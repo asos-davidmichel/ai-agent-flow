@@ -45,7 +45,22 @@ Parse the URL to identify, where possible:
 - Team
 - Board level
 
-### Step 3: Retrieve all in-scope work items
+### Step 3: Check session cache
+
+Before retrieving work items, check if board data is already cached in this session:
+
+1. Create a cache key from the board context: `ado-board-{organization}-{project}-{team}`
+2. Attempt to read `/memories/session/{cacheKey}.json`
+3. If the file exists:
+   - Read the `retrievalTimestamp` field
+   - Calculate the age of the cache (current time - retrievalTimestamp)
+   - If the cache is less than 5 minutes old:
+     - Use the cached `workItems` data
+     - Note in the Coverage/Limitations section: "Using cached board data retrieved at {timestamp}"
+     - Skip to Step 5
+4. If the cache doesn't exist or is stale (>5 minutes old), proceed to Step 4
+
+### Step 4: Retrieve all in-scope work items
 
 Retrieve **all work items currently in scope for the specified board or backlog level**.
 
@@ -65,7 +80,24 @@ Treat the board's current scope as the source of truth. Do not expand beyond it 
 
 If full retrieval is not possible with the available tools, state that clearly and report only on the items actually retrieved.
 
-### Step 4: Retrieve states for each work item type
+**After retrieving work items, cache them for reuse:**
+
+1. Create or update `/memories/session/{cacheKey}.json` with:
+   ```json
+   {
+     "boardUrl": "...",
+     "organization": "...",
+     "pro6ect": "...",
+     "team": "...",
+     "boardLevel": "...",
+     "retrievalTimestamp": "2026-04-10T14:30:00Z",
+     "workItems": [...all retrieved work items...],
+     "totalCount": 72
+   }
+   ```
+2. Proceed to Step 5
+
+### Step 5: Retrieve states for each work item type
 
 For each associated work item type:
 - retrieve its definition
@@ -82,7 +114,7 @@ Determine whether:
 
 If differences exist, show them clearly and do not merge them into one generic list.
 
-### Step 6: Return structured analysis
+### Step 7: Return structured analysis
 
 Present findings in this format:
 

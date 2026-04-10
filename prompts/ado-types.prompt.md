@@ -54,7 +54,22 @@ Also identify the most likely board or backlog level from the URL or returned me
 
 If the board level cannot be determined reliably, say so explicitly.
 
-### Step 3: Inspect all current board items
+### Step 3: Check session cache
+
+Before retrieving work items, check if board data is already cached in this session:
+
+1. Create a cache key from the board context: `ado-board-{organization}-{project}-{team}`
+2. Attempt to read `/memories/session/{cacheKey}.json`
+3. If the file exists:
+   - Read the `retrievalTimestamp` field
+   - Calculate the age of the cache (current time - retrievalTimestamp)
+   - If the cache is less than 5 minutes old:
+     - Use the cached `workItems` data
+     - Note in the Coverage/Limitations section: "Using cached board data retrieved at {timestamp}"
+     - Skip to Step 5
+4. If the cache doesn't exist or is stale (>5 minutes old), proceed to Step 4
+
+### Step 4: Inspect all current board items
 
 Retrieve **all work items currently returned for that board**, not a sample.
 
@@ -62,7 +77,24 @@ Inspect their `System.WorkItemType` field and count how many items exist for eac
 
 This step establishes which work item types are **currently present on the board**.
 
-### Step 4: Inspect board configuration, if supported
+**After retrieving work items, cache them for reuse:**
+
+1. Create or update `/memories/session/{cacheKey}.json` with:
+   ```json
+   {
+     "boardUrl": "...",
+     "organization": "...",
+     "pro6ect": "...",
+     "team": "...",
+     "boardLevel": "...",
+     "retrievalTimestamp": "2026-04-10T14:30:00Z",
+     "workItems": [...all retrieved work items...],
+     "totalCount": 72
+   }
+   ```
+2. Proceed to Step 5
+
+### Step 5: Inspect board configuration, if supported
 
 Check whether the available tools can directly confirm which work item types are configured for this board level.
 
@@ -82,7 +114,7 @@ Use these categories:
 - **Could not verify configuration**
   - Use this when the tools do not expose reliable board-level type configuration
 
-### Step 6: Return structured analysis
+### Step 7: Return structured analysis
 
 Present findings in this format:
 
