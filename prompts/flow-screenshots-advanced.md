@@ -4,7 +4,7 @@ name: "Flow Metrics Screenshot Analysis, Deep Analysis"
 argument-hint: "Screenshot(s) of flow metrics charts, optionally with prior Basic Read output"
 agent: "agent"
 tools: []
----
+----
 
 # Flow Metrics Screenshot Analysis, Deep Analysis
 
