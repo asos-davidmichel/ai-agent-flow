@@ -246,6 +246,18 @@
             color: #667eea;
             font-family: monospace;
         }
+
+        .modal li a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+            font-family: monospace;
+        }
+
+        .modal li a:hover {
+            color: #764ba2;
+            text-decoration: underline;
+        }
         
         @media (max-width: 768px) {
             .charts-grid {
@@ -459,7 +471,8 @@
             list.innerHTML = '';
             items.forEach(item => {
                 const li = document.createElement('li');
-                li.innerHTML = `<strong>#${item.id}</strong> ${item.title}`;
+                const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
+                li.innerHTML = `<a href="${adoUrl}" target="_blank">#${item.id}</a> ${item.title}`;
                 list.appendChild(li);
             });
             modal.style.display = 'block';
@@ -540,6 +553,15 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                onClick: (e, activeElements) => {
+                    if (activeElements.length > 0) {
+                        const datasetIndex = activeElements[0].datasetIndex;
+                        const index = activeElements[0].index;
+                        const item = dashboardData.charts.cycleTime.datasets[datasetIndex].data[index];
+                        const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
+                        window.open(adoUrl, '_blank');
+                    }
+                },
                 plugins: {
                     legend: { 
                         display: true,
@@ -557,6 +579,9 @@
                                     `Cycle Time: ${item.y} days`,
                                     `Completed: ${item.completedDate}`
                                 ];
+                            },
+                            afterBody: function() {
+                                return 'Click to open in ADO';
                             }
                         }
                     },
@@ -715,6 +740,14 @@
                 indexAxis: 'y',
                 responsive: true,
                 maintainAspectRatio: false,
+                onClick: (e, activeElements) => {
+                    if (activeElements.length > 0) {
+                        const index = activeElements[0].index;
+                        const workItemId = dashboardData.charts.wip.ids[index];
+                        const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${workItemId}`;
+                        window.open(adoUrl, '_blank');
+                    }
+                },
                 plugins: {
                     legend: { display: false },
                     tooltip: {
@@ -728,6 +761,9 @@
                                     `Title: ${dashboardData.charts.wip.titles[index]}`,
                                     `Age: ${context.parsed.x} days`
                                 ];
+                            },
+                            afterBody: function() {
+                                return 'Click to open in ADO';
                             }
                         }
                     }

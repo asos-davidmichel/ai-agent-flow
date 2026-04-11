@@ -166,6 +166,8 @@ Statistics:**
 {
   "teamName": "Team Name (Project)",
   "period": "DD MMM YYYY - DD MMM YYYY (X weeks/months)",
+  "adoOrg": "organization-name",     // ADO organization (e.g., "asos")
+  "adoProject": "Project Name",       // ADO project (e.g., "Customer")
   "hasBugPbiSplit": true/false,  // true if both bugs AND PBIs exist
   
   "metrics": {
@@ -296,25 +298,27 @@ Statistics:**
 
 **Important implementation notes:**
 
-1. **Bug/PBI split**: Set `hasBugPbiSplit` to `true` ONLY if BOTH bugs and PBIs exist in completed work. If there are only bugs OR only PBIs, set to `false` and use the single values (avg, not bugs/pbis)
+1. **ADO organization and project**: Extract from the board URL or API calls. Set `adoOrg` to the organization name (e.g., "asos") and `adoProject` to the project name (e.g., "Customer"). These are used to generate clickable links to work items: `https://dev.azure.com/{org}/{project}/_workitems/edit/{id}`
 
-2. **Cycle time datasets**: Create separate datasets for each work item type (Bug, Product Backlog Item, Spike, etc.). Sort data points by completion date (x-axis).
+2. **Bug/PBI split**: Set `hasBugPbiSplit` to `true` ONLY if BOTH bugs and PBIs exist in completed work. If there are only bugs OR only PBIs, set to `false` and use the single values (avg, not bugs/pbis)
 
-3. **CFD trend lines**: Calculate linear trend from first point (0,0) to last actual data point. 
+3. **Cycle time datasets**: Create separate datasets for each work item type (Bug, Product Backlog Item, Spike, etc.). Sort data points by completion date (x-axis).
+
+4. **CFD trend lines**: Calculate linear trend from first point (0,0) to last actual data point. 
    - Formula: `trendValue[i] = (lastActualValue / numberOfPoints) * i`
    - Example: If you have 13 data points (index 0-12) and last arrival is 56, then arrivalTrend[i] = (56/12) * i
    - This ensures the trend line passes through both the origin and the final data point
    - The slope of this line represents the average rate over the entire period
 
-4. **WIP chart**: Only include items with age >7 days. Sort by age descending (oldest first). Limit to top 10 if more than 10 items.
+5. **WIP chart**: Only include items with age >7 days. Sort by age descending (oldest first). Limit to top 10 if more than 10 items.
 
-5. **Bug rate by week**: Calculate percentage for each week (bugs/(bugs+features)*100). If a week has 0 completions, use null or 0.
+6. **Bug rate by week**: Calculate percentage for each week (bugs/(bugs+features)*100). If a week has 0 completions, use null or 0.
 
-6. **Color coding**:
+7. **Color coding**:
    - WIP age: Green <7 days, yellow 7-14 days, red >14 days
    - Use `#68d391` (green), `#fbd38d` (yellow), `#fc8181` (red)
 
-7. **Date formatting**: Use "DD MMM" format for chart labels (e.g., "22 Feb", "1 Mar")
+8. **Date formatting**: Use "DD MMM" format for chart labels (e.g., "22 Feb", "1 Mar")
 
 ### Step 7: Return structured analysis
 

@@ -1,6 +1,8 @@
 {
   "teamName": "Analytics & Experimentation (Customer)",
   "period": "11 Jan 2026 - 11 Apr 2026 (3 months)",
+  "adoOrg": "asos",
+  "adoProject": "Customer",
   "hasBugPbiSplit": true,
   
   "metrics": {

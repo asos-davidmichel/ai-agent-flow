@@ -37,6 +37,7 @@ The template uses a data injection approach:
 
 - **Throughput Chart**: 
   - Interactive - click any point to see list of completed items for that week
+  - Popup shows work item IDs (clickable links to ADO) and titles
   - Shows weekly completion trend
 
 - **Cycle Time Chart**:
@@ -44,6 +45,7 @@ The template uses a data injection approach:
   - X-axis labels showing dates
   - Horizontal reference lines for average, 50th, and 85th percentile
   - Different colors for bugs vs PBIs
+  - **Clickable**: Click any point to open that work item in ADO
   - Hover shows ID, title, cycle time, completion date
 
 - **Cumulative Flow Diagram**:
@@ -55,6 +57,7 @@ The template uses a data injection approach:
   - Ordered by age (worst/oldest first)
   - Only shows concerning items (age >7 days)
   - Color-coded: red >14 days, yellow 7-14 days
+  - **Clickable**: Click any bar to open that work item in ADO
   - Horizontal bar chart for easy comparison
 
 - **Bug Rate Chart**:
@@ -73,6 +76,8 @@ See `dashboard-data-example.json` for the complete data structure. Key sections:
 {
   "teamName": "...",
   "period": "...",
+  "adoOrg": "...",          // ADO organization for generating work item links
+  "adoProject": "...",      // ADO project for generating work item links
   "hasBugPbiSplit": true/false,  // Set true only if BOTH bugs AND PBIs exist
   
   "metrics": {
