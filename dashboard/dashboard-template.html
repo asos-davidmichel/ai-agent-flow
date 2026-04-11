@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flow Metrics Dashboard - {{team_name}}</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f7fa;
+            color: #2d3748;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.95;
+            font-size: 16px;
+        }
+        
+        .metric-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .metric-card {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.07);
+            border-left: 4px solid #667eea;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .metric-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 24px rgba(0,0,0,0.1);
+        }
+        
+        .metric-card h3 {
+            font-size: 14px;
+            text-transform: uppercase;
+            color: #718096;
+            font-weight: 600;
+            margin-bottom: 12px;
+            letter-spacing: 0.5px;
+        }
+        
+        .metric-value {
+            font-size: 36px;
+            font-weight: 700;
+            color: #2d3748;
+            margin-bottom: 8px;
+        }
+
+        .metric-split {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .metric-split-item {
+            padding: 8px;
+            border-radius: 6px;
+            background: #f7fafc;
+        }
+
+        .metric-split-item .type-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #718096;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .metric-split-item .type-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #2d3748;
+        }
+        
+        .metric-label {
+            font-size: 13px;
+            color: #718096;
+        }
+        
+        .metric-trend {
+            font-size: 13px;
+            margin-top: 10px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            display: inline-block;
+        }
+        
+        .trend-good {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+        
+        .trend-warning {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+        
+        .trend-neutral {
+            background: #e2e8f0;
+            color: #2d3748;
+        }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .chart-card {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.07);
+        }
+        
+        .chart-card h2 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #2d3748;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+        
+        .chart-container-tall {
+            height: 400px;
+        }
+        
+        .insight-box {
+            background: #edf2f7;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            border-left: 3px solid #667eea;
+        }
+        
+        .insight-box p {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #4a5568;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #718096;
+            font-size: 13px;
+        }
+
+        /* Modal for item details */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 12px;
+            width: 80%;
+            max-width: 600px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: #000;
+        }
+
+        .modal h2 {
+            margin-bottom: 20px;
+            color: #2d3748;
+        }
+
+        .modal ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .modal li {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: #f7fafc;
+            border-radius: 6px;
+            border-left: 3px solid #667eea;
+        }
+
+        .modal li strong {
+            color: #667eea;
+            font-family: monospace;
+        }
+        
+        @media (max-width: 768px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🚀 Agile Flow Metrics Dashboard</h1>
+            <p id="headerInfo"></p>
+        </div>
+
+        <!-- Key Metrics Cards -->
+        <div class="metric-cards" id="metricCards">
+            <!-- Dynamically populated -->
+        </div>
+
+        <!-- Charts -->
+        <div class="charts-grid">
+            <!-- Throughput Trend -->
+            <div class="chart-card">
+                <h2>📈 Throughput Trend</h2>
+                <div class="chart-container">
+                    <canvas id="throughputChart"></canvas>
+                </div>
+                <div class="insight-box" id="throughputInsight"></div>
+            </div>
+
+            <!-- Cycle Time Distribution -->
+            <div class="chart-card">
+                <h2>⏱️ Cycle Time by Completion Date</h2>
+                <div class="chart-container">
+                    <canvas id="cycleTimeChart"></canvas>
+                </div>
+                <div class="insight-box" id="cycleTimeInsight"></div>
+            </div>
+
+            <!-- Cumulative Flow Diagram -->
+            <div class="chart-card">
+                <h2>🔄 Cumulative Flow (Arrival vs Departure)</h2>
+                <div class="chart-container">
+                    <canvas id="cfdChart"></canvas>
+                </div>
+                <div class="insight-box" id="cfdInsight"></div>
+            </div>
+
+            <!-- WIP Aging -->
+            <div class="chart-card">
+                <h2>🔧 Aging Work In Progress</h2>
+                <div class="chart-container">
+                    <canvas id="wipChart"></canvas>
+                </div>
+                <div class="insight-box" id="wipInsight"></div>
+            </div>
+
+            <!-- Bug Rate Trend -->
+            <div class="chart-card">
+                <h2>🐛 Bug Rate by Week</h2>
+                <div class="chart-container">
+                    <canvas id="bugRateChart"></canvas>
+                </div>
+                <div class="insight-box" id="bugRateInsight"></div>
+            </div>
+
+            <!-- State Distribution -->
+            <div class="chart-card">
+                <h2>📊 Backlog State Distribution</h2>
+                <div class="chart-container">
+                    <canvas id="stateChart"></canvas>
+                </div>
+                <div class="insight-box" id="stateInsight"></div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer" id="footer"></div>
+    </div>
+
+    <!-- Modal for showing completed items -->
+    <div id="itemModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="modalTitle">Completed Items</h2>
+            <ul id="modalItemList"></ul>
+        </div>
+    </div>
+
+    <script>
+        // ===== DATA INJECTION POINT =====
+        // The data object will be injected here by the Python script
+        const dashboardData = /* DATA_PLACEHOLDER */;
+        // ===== END DATA INJECTION =====
+
+        // Render header
+        document.getElementById('headerInfo').innerHTML = `
+            <strong>Team:</strong> ${dashboardData.teamName} | 
+            <strong>Period:</strong> ${dashboardData.period} | 
+            <strong>Generated:</strong> ${new Date().toLocaleString('en-GB')}
+        `;
+
+        // Render metric cards
+        const metricCardsHTML = `
+            <div class="metric-card">
+                <h3>Throughput</h3>
+                ${dashboardData.hasBugPbiSplit ? `
+                    <div class="metric-split">
+                        <div class="metric-split-item">
+                            <div class="type-label">🐛 Bugs</div>
+                            <div class="type-value">${dashboardData.metrics.throughput.bugs}</div>
+                        </div>
+                        <div class="metric-split-item">
+                            <div class="type-label">✨ PBIs</div>
+                            <div class="type-value">${dashboardData.metrics.throughput.pbis}</div>
+                        </div>
+                    </div>
+                    <div class="metric-label">items/week average</div>
+                ` : `
+                    <div class="metric-value">${dashboardData.metrics.throughput.avg}</div>
+                    <div class="metric-label">items/week average</div>
+                `}
+                <div class="metric-trend trend-neutral">
+                    Median: ${dashboardData.metrics.throughput.median} | Range: ${dashboardData.metrics.throughput.min}-${dashboardData.metrics.throughput.max}
+                </div>
+            </div>
+            
+            <div class="metric-card">
+                <h3>Cycle Time</h3>
+                ${dashboardData.hasBugPbiSplit ? `
+                    <div class="metric-split">
+                        <div class="metric-split-item">
+                            <div class="type-label">🐛 Bugs</div>
+                            <div class="type-value">${dashboardData.metrics.cycleTime.bugs}</div>
+                        </div>
+                        <div class="metric-split-item">
+                            <div class="type-label">✨ PBIs</div>
+                            <div class="type-value">${dashboardData.metrics.cycleTime.pbis}</div>
+                        </div>
+                    </div>
+                    <div class="metric-label">days average</div>
+                ` : `
+                    <div class="metric-value">${dashboardData.metrics.cycleTime.avg}</div>
+                    <div class="metric-label">days average</div>
+                `}
+                <div class="metric-trend trend-good">
+                    Median: ${dashboardData.metrics.cycleTime.median} | 85th: ${dashboardData.metrics.cycleTime.p85}
+                </div>
+            </div>
+            
+            <div class="metric-card">
+                <h3>System Stability</h3>
+                <div class="metric-value">${dashboardData.metrics.systemStability.ratio}</div>
+                <div class="metric-label">Arrival/Departure Ratio</div>
+                <div class="metric-trend ${dashboardData.metrics.systemStability.class}">${dashboardData.metrics.systemStability.text}</div>
+            </div>
+            
+            <div class="metric-card">
+                <h3>Bug Rate</h3>
+                <div class="metric-value">${dashboardData.metrics.bugRate.percentage}%</div>
+                <div class="metric-label">of completed work</div>
+                <div class="metric-trend ${dashboardData.metrics.bugRate.class}">${dashboardData.metrics.bugRate.count} of ${dashboardData.metrics.bugRate.total} completed items</div>
+            </div>
+            
+            <div class="metric-card">
+                <h3>Work In Progress</h3>
+                <div class="metric-value">${dashboardData.metrics.wip.count}</div>
+                <div class="metric-label">active items</div>
+                <div class="metric-trend ${dashboardData.metrics.wip.class}">
+                    Avg: ${dashboardData.metrics.wip.avgAge} days | Range: ${dashboardData.metrics.wip.minAge}-${dashboardData.metrics.wip.maxAge} days
+                </div>
+            </div>
+            
+            <div class="metric-card">
+                <h3>Blocked Items</h3>
+                <div class="metric-value">${dashboardData.metrics.blocked.count}</div>
+                <div class="metric-label">items blocked/on hold</div>
+                <div class="metric-trend ${dashboardData.metrics.blocked.class}">${dashboardData.metrics.blocked.percentage}% of total backlog</div>
+            </div>
+        `;
+        document.getElementById('metricCards').innerHTML = metricCardsHTML;
+
+        // Render insights
+        document.getElementById('throughputInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.throughput}</p>`;
+        document.getElementById('cycleTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.cycleTime}</p>`;
+        document.getElementById('cfdInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.cfd}</p>`;
+        document.getElementById('wipInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.wip}</p>`;
+        document.getElementById('bugRateInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.bugRate}</p>`;
+        document.getElementById('stateInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.state}</p>`;
+
+        // Render footer
+        document.getElementById('footer').innerHTML = `<p>${dashboardData.footer}</p>`;
+
+        // Modal functionality
+        const modal = document.getElementById('itemModal');
+        const span = document.getElementsByClassName('close')[0];
+        span.onclick = function() {
+            modal.style.display = 'none';
+        }
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        function showItemsModal(title, items) {
+            document.getElementById('modalTitle').textContent = title;
+            const list = document.getElementById('modalItemList');
+            list.innerHTML = '';
+            items.forEach(item => {
+                const li = document.createElement('li');
+                li.innerHTML = `<strong>#${item.id}</strong> ${item.title}`;
+                list.appendChild(li);
+            });
+            modal.style.display = 'block';
+        }
+
+        // Chart.js configuration
+        Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif';
+        Chart.defaults.color = '#4a5568';
+
+        // Throughput Chart with clickable points
+        new Chart(document.getElementById('throughputChart'), {
+            type: 'line',
+            data: {
+                labels: dashboardData.charts.throughput.labels,
+                datasets: [{
+                    label: 'Items Completed',
+                    data: dashboardData.charts.throughput.values,
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 6,
+                    pointHoverRadius: 10,
+                    pointBackgroundColor: '#667eea',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    pointHitRadius: 15
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                onClick: (e, activeElements) => {
+                    if (activeElements.length > 0) {
+                        const index = activeElements[0].index;
+                        const weekLabel = dashboardData.charts.throughput.labels[index];
+                        const items = dashboardData.charts.throughput.items[index];
+                        showItemsModal(`Items Completed - Week Ending ${weekLabel}`, items);
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.8)',
+                        padding: 12,
+                        titleFont: { size: 14, weight: 'bold' },
+                        bodyFont: { size: 13 },
+                        displayColors: false,
+                        callbacks: {
+                            afterBody: function() {
+                                return 'Click to see details';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { precision: 0 },
+                        grid: { color: '#e2e8f0' },
+                        title: { display: true, text: 'Items Completed' }
+                    },
+                    x: {
+                        grid: { display: false },
+                        title: { display: true, text: 'Week Ending' }
+                    }
+                }
+            }
+        });
+
+        // Cycle Time Chart with reference lines
+        new Chart(document.getElementById('cycleTimeChart'), {
+            type: 'scatter',
+            data: {
+                datasets: dashboardData.charts.cycleTime.datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { 
+                        display: true,
+                        position: 'top'
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.8)',
+                        padding: 12,
+                        callbacks: {
+                            label: function(context) {
+                                const item = context.raw;
+                                return [
+                                    `ID: #${item.id}`,
+                                    `Title: ${item.title}`,
+                                    `Cycle Time: ${item.y} days`,
+                                    `Completed: ${item.completedDate}`
+                                ];
+                            }
+                        }
+                    },
+                    annotation: {
+                        annotations: {
+                            avgLine: {
+                                type: 'line',
+                                yMin: dashboardData.charts.cycleTime.average,
+                                yMax: dashboardData.charts.cycleTime.average,
+                                borderColor: '#4a5568',
+                                borderWidth: 2,
+                                borderDash: [8, 4],
+                                label: {
+                                    display: true,
+                                    content: `Avg: ${dashboardData.charts.cycleTime.average} days`,
+                                    position: 'end',
+                                    backgroundColor: 'rgba(74, 85, 104, 0.8)',
+                                    color: 'white',
+                                    padding: 4
+                                }
+                            },
+                            medianLine: {
+                                type: 'line',
+                                yMin: dashboardData.charts.cycleTime.median,
+                                yMax: dashboardData.charts.cycleTime.median,
+                                borderColor: '#48bb78',
+                                borderWidth: 2,
+                                borderDash: [8, 4],
+                                label: {
+                                    display: true,
+                                    content: `Median: ${dashboardData.charts.cycleTime.median} days`,
+                                    position: 'start',
+                                    backgroundColor: 'rgba(72, 187, 120, 0.8)',
+                                    color: 'white',
+                                    padding: 4
+                                }
+                            },
+                            percentile85Line: {
+                                type: 'line',
+                                yMin: dashboardData.charts.cycleTime.percentile85,
+                                yMax: dashboardData.charts.cycleTime.percentile85,
+                                borderColor: '#ed8936',
+                                borderWidth: 2,
+                                borderDash: [8, 4],
+                                label: {
+                                    display: true,
+                                    content: `85th: ${dashboardData.charts.cycleTime.percentile85} days`,
+                                    position: 'end',
+                                    backgroundColor: 'rgba(237, 137, 54, 0.8)',
+                                    color: 'white',
+                                    padding: 4
+                                }
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: { display: true, text: 'Cycle Time (days)' },
+                        grid: { color: '#e2e8f0' }
+                    },
+                    x: {
+                        type: 'category',
+                        title: { display: true, text: 'Completion Date' },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+
+        // Cumulative Flow Diagram
+        new Chart(document.getElementById('cfdChart'), {
+            type: 'line',
+            data: {
+                labels: dashboardData.charts.cfd.labels,
+                datasets: [{
+                    label: 'Cumulative Arrivals',
+                    data: dashboardData.charts.cfd.arrivals,
+                    borderColor: '#f56565',
+                    backgroundColor: 'rgba(245, 101, 101, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0,
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                }, {
+                    label: 'Cumulative Departures',
+                    data: dashboardData.charts.cfd.departures,
+                    borderColor: '#48bb78',
+                    backgroundColor: 'rgba(72, 187, 120, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0,
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                }, {
+                    label: 'Arrival Trend',
+                    data: dashboardData.charts.cfd.arrivalTrend,
+                    borderColor: '#c53030',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    borderDash: [10, 5],
+                    pointRadius: 0,
+                    fill: false
+                }, {
+                    label: 'Departure Trend',
+                    data: dashboardData.charts.cfd.departureTrend,
+                    borderColor: '#2f855a',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    borderDash: [10, 5],
+                    pointRadius: 0,
+                    fill: false
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: true, position: 'top' },
+                    tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.8)',
+                        padding: 12
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: { display: true, text: 'Cumulative Count' },
+                        ticks: { precision: 0 },
+                        grid: { color: '#e2e8f0' }
+                    },
+                    x: {
+                        title: { display: true, text: 'Week Ending' },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+
+        // WIP Chart (ordered by age, descending, only concerning items)
+        new Chart(document.getElementById('wipChart'), {
+            type: 'bar',
+            data: {
+                labels: dashboardData.charts.wip.labels,
+                datasets: [{
+                    label: 'WIP Age (days)',
+                    data: dashboardData.charts.wip.values,
+                    backgroundColor: dashboardData.charts.wip.colors,
+                    borderColor: '#fff',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.8)',
+                        padding: 12,
+                        callbacks: {
+                            label: function(context) {
+                                const index = context.dataIndex;
+                                return [
+                                    `ID: #${dashboardData.charts.wip.ids[index]}`,
+                                    `Title: ${dashboardData.charts.wip.titles[index]}`,
+                                    `Age: ${context.parsed.x} days`
+                                ];
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        title: { display: true, text: 'Age (days)' },
+                        grid: { color: '#e2e8f0' }
+                    },
+                    y: {
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+
+        // Bug Rate Trend Chart
+        new Chart(document.getElementById('bugRateChart'), {
+            type: 'line',
+            data: {
+                labels: dashboardData.charts.bugRate.labels,
+                datasets: [{
+                    label: 'Bug Rate (%)',
+                    data: dashboardData.charts.bugRate.values,
+                    borderColor: '#fc8181',
+                    backgroundColor: 'rgba(252, 129, 129, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 5,
+                    pointHoverRadius: 7
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.8)',
+                        padding: 12,
+                        callbacks: {
+                            label: function(context) {
+                                const week = dashboardData.charts.bugRate.labels[context.dataIndex];
+                                const details = dashboardData.charts.bugRate.details[context.dataIndex];
+                                return [
+                                    `Bug Rate: ${context.parsed.y}%`,
+                                    `Bugs: ${details.bugs} | Features: ${details.features}`
+                                ];
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        title: { display: true, text: 'Bug Rate (%)' },
+                        grid: { color: '#e2e8f0' }
+                    },
+                    x: {
+                        title: { display: true, text: 'Week Ending' },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+
+        // State Distribution Chart
+        new Chart(document.getElementById('stateChart'), {
+            type: 'doughnut',
+            data: {
+                labels: dashboardData.charts.state.labels,
+                datasets: [{
+                    data: dashboardData.charts.state.values,
+                    backgroundColor: dashboardData.charts.state.colors,
+                    borderColor: '#fff',
+                    borderWidth: 3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' },
+                    tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.8)',
+                        padding: 12,
+                        callbacks: {
+                            label: function(context) {
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                return context.label + ': ' + context.parsed + ' items (' + percentage + '%)';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

@@ -149,32 +149,172 @@ Statistics:**
 
 ### Step 6: Generate interactive HTML dashboard
 
-Create a standalone HTML file named `flow_metrics_dashboard.html` with:
+**Use the dashboard template file** located in the workspace: `dashboard/dashboard-template.html`
 
-**Requirements:**
-- Use Chart.js for interactive charts
-- Include CDN links (no external dependencies needed)
-- All charts must have hover tooltips showing:
-  - For throughput: Week ending date, item count
-  - For cycle time scatter: Work item ID, title, cycle time
-  - For arrival/departure: Week, arrival count, departure count
-  - For aging items: Work item ID, title, age in days
-- Use professional color scheme
-- Responsive design (works on mobile/tablet/desktop)
-- Include all calculated metrics with percentiles
-- Add timestamp of when analysis was generated
+**Process:**
+1. Read `dashboard/dashboard-template.html` from the workspace
+2. Prepare a data object matching this structure (see Data Structure below)
+3. Convert the data object to a JSON string
+4. Replace `/* DATA_PLACEHOLDER */` in the template with the JSON data
+5. Save as `flow_metrics_dashboard.html` with UTF-8 encoding (no BOM) to prevent emoji corruption
 
-**Charts to include:**
-1. **Throughput Trend** (Line chart): Weekly completions over time
-2. **Cycle Time Distribution** (Scatter plot): Each completed item as a dot, hoverable with ID+title
-3. **Cycle Time Box Plot** (Box/whisker): Show min, max, median, 25th, 75th percentiles by work item type
-4. **Arrival vs Departure Rate** (Dual line chart): Weekly arrivals vs departures to show system stability
-5. **WIP Trend** (Line chart): WIP count over time
-6. **Bug Rate Trend** (Line chart): % of bugs in completed work per week
-7. **Blocker Analysis** (Bar chart): Count and average duration of blockers
-8. **State Distribution** (Pie/Donut chart): Current backlog state distribution
+**Encoding Note:** When saving in Python, use `encoding='utf-8'`. When using PowerShell, use `[System.IO.File]::WriteAllText()` with `[System.Text.UTF8Encoding]::new($false)` to ensure proper UTF-8 without BOM.
 
-Include a summary section at the top with key metrics displayed as cards/tiles.
+**Data Structure:**
+
+```javascript
+{
+  "teamName": "Team Name (Project)",
+  "period": "DD MMM YYYY - DD MMM YYYY (X weeks/months)",
+  "hasBugPbiSplit": true/false,  // true if both bugs AND PBIs exist
+  
+  "metrics": {
+    "throughput": {
+      "avg": 0.0,      // Overall average if hasBugPbiSplit is false
+      "bugs": 0.0,     // Include if hasBugPbiSplit is true
+      "pbis": 0.0,     // Include if hasBugPbiSplit is true
+      "median": 0.0,
+      "min": 0,
+      "max": 0
+    },
+    "cycleTime": {
+      "avg": 0.0,      // Overall average if hasBugPbiSplit is false
+      "bugs": 0.0,     // Include if hasBugPbiSplit is true
+      "pbis": 0.0,     // Include if hasBugPbiSplit is true
+      "median": 0.0,
+      "p85": 0.0
+    },
+    "systemStability": {
+      "ratio": "0.00",
+      "text": "⚠️ UNSTABLE - GROWING",
+      "class": "trend-warning"  // trend-good, trend-warning, or trend-neutral
+    },
+    "bugRate": {
+      "percentage": "0.0",
+      "count": 0,
+      "total": 0,
+      "class": "trend-warning"  // trend-good if <20%, trend-warning if >=20%
+    },
+    "wip": {
+      "count": 0,
+      "avgAge": "0.0",
+      "minAge": 0,
+      "maxAge": 0,
+      "class": "trend-warning"  // trend-good if avg<14, trend-warning if >=14
+    },
+    "blocked": {
+      "count": 0,
+      "percentage": "0.0",
+      "class": "trend-warning"  // trend-good if count=0, trend-warning otherwise
+    }
+  },
+  
+  "charts": {
+    "throughput": {
+      "labels": ["DD MMM", "DD MMM", ...],  // Week ending dates
+      "values": [0, 0, ...],                // Items completed each week
+      "items": [                             // Items completed each week (for click popup)
+        [{"id": 123, "title": "..."}, ...],
+        [{"id": 456, "title": "..."}, ...],
+        ...
+      ]
+    },
+    "cycleTime": {
+      "average": 0.0,
+      "median": 0.0,
+      "percentile85": 0.0,
+      "datasets": [
+        {
+          "label": "Bugs",
+          "data": [
+            {"x": "DD MMM", "y": 10, "id": 123, "title": "...", "completedDate": "DD MMM YYYY"},
+            ...
+          ],
+          "backgroundColor": "#fc8181",
+          "borderColor": "#e53e3e",
+          "pointRadius": 8,
+          "pointHoverRadius": 10
+        },
+        {
+          "label": "PBIs",
+          "data": [
+            {"x": "DD MMM", "y": 7, "id": 456, "title": "...", "completedDate": "DD MMM YYYY"},
+            ...
+          ],
+          "backgroundColor": "#68d391",
+          "borderColor": "#38a169",
+          "pointRadius": 8,
+          "pointHoverRadius": 10
+        }
+        // Add other work item types as needed
+      ]
+    },
+    "cfd": {  // Cumulative Flow Diagram
+      "labels": ["DD MMM", "DD MMM", ...],  // Week ending dates
+      "arrivals": [0, 4, 18, ...],          // Cumulative arrivals
+      "departures": [0, 0, 2, ...],         // Cumulative departures
+      "arrivalTrend": [0, 4.67, 9.33, ..., 56.0],   // Linear trend: (lastValue/numIntervals) * i
+      "departureTrend": [0, 1.0, 2.0, ..., 12.0]    // Linear trend: (lastValue/numIntervals) * i
+    },
+    "wip": {
+      "labels": ["#ID", "#ID", ...],        // Work item IDs (sorted by age, oldest first)
+      "values": [109, 95, ...],             // Ages in days (matching label order)
+      "ids": [123, 456, ...],               // Raw IDs for tooltip
+      "titles": ["Title", "Title", ...],    // Titles for tooltip
+      "colors": ["#fc8181", "#fc8181", ...] // Color based on age (red if >14 days, yellow if 7-14, green if <7)
+      // NOTE: Only include items with age >7 days (concerning items)
+    },
+    "bugRate": {
+      "labels": ["DD MMM", "DD MMM", ...],  // Week ending dates
+      "values": [0, 0, 50, ...],            // Bug rate % for each week
+      "details": [                          // For tooltip details
+        {"bugs": 0, "features": 2},
+        {"bugs": 0, "features": 1},
+        {"bugs": 1, "features": 1},
+        ...
+      ]
+    },
+    "state": {
+      "labels": ["New", "In Progress", "Resolved"],
+      "values": [112, 6, 12],
+      "colors": ["#a0aec0", "#4299e1", "#68d391"]
+    }
+  },
+  
+  "insights": {
+    "throughput": "Description of throughput trend and patterns",
+    "cycleTime": "Description of cycle time patterns, outliers, by-type differences",
+    "cfd": "Description of system stability, arrival vs departure, backlog growth",
+    "wip": "Description of WIP aging concerns, stale work, recommendations",
+    "bugRate": "Description of bug rate trend and quality concerns",
+    "state": "Description of backlog distribution and prioritization needs"
+  },
+  
+  "footer": "Generated by Azure DevOps Flow Metrics Analysis | Data from [Project] project | Analysis Period: [Date Range]"
+}
+```
+
+**Important implementation notes:**
+
+1. **Bug/PBI split**: Set `hasBugPbiSplit` to `true` ONLY if BOTH bugs and PBIs exist in completed work. If there are only bugs OR only PBIs, set to `false` and use the single values (avg, not bugs/pbis)
+
+2. **Cycle time datasets**: Create separate datasets for each work item type (Bug, Product Backlog Item, Spike, etc.). Sort data points by completion date (x-axis).
+
+3. **CFD trend lines**: Calculate linear trend from first point (0,0) to last actual data point. 
+   - Formula: `trendValue[i] = (lastActualValue / numberOfPoints) * i`
+   - Example: If you have 13 data points (index 0-12) and last arrival is 56, then arrivalTrend[i] = (56/12) * i
+   - This ensures the trend line passes through both the origin and the final data point
+   - The slope of this line represents the average rate over the entire period
+
+4. **WIP chart**: Only include items with age >7 days. Sort by age descending (oldest first). Limit to top 10 if more than 10 items.
+
+5. **Bug rate by week**: Calculate percentage for each week (bugs/(bugs+features)*100). If a week has 0 completions, use null or 0.
+
+6. **Color coding**:
+   - WIP age: Green <7 days, yellow 7-14 days, red >14 days
+   - Use `#68d391` (green), `#fbd38d` (yellow), `#fc8181` (red)
+
+7. **Date formatting**: Use "DD MMM" format for chart labels (e.g., "22 Feb", "1 Mar")
 
 ### Step 7: Return structured analysis
 
