@@ -1467,17 +1467,6 @@
                 document.getElementById('departureRate').textContent = departureRate;
             }
         }
-                const arrivalEnd = arrivalData[numPoints - 1] || 0;
-                const departureStart = departureData[0] || 0;
-                const departureEnd = departureData[numPoints - 1] || 0;
-                
-                const arrivalRate = ((arrivalEnd - arrivalStart) / (numPoints - 1)).toFixed(2);
-                const departureRate = ((departureEnd - departureStart) / (numPoints - 1)).toFixed(2);
-                
-                document.getElementById('arrivalRate').textContent = arrivalRate;
-                document.getElementById('departureRate').textContent = departureRate;
-            }
-        }
         
         const cfdChart = new Chart(document.getElementById('cfdChart'), {
             type: 'line',
