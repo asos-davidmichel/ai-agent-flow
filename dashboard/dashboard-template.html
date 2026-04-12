@@ -1407,8 +1407,18 @@
         
         // Function to update trend lines and rates based on visible states
         function updateTrendLines(chart) {
-            const meta = chart.getSortedVisibleDatasetMetas();
-            const visibleStates = meta.filter(m => chart.data.datasets[m.index].isState && !m.hidden);
+            // Get all state datasets that are currently visible
+            const visibleStates = [];
+            chart.data.datasets.forEach((dataset, index) => {
+                if (dataset.isState) {
+                    const meta = chart.getDatasetMeta(index);
+                    // Check if dataset is visible (not hidden)
+                    const isVisible = meta.hidden === null ? !dataset.hidden : !meta.hidden;
+                    if (isVisible) {
+                        visibleStates.push({ index, data: dataset.data, label: dataset.label });
+                    }
+                }
+            });
             
             if (visibleStates.length === 0) {
                 // No states visible, hide trends
@@ -1422,12 +1432,10 @@
             }
             
             // First visible state = arrivals
-            const firstState = visibleStates[0];
-            const arrivalData = chart.data.datasets[firstState.index].data;
+            const arrivalData = visibleStates[0].data;
             
             // Last visible state = departures
-            const lastState = visibleStates[visibleStates.length - 1];
-            const departureData = chart.data.datasets[lastState.index].data;
+            const departureData = visibleStates[visibleStates.length - 1].data;
             
             // Calculate trend lines
             const arrivalTrend = calculateTrendLine(arrivalData);
@@ -1448,6 +1456,17 @@
             const numPoints = arrivalData.length;
             if (numPoints >= 2) {
                 const arrivalStart = arrivalData[0] || 0;
+                const arrivalEnd = arrivalData[numPoints - 1] || 0;
+                const departureStart = departureData[0] || 0;
+                const departureEnd = departureData[numPoints - 1] || 0;
+                
+                const arrivalRate = ((arrivalEnd - arrivalStart) / (numPoints - 1)).toFixed(2);
+                const departureRate = ((departureEnd - departureStart) / (numPoints - 1)).toFixed(2);
+                
+                document.getElementById('arrivalRate').textContent = arrivalRate;
+                document.getElementById('departureRate').textContent = departureRate;
+            }
+        }
                 const arrivalEnd = arrivalData[numPoints - 1] || 0;
                 const departureStart = departureData[0] || 0;
                 const departureEnd = departureData[numPoints - 1] || 0;
