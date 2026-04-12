@@ -1292,32 +1292,7 @@
         });
 
         // Cumulative Flow Diagram with state-based layers
-        const cfdDatasets = [
-            // Arrival Trend
-            {
-                label: 'Arrival Trend',
-                data: dashboardData.charts.cfd.arrivalTrend,
-                borderColor: '#c53030',
-                backgroundColor: 'transparent',
-                borderWidth: 2,
-                borderDash: [10, 5],
-                pointRadius: 0,
-                fill: false,
-                order: 0
-            },
-            // Departure Trend
-            {
-                label: 'Departure Trend',
-                data: dashboardData.charts.cfd.departureTrend,
-                borderColor: '#2f855a',
-                backgroundColor: 'transparent',
-                borderWidth: 2,
-                borderDash: [10, 5],
-                pointRadius: 0,
-                fill: false,
-                order: 0
-            }
-        ];
+        const cfdDatasets = [];
         
         // Add state-based layers if available (converted to cumulative)
         if (dashboardData.charts.cfd.states) {
@@ -1363,7 +1338,8 @@
                     pointRadius: 2,
                     pointHoverRadius: 4,
                     hidden: false,  // Visible by default
-                    order: 2
+                    order: 2,
+                    isState: true
                 });
             });
             
@@ -1379,8 +1355,109 @@
                 pointRadius: 2,
                 pointHoverRadius: 4,
                 hidden: false,  // Visible by default
-                order: 2
+                order: 2,
+                isState: true
             });
+        }
+        
+        // Add placeholder trend lines (will be populated by updateTrendLines)
+        cfdDatasets.push({
+            label: 'Arrival Trend',
+            data: [],
+            borderColor: '#c53030',
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            borderDash: [10, 5],
+            pointRadius: 0,
+            fill: false,
+            order: 0,
+            isTrend: true
+        });
+        
+        cfdDatasets.push({
+            label: 'Departure Trend',
+            data: [],
+            borderColor: '#2f855a',
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            borderDash: [10, 5],
+            pointRadius: 0,
+            fill: false,
+            order: 0,
+            isTrend: true
+        });
+        
+        // Function to calculate trend line from data points
+        function calculateTrendLine(data) {
+            const n = data.length;
+            let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+            
+            for (let i = 0; i < n; i++) {
+                sumX += i;
+                sumY += data[i];
+                sumXY += i * data[i];
+                sumX2 += i * i;
+            }
+            
+            const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+            const intercept = (sumY - slope * sumX) / n;
+            
+            return data.map((_, i) => slope * i + intercept);
+        }
+        
+        // Function to update trend lines and rates based on visible states
+        function updateTrendLines(chart) {
+            const meta = chart.getSortedVisibleDatasetMetas();
+            const visibleStates = meta.filter(m => chart.data.datasets[m.index].isState && !m.hidden);
+            
+            if (visibleStates.length === 0) {
+                // No states visible, hide trends
+                const arrivalTrendIndex = chart.data.datasets.findIndex(d => d.label === 'Arrival Trend');
+                const departureTrendIndex = chart.data.datasets.findIndex(d => d.label === 'Departure Trend');
+                if (arrivalTrendIndex >= 0) chart.data.datasets[arrivalTrendIndex].data = [];
+                if (departureTrendIndex >= 0) chart.data.datasets[departureTrendIndex].data = [];
+                document.getElementById('arrivalRate').textContent = '-';
+                document.getElementById('departureRate').textContent = '-';
+                return;
+            }
+            
+            // First visible state = arrivals
+            const firstState = visibleStates[0];
+            const arrivalData = chart.data.datasets[firstState.index].data;
+            
+            // Last visible state = departures
+            const lastState = visibleStates[visibleStates.length - 1];
+            const departureData = chart.data.datasets[lastState.index].data;
+            
+            // Calculate trend lines
+            const arrivalTrend = calculateTrendLine(arrivalData);
+            const departureTrend = calculateTrendLine(departureData);
+            
+            // Update trend datasets
+            const arrivalTrendIndex = chart.data.datasets.findIndex(d => d.label === 'Arrival Trend');
+            const departureTrendIndex = chart.data.datasets.findIndex(d => d.label === 'Departure Trend');
+            
+            if (arrivalTrendIndex >= 0) {
+                chart.data.datasets[arrivalTrendIndex].data = arrivalTrend;
+            }
+            if (departureTrendIndex >= 0) {
+                chart.data.datasets[departureTrendIndex].data = departureTrend;
+            }
+            
+            // Calculate and display rates
+            const numPoints = arrivalData.length;
+            if (numPoints >= 2) {
+                const arrivalStart = arrivalData[0] || 0;
+                const arrivalEnd = arrivalData[numPoints - 1] || 0;
+                const departureStart = departureData[0] || 0;
+                const departureEnd = departureData[numPoints - 1] || 0;
+                
+                const arrivalRate = ((arrivalEnd - arrivalStart) / (numPoints - 1)).toFixed(2);
+                const departureRate = ((departureEnd - departureStart) / (numPoints - 1)).toFixed(2);
+                
+                document.getElementById('arrivalRate').textContent = arrivalRate;
+                document.getElementById('departureRate').textContent = departureRate;
+            }
         }
         
         const cfdChart = new Chart(document.getElementById('cfdChart'), {
@@ -1401,8 +1478,17 @@
                             const ci = legend.chart;
                             const meta = ci.getDatasetMeta(index);
                             
+                            // Don't allow toggling trend lines
+                            if (ci.data.datasets[index].isTrend) {
+                                return;
+                            }
+                            
                             // Toggle visibility
                             meta.hidden = meta.hidden === null ? !ci.data.datasets[index].hidden : null;
+                            ci.update();
+                            
+                            // Recalculate trend lines and rates based on visible states
+                            updateTrendLines(ci);
                             ci.update();
                         }
                     },
@@ -1426,22 +1512,9 @@
             }
         });
         
-        // Calculate and display arrival/departure rates
-        if (dashboardData.charts.cfd.arrivals && dashboardData.charts.cfd.departures) {
-            const numPoints = dashboardData.charts.cfd.arrivals.length;
-            if (numPoints >= 2) {
-                const arrivalStart = dashboardData.charts.cfd.arrivals[0] || 0;
-                const arrivalEnd = dashboardData.charts.cfd.arrivals[numPoints - 1] || 0;
-                const departureStart = dashboardData.charts.cfd.departures[0] || 0;
-                const departureEnd = dashboardData.charts.cfd.departures[numPoints - 1] || 0;
-                
-                const arrivalRate = ((arrivalEnd - arrivalStart) / (numPoints - 1)).toFixed(2);
-                const departureRate = ((departureEnd - departureStart) / (numPoints - 1)).toFixed(2);
-                
-                document.getElementById('arrivalRate').textContent = arrivalRate;
-                document.getElementById('departureRate').textContent = departureRate;
-            }
-        }
+        // Initialize trend lines and rates based on initially visible states
+        updateTrendLines(cfdChart);
+        cfdChart.update();
         
         // Time In Board Column Chart
         if (dashboardData.charts.timeInColumn) {
