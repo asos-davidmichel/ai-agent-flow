@@ -195,20 +195,26 @@
     "workItemAge": {
       "states": [
         {
+          "name": "Ready for Dev",
+          "items": [
+            {"id": 1148527, "title": "Server Side - Extend view_item_list", "age": 22},
+            {"id": 1147435, "title": "External view, new list to cover categories", "age": 18}
+          ]
+        },
+        {
           "name": "In Development",
           "items": [
-            {"id": 1127036, "title": "Add onChange callback to datalayer", "age": 15},
-            {"id": 1146851, "title": "Extend search result view event", "age": 8},
-            {"id": 1158931, "title": "Add new events to Saved List page", "age": 5}
+            {"id": 1176823, "title": "New article API - Calculated sizes", "age": 12},
+            {"id": 1159038, "title": "Saved List - Send flexibleSalesChannel values", "age": 8}
           ]
         },
         {
           "name": "In Review",
           "items": [
-            {"id": 1159059, "title": "PDP event item object update", "age": 45},
-            {"id": 1159096, "title": "Bag Engagement Events", "age": 28},
-            {"id": 1160123, "title": "Checkout events update", "age": 12},
-            {"id": 1161234, "title": "Profile page tracking", "age": 3}
+            {"id": 1193345, "title": "Investigate checkout CRM event dimension", "age": 6},
+            {"id": 1193598, "title": "My Account - Push server details events", "age": 5},
+            {"id": 1189641, "title": "Voucher Split Payments and Basket PaymentMethods", "age": 9},
+            {"id": 1193568, "title": "Another review item", "age": 4}
           ]
         },
         {
@@ -223,25 +229,24 @@
         {
           "name": "Ready for QA",
           "items": [
-            {"id": 1164567, "title": "Homepage events", "age": 18},
-            {"id": 1165678, "title": "Search refinement", "age": 7},
-            {"id": 1166789, "title": "Filter events", "age": 2}
+            {"id": 1193093, "title": "Bag - Extend view_item to cover UltimateIdeas", "age": 15},
+            {"id": 1166516, "title": "SearchBox - Falling customerMarketingSite event", "age": 12},
+            {"id": 1195432, "title": "Additional QA item", "age": 7}
           ]
         },
         {
           "name": "QA",
           "items": [
-            {"id": 1167890, "title": "Mobile app tracking", "age": 35},
-            {"id": 1168901, "title": "Cross-device sync", "age": 22},
-            {"id": 1169012, "title": "Analytics dashboard", "age": 14},
-            {"id": 1170123, "title": "Event validation", "age": 6}
+            {"id": 1180335, "title": "BDD - Send flexibleSalesChannel values", "age": 24},
+            {"id": 1185678, "title": "QA validation item", "age": 16}
           ]
         },
         {
           "name": "Ready for Release",
           "items": [
-            {"id": 1171234, "title": "Performance optimization", "age": 42},
-            {"id": 1172345, "title": "Error handling", "age": 19}
+            {"id": 1182706, "title": "SavedList - add modify_item button click event", "age": 18},
+            {"id": 1182291, "title": "PLP - Pass recipient id to view_item_list event", "age": 14},
+            {"id": 1186791, "title": "Items array empty when adding shortcut to Wishlist iOS", "age": 11}
           ]
         }
       ],
@@ -529,7 +534,7 @@
     "leadTime": "Lead time averages 18.2 days (median 15 days) from creation to completion. Much longer than cycle time, indicating items wait in backlog before work begins. Longest: Bug #1170800 at 45 days total (22 days before work started + 23 days active).",
     "flowEfficiency": "Average flow efficiency 35% - items spend only about 1/3 of total time in active work. Significant opportunity to reduce non-active time. Best efficiency: Bug #1192521 at 87% (1 day active / 1.15 days total). Worst: Bug #1170800 at 51% (23/45 days active). Improving efficiency means reducing time between creation and starting work.",
     "cfd": "System is significantly unstable. Arrival rate (5.6/week) far exceeds departure rate (2.0/week), causing backlog to grow by ~3.6 items/week. The gap between cumulative arrivals and departures is widening, indicating accumulating backlog. Trend lines show arrivals accelerating while departures remain relatively flat.",
-    "workItemAge": "Work items aging significantly in External Review (48 days max) and QA (35 days max). Most concerning: #1147602 (Bag - Badges) at 48 days in External Review, #1159059 (PDP update) at 45 days in Review. Focus on clearing older items before starting new work.",
+    "workItemAge": "Work items aging significantly in External Review (48 days max) and Ready for Dev (22 days). Most concerning: #1147602 (Bag - Badges) at 48 days in External Review, #1180335 (BDD flexibleSalesChannel) at 24 days in QA. Items waiting in Ready for Dev suggest intake/prioritization bottleneck. Focus on clearing older items before starting new work.",
     "dailyWip": "WIP trending upward from 6 to 9-12 items over the period. Trend line shows consistent growth. Consider implementing WIP limits to prevent further accumulation and maintain sustainable delivery pace.",
     "staleWork": "5 items haven't been updated in 4 days. All are high-value items stuck in different states. Most critical: #1127036 (onChange callback), #1162345 (GDPR compliance), #1159059 (PDP update). Daily standup should focus on unblocking these items.",
     "timeInColumn": "Most time spent in QA (108 days) and External Review (72 days), indicating significant bottlenecks in review processes. In Development (22 days) and In Review (20 days) are more efficient. Consider increasing QA capacity or implementing automated testing to reduce time in QA column. External Review bottleneck suggests need for better coordination with external stakeholders.",
