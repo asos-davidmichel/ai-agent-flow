@@ -1293,32 +1293,6 @@
 
         // Cumulative Flow Diagram with state-based layers
         const cfdDatasets = [
-            // Cumulative Arrivals
-            {
-                label: 'Cumulative Arrivals',
-                data: dashboardData.charts.cfd.arrivals,
-                borderColor: '#f56565',
-                backgroundColor: 'rgba(245, 101, 101, 0.1)',
-                borderWidth: 3,
-                fill: true,
-                tension: 0,
-                pointRadius: 4,
-                pointHoverRadius: 6,
-                order: 1
-            },
-            // Cumulative Departures
-            {
-                label: 'Cumulative Departures',
-                data: dashboardData.charts.cfd.departures,
-                borderColor: '#48bb78',
-                backgroundColor: 'rgba(72, 187, 120, 0.1)',
-                borderWidth: 3,
-                fill: true,
-                tension: 0,
-                pointRadius: 4,
-                pointHoverRadius: 6,
-                order: 1
-            },
             // Arrival Trend
             {
                 label: 'Arrival Trend',
@@ -1388,7 +1362,7 @@
                     tension: 0,
                     pointRadius: 2,
                     pointHoverRadius: 4,
-                    hidden: true,  // Hidden by default
+                    hidden: false,  // Visible by default
                     order: 2
                 });
             });
@@ -1404,7 +1378,7 @@
                 tension: 0,
                 pointRadius: 2,
                 pointHoverRadius: 4,
-                hidden: true,  // Hidden by default
+                hidden: false,  // Visible by default
                 order: 2
             });
         }
