@@ -657,6 +657,38 @@
             </div>
             
             <div class="metric-card">
+                <h3>Lead Time</h3>
+                ${dashboardData.hasBugPbiSplit ? `
+                    <div class="metric-split">
+                        <div class="metric-split-item">
+                            <div class="type-label">🐛 Bugs</div>
+                            <div class="type-value">${dashboardData.metrics.leadTime.bugs}</div>
+                        </div>
+                        <div class="metric-split-item">
+                            <div class="type-label">✨ PBIs</div>
+                            <div class="type-value">${dashboardData.metrics.leadTime.pbis}</div>
+                        </div>
+                    </div>
+                    <div class="metric-label">days average</div>
+                ` : `
+                    <div class="metric-value">${dashboardData.metrics.leadTime.avg}</div>
+                    <div class="metric-label">days average</div>
+                `}
+                <div class="metric-trend trend-good">
+                    Median: ${dashboardData.metrics.leadTime.median} | 85th: ${dashboardData.metrics.leadTime.p85}
+                </div>
+            </div>
+            
+            <div class="metric-card">
+                <h3>Flow Efficiency</h3>
+                <div class="metric-value">${dashboardData.metrics.flowEfficiency.avg}%</div>
+                <div class="metric-label">average efficiency</div>
+                <div class="metric-trend ${dashboardData.metrics.flowEfficiency.class}">
+                    ${dashboardData.metrics.flowEfficiency.text}
+                </div>
+            </div>
+            
+            <div class="metric-card">
                 <h3>System Stability</h3>
                 <div class="metric-value">${dashboardData.metrics.systemStability.ratio}</div>
                 <div class="metric-label">Arrival/Departure Ratio</div>
@@ -1313,7 +1345,7 @@
             }
         ];
         
-        // Add state-based layers if available
+        // Add state-based layers if available (converted to cumulative)
         if (dashboardData.charts.cfd.states) {
             const stateColors = [
                 { border: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.2)' },  // Purple
@@ -1325,11 +1357,30 @@
                 { border: '#6366f1', bg: 'rgba(99, 102, 241, 0.2)' },  // Indigo
             ];
             
+            // Convert state WIP counts to cumulative flow
+            // For a proper CFD, we need to show cumulative items that reached each state
+            // We'll calculate this by taking cumulative arrivals and subtracting items still in previous states
+            
             dashboardData.charts.cfd.states.forEach((state, index) => {
                 const color = stateColors[index % stateColors.length];
+                
+                // Calculate cumulative values for this state
+                // This represents "how many items have reached this state or beyond"
+                const cumulativeValues = state.values.map((wipCount, timeIndex) => {
+                    // Start with total arrivals up to this point
+                    let cumulative = dashboardData.charts.cfd.arrivals[timeIndex];
+                    
+                    // Subtract items still in states before this one
+                    for (let prevStateIndex = 0; prevStateIndex < index; prevStateIndex++) {
+                        cumulative -= dashboardData.charts.cfd.states[prevStateIndex].values[timeIndex];
+                    }
+                    
+                    return cumulative;
+                });
+                
                 cfdDatasets.push({
                     label: state.name,
-                    data: state.values,
+                    data: cumulativeValues,
                     borderColor: color.border,
                     backgroundColor: color.bg,
                     borderWidth: 2,
@@ -1340,6 +1391,21 @@
                     hidden: true,  // Hidden by default
                     order: 2
                 });
+            });
+            
+            // Add "Done" state as cumulative departures
+            cfdDatasets.push({
+                label: 'Done',
+                data: dashboardData.charts.cfd.departures,
+                borderColor: '#059669',
+                backgroundColor: 'rgba(5, 150, 105, 0.2)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0,
+                pointRadius: 2,
+                pointHoverRadius: 4,
+                hidden: true,  // Hidden by default
+                order: 2
             });
         }
         

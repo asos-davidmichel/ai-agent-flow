@@ -19,6 +19,18 @@
       "median": 6.0,
       "p85": 10.7
     },
+    "leadTime": {
+      "bugs": 21.6,
+      "pbis": 16.5,
+      "avg": 18.2,
+      "median": 15.0,
+      "p85": 28.5
+    },
+    "flowEfficiency": {
+      "avg": 35,
+      "text": "Items spend only 35% of time in active work",
+      "class": "trend-warning"
+    },
     "systemStability": {
       "ratio": "2.80",
       "text": "⚠️ UNSTABLE - GROWING",
