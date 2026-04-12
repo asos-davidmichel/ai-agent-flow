@@ -3,6 +3,7 @@ flow_metrics_analysis.py
 flow_metrics_data.json
 FLOW_METRICS_REPORT.md
 flow_metrics_dashboard.html
+dashboard/dashboard.html
 
 # Python
 __pycache__/
