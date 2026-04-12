@@ -86,9 +86,10 @@
         }
         
         .trend-indicator {
-            font-size: 32px;
+            font-size: 40px;
             font-weight: 900;
             line-height: 1;
+            -webkit-text-stroke: 0.5px currentColor;
         }
         
         .trend-up-good {
@@ -420,17 +421,22 @@
         <!-- Tabs -->
         <div class="tabs">
             <div class="tab-nav">
-                <button class="tab-button active" onclick="switchTab(event, 'flow-delivery')">📈 Flow & Delivery</button>
-                <button class="tab-button" onclick="switchTab(event, 'wip-management')">⏱️ WIP Management</button>
-                <button class="tab-button" onclick="switchTab(event, 'quality-health')">🐛 Quality & Health</button>
+                <button class="tab-button active" onclick="switchTab(event, 'time-metrics')">⏱️ Time Metrics</button>
+                <button class="tab-button" onclick="switchTab(event, 'flow-system')">🔄 Flow & System</button>
+                <button class="tab-button" onclick="switchTab(event, 'wip-tracking')">📊 WIP Tracking</button>
+                <button class="tab-button" onclick="switchTab(event, 'aging-analysis')">📈 Aging Analysis</button>
+                <button class="tab-button" onclick="switchTab(event, 'blocked-items')">🚫 Blocked Items</button>
             </div>
 
-            <!-- Tab 1: Flow & Delivery -->
-            <div id="flow-delivery" class="tab-content active">
+            <!-- Tab 1: Time Metrics (Throughput, Cycle & Lead Time, Efficiency) -->
+            <div id="time-metrics" class="tab-content active">
                 <div class="charts-grid">
             <!-- Throughput Trend -->
             <div class="chart-card">
                 <h2>📈 Throughput Trend</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    Shows the number of items completed over time.
+                </p>
                 <div class="chart-container">
                     <canvas id="throughputChart"></canvas>
                 </div>
@@ -440,6 +446,9 @@
             <!-- Cycle Time Distribution -->
             <div class="chart-card">
                 <h2>⏱️ Cycle Time by Completion Date</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    Shows how long items took to complete (from start to done), measured in calendar days.
+                </p>
                 <div class="chart-container">
                     <canvas id="cycleTimeChart"></canvas>
                 </div>
@@ -449,6 +458,9 @@
             <!-- Lead Time Distribution -->
             <div class="chart-card">
                 <h2>🕐 Lead Time by Completion Date</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    Shows the total time from creation to completion for each item.
+                </p>
                 <div class="chart-container">
                     <canvas id="leadTimeChart"></canvas>
                 </div>
@@ -459,14 +471,31 @@
             <div class="chart-card">
                 <h2>⚡ Flow Efficiency (Cycle / Lead Time)</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    Percentage of total time spent in active work vs total lead time.<br>
-                    <strong>Goal:</strong> Higher is better - optimize by reducing non-active time.
+                    Shows the percentage of time spent in active work compared to total lead time.
                 </p>
                 <div class="chart-container">
                     <canvas id="flowEfficiencyChart"></canvas>
                 </div>
                 <div class="insight-box" id="flowEfficiencyInsight"></div>
             </div>
+
+            <!-- Bug Rate Trend -->
+            <div class="chart-card">
+                <h2>🐛 Bug Rate Trend</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    Shows the percentage of bugs relative to all completed work items over time.
+                </p>
+                <div class="chart-container">
+                    <canvas id="bugRateChart"></canvas>
+                </div>
+                <div class="insight-box" id="bugRateInsight"></div>
+            </div>
+        </div>
+            </div>
+
+            <!-- Tab 2: Flow & System (CFD, Net Flow, Stale Work, State Distribution) -->
+            <div id="flow-system" class="tab-content">
+                <div class="charts-grid">
 
             <!-- Cumulative Flow Diagram -->
             <div class="chart-card">
@@ -484,41 +513,16 @@
                 <div class="insight-box" id="cfdInsight"></div>
             </div>
 
-            <!-- Time In Board Column -->
+            <!-- Net Flow (Sustainability) -->
             <div class="chart-card">
-                <h2>⏱️ Time In Board Column</h2>
+                <h2>⚖️ Sustainability (Net Flow)</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    Total amount of time (in calendar days) items spent in a given column.
+                    Shows the difference between work started and work completed each day.
                 </p>
                 <div class="chart-container">
-                    <canvas id="timeInColumnChart"></canvas>
+                    <canvas id="netFlowChart"></canvas>
                 </div>
-                <div class="insight-box" id="timeInColumnInsight"></div>
-            </div>
-
-            <!-- Work Item Age by State -->
-            <div class="chart-card">
-                <h2>📍 Work Item Age</h2>
-                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    How many days an individual work item (represented by a dot) has been in-progress for.
-                </p>
-                <div class="chart-container">
-                    <canvas id="workItemAgeChart"></canvas>
-                </div>
-                <div class="insight-box" id="workItemAgeInsight"></div>
-            </div>
-
-            <!-- Daily WIP -->
-            <div class="chart-card">
-                <h2>📈 Daily Work In Progress (WIP)</h2>
-                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    The number of items in progress each day.<br>
-                    A red dot represents when a column breached its WIP limit on that date.
-                </p>
-                <div class="chart-container">
-                    <canvas id="dailyWipChart"></canvas>
-                </div>
-                <div class="insight-box" id="dailyWipInsight"></div>
+                <div class="insight-box" id="netFlowInsight"></div>
             </div>
 
             <!-- Stale Work -->
@@ -533,6 +537,61 @@
                 <div class="insight-box" id="staleWorkInsight"></div>
             </div>
 
+            <!-- Transition Rate Ratios -->
+            <div class="chart-card">
+                <h2>🔄 Transition Rate Ratios</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    Shows the arrival-to-departure rate ratio for each workflow transition.
+                </p>
+                <div class="chart-container">
+                    <canvas id="transitionRatesChart"></canvas>
+                </div>
+                <div class="insight-box" id="transitionRatesInsight"></div>
+            </div>
+
+            <!-- State Distribution -->
+            <div class="chart-card">
+                <h2>📊 Backlog State Distribution</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    Shows how work items are distributed across different workflow states.
+                </p>
+                <div class="chart-container">
+                    <canvas id="stateChart"></canvas>
+                </div>
+                <div class="insight-box" id="stateInsight"></div>
+            </div>
+
+            <!-- Time In Board Column -->
+            <div class="chart-card">
+                <h2>⏱️ Time In Board Column</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    Total amount of time (in calendar days) items spent in a given column.
+                </p>
+                <div class="chart-container">
+                    <canvas id="timeInColumnChart"></canvas>
+                </div>
+                <div class="insight-box" id="timeInColumnInsight"></div>
+            </div>
+        </div>
+            </div>
+
+            <!-- Tab 3: WIP Tracking (Daily WIP, Daily WIP x Work Item Age) -->
+            <div id="wip-tracking" class="tab-content">
+                <div class="charts-grid">
+
+            <!-- Daily WIP -->
+            <div class="chart-card">
+                <h2>📈 Daily Work In Progress (WIP)</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    The number of items in progress each day.<br>
+                    A red dot represents when a column breached its WIP limit on that date.
+                </p>
+                <div class="chart-container">
+                    <canvas id="dailyWipChart"></canvas>
+                </div>
+                <div class="insight-box" id="dailyWipInsight"></div>
+            </div>
+
             <!-- Daily WIP x Work Item Age -->
             <div class="chart-card">
                 <h2>📊 Daily WIP x Work Item Age</h2>
@@ -544,50 +603,51 @@
                 </div>
                 <div class="insight-box" id="wipAgeBreakdownInsight"></div>
             </div>
+        </div>
+            </div>
 
+            <!-- Tab 4: Aging Analysis (Aging WIP, Work Item Age) -->
+            <div id="aging-analysis" class="tab-content">
+                <div class="charts-grid">
             <!-- WIP Aging -->
             <div class="chart-card">
                 <h2>🔧 Aging Work In Progress</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    Shows currently active items grouped by how long they've been in progress.
+                </p>
                 <div class="chart-container">
                     <canvas id="wipChart"></canvas>
                 </div>
                 <div class="insight-box" id="wipInsight"></div>
             </div>
+
+            <!-- Work Item Age by State -->
+            <div class="chart-card">
+                <h2>📍 Work Item Age</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    How many days an individual work item (represented by a dot) has been in-progress for.
+                </p>
+                <div class="chart-container">
+                    <canvas id="workItemAgeChart"></canvas>
+                </div>
+                <div class="insight-box" id="workItemAgeInsight"></div>
+            </div>
         </div>
             </div>
 
-            <!-- Tab 3: Quality & Health -->
-            <div id="quality-health" class="tab-content">
+            <!-- Tab 5: Blocked Items -->
+            <div id="blocked-items" class="tab-content">
                 <div class="charts-grid">
-            <!-- Bug Rate Trend -->
+            <!-- Blocked Items Over Time -->
             <div class="chart-card">
-                <h2>🐛 Bug Rate Trend</h2>
-                <div class="chart-container">
-                    <canvas id="bugRateChart"></canvas>
-                </div>
-                <div class="insight-box" id="bugRateInsight"></div>
-            </div>
-
-            <!-- Net Flow (Sustainability) -->
-            <div class="chart-card">
-                <h2>⚖️ Sustainability (Net Flow)</h2>
+                <h2>🚫 Blocked Items Over Time</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    How sustainable is our pace of starting and finishing work?<br>
-                    <strong>Goal:</strong> Stop starting, start finishing - aim to keep around zero and avoid high/low peaks.
+                    Shows the number of blocked items each day with a trend line.
                 </p>
                 <div class="chart-container">
-                    <canvas id="netFlowChart"></canvas>
+                    <canvas id="blockedItemsChart"></canvas>
                 </div>
-                <div class="insight-box" id="netFlowInsight"></div>
-            </div>
-
-            <!-- State Distribution -->
-            <div class="chart-card">
-                <h2>📊 Backlog State Distribution</h2>
-                <div class="chart-container">
-                    <canvas id="stateChart"></canvas>
-                </div>
-                <div class="insight-box" id="stateInsight"></div>
+                <div class="insight-box" id="blockedItemsInsight"></div>
             </div>
         </div>
             </div>
@@ -2472,6 +2532,142 @@
                                 return context.label + ': ' + context.parsed + ' items (' + percentage + '%)';
                             }
                         }
+                    }
+                }
+            }
+        });
+
+        // Blocked Items Over Time Chart
+        new Chart(document.getElementById('blockedItemsChart'), {
+            type: 'line',
+            data: {
+                labels: dashboardData.charts.blockedItems.labels,
+                datasets: [{
+                    label: 'Blocked Items',
+                    data: dashboardData.charts.blockedItems.values,
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 6,
+                    pointHoverRadius: 10,
+                    pointBackgroundColor: '#ef4444',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2
+                }, {
+                    label: 'Trend',
+                    data: calculateThroughputTrend(dashboardData.charts.blockedItems.values),
+                    borderColor: '#9ca3af',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    borderDash: [10, 5],
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.8)',
+                        padding: 12,
+                        callbacks: {
+                            title: function(context) {
+                                return 'Date: ' + context[0].label;
+                            },
+                            label: function(context) {
+                                if (context.datasetIndex === 0) {
+                                    return 'Blocked Items: ' + context.parsed.y;
+                                }
+                                return null;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: { display: true, text: 'Number of Blocked Items' },
+                        grid: { color: '#e2e8f0' }
+                    },
+                    x: {
+                        title: { display: true, text: 'Date' },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+
+        // Transition Rate Ratios Chart
+        new Chart(document.getElementById('transitionRatesChart'), {
+            type: 'bar',
+            data: {
+                labels: dashboardData.charts.transitionRates.transitions,
+                datasets: [{
+                    label: 'Arrival/Departure Ratio',
+                    data: dashboardData.charts.transitionRates.ratios,
+                    backgroundColor: dashboardData.charts.transitionRates.ratios.map(ratio => 
+                        ratio > 1.2 ? '#ef4444' : ratio < 0.8 ? '#10b981' : '#6b7280'
+                    ),
+                    borderColor: dashboardData.charts.transitionRates.ratios.map(ratio => 
+                        ratio > 1.2 ? '#ef4444' : ratio < 0.8 ? '#10b981' : '#6b7280'
+                    ),
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.8)',
+                        padding: 12,
+                        callbacks: {
+                            label: function(context) {
+                                const ratio = context.parsed.x;
+                                const status = ratio > 1.2 ? '(Building up)' : 
+                                             ratio < 0.8 ? '(Draining)' : 
+                                             '(Balanced)';
+                                return `Ratio: ${ratio.toFixed(2)} ${status}`;
+                            },
+                            afterLabel: function(context) {
+                                const index = context.dataIndex;
+                                return [
+                                    `Arrival: ${dashboardData.charts.transitionRates.arrivals[index]}/wk`,
+                                    `Departure: ${dashboardData.charts.transitionRates.departures[index]}/wk`
+                                ];
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        title: { display: true, text: 'Arrival/Departure Ratio' },
+                        grid: { 
+                            color: function(context) {
+                                if (context.tick.value === 1) {
+                                    return '#2d3748';
+                                }
+                                return '#e2e8f0';
+                            },
+                            lineWidth: function(context) {
+                                if (context.tick.value === 1) {
+                                    return 2;
+                                }
+                                return 1;
+                            }
+                        }
+                    },
+                    y: {
+                        title: { display: true, text: 'Workflow Transition' },
+                        grid: { display: false }
                     }
                 }
             }
