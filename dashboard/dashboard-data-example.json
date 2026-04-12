@@ -78,8 +78,8 @@
       "percentage": "7.7",
       "class": "trend-warning",
       "trend": {
-        "direction": "down",
-        "isGood": true
+        "direction": "up",
+        "isGood": false
       }
     }
   },
