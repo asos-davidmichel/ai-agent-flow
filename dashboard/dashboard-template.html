@@ -258,10 +258,119 @@
             color: #764ba2;
             text-decoration: underline;
         }
+
+        /* Custom HTML Tooltip */
+        #customTooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 12px;
+            border-radius: 6px;
+            pointer-events: auto;
+            display: none;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            max-width: 400px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        #customTooltip.visible {
+            display: block;
+        }
+
+        #customTooltip .tooltip-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        #customTooltip .tooltip-content {
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        #customTooltip a {
+            color: #67d3ea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        #customTooltip a:hover {
+            color: #9fe7f5;
+            text-decoration: underline;
+        }
+
+        #customTooltip .close-hint {
+            font-size: 11px;
+            color: #aaa;
+            margin-top: 8px;
+            font-style: italic;
+        }
+        
+        /* Tabs */
+        .tabs {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.07);
+            margin-bottom: 30px;
+            overflow: hidden;
+        }
+        
+        .tab-nav {
+            display: flex;
+            border-bottom: 2px solid #e2e8f0;
+            background: #f7fafc;
+        }
+        
+        .tab-button {
+            flex: 1;
+            padding: 18px 24px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+            color: #718096;
+            transition: all 0.3s;
+            position: relative;
+        }
+        
+        .tab-button:hover {
+            background: #edf2f7;
+            color: #4a5568;
+        }
+        
+        .tab-button.active {
+            color: #667eea;
+            background: white;
+        }
+        
+        .tab-button.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .tab-content {
+            display: none;
+            padding: 25px;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
         
         @media (max-width: 768px) {
             .charts-grid {
                 grid-template-columns: 1fr;
+            }
+            .tab-nav {
+                flex-direction: column;
             }
         }
     </style>
@@ -279,8 +388,17 @@
             <!-- Dynamically populated -->
         </div>
 
-        <!-- Charts -->
-        <div class="charts-grid">
+        <!-- Tabs -->
+        <div class="tabs">
+            <div class="tab-nav">
+                <button class="tab-button active" onclick="switchTab(event, 'flow-delivery')">📈 Flow & Delivery</button>
+                <button class="tab-button" onclick="switchTab(event, 'wip-management')">⏱️ WIP Management</button>
+                <button class="tab-button" onclick="switchTab(event, 'quality-health')">🐛 Quality & Health</button>
+            </div>
+
+            <!-- Tab 1: Flow & Delivery -->
+            <div id="flow-delivery" class="tab-content active">
+                <div class="charts-grid">
             <!-- Throughput Trend -->
             <div class="chart-card">
                 <h2>📈 Throughput Trend</h2>
@@ -299,13 +417,103 @@
                 <div class="insight-box" id="cycleTimeInsight"></div>
             </div>
 
+            <!-- Lead Time Distribution -->
+            <div class="chart-card">
+                <h2>🕐 Lead Time by Completion Date</h2>
+                <div class="chart-container">
+                    <canvas id="leadTimeChart"></canvas>
+                </div>
+                <div class="insight-box" id="leadTimeInsight"></div>
+            </div>
+
+            <!-- Flow Efficiency -->
+            <div class="chart-card">
+                <h2>⚡ Flow Efficiency (Cycle / Lead Time)</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    Percentage of total time spent in active work vs total lead time.<br>
+                    <strong>Goal:</strong> Higher is better - optimize by reducing non-active time.
+                </p>
+                <div class="chart-container">
+                    <canvas id="flowEfficiencyChart"></canvas>
+                </div>
+                <div class="insight-box" id="flowEfficiencyInsight"></div>
+            </div>
+
             <!-- Cumulative Flow Diagram -->
             <div class="chart-card">
-                <h2>🔄 Cumulative Flow (Arrival vs Departure)</h2>
+                <h2>🔄 Cumulative Flow Diagram</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    Shows arrival vs departure as cumulative lines with trend lines to visualize system stability. Toggle states on/off to analyze specific workflow stages.
+                </p>
+                <div id="cfdRates" style="background: #f7fafc; padding: 10px; margin-bottom: 10px; border-radius: 6px; font-size: 14px; color: #4a5568;">
+                    <strong>Arrival Rate:</strong> <span id="arrivalRate">-</span> items/week | 
+                    <strong>Departure Rate:</strong> <span id="departureRate">-</span> items/week
+                </div>
                 <div class="chart-container">
                     <canvas id="cfdChart"></canvas>
                 </div>
                 <div class="insight-box" id="cfdInsight"></div>
+            </div>
+
+            <!-- Time In Board Column -->
+            <div class="chart-card">
+                <h2>⏱️ Time In Board Column</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    Total amount of time (in calendar days) items spent in a given column.
+                </p>
+                <div class="chart-container">
+                    <canvas id="timeInColumnChart"></canvas>
+                </div>
+                <div class="insight-box" id="timeInColumnInsight"></div>
+            </div>
+
+            <!-- Work Item Age by State -->
+            <div class="chart-card">
+                <h2>📍 Work Item Age</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    How many days an individual work item (represented by a dot) has been in-progress for.
+                </p>
+                <div class="chart-container">
+                    <canvas id="workItemAgeChart"></canvas>
+                </div>
+                <div class="insight-box" id="workItemAgeInsight"></div>
+            </div>
+
+            <!-- Daily WIP -->
+            <div class="chart-card">
+                <h2>📈 Daily Work In Progress (WIP)</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    The number of items in progress each day.<br>
+                    A red dot represents when a column breached its WIP limit on that date.
+                </p>
+                <div class="chart-container">
+                    <canvas id="dailyWipChart"></canvas>
+                </div>
+                <div class="insight-box" id="dailyWipInsight"></div>
+            </div>
+
+            <!-- Stale Work -->
+            <div class="chart-card">
+                <h2>⚠️ Stale Work</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    How many days since a work item has been updated.
+                </p>
+                <div class="chart-container">
+                    <canvas id="staleWorkChart"></canvas>
+                </div>
+                <div class="insight-box" id="staleWorkInsight"></div>
+            </div>
+
+            <!-- Daily WIP x Work Item Age -->
+            <div class="chart-card">
+                <h2>📊 Daily WIP x Work Item Age</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    Maintain a focus on WIP whilst seeing when work item age grows.
+                </p>
+                <div class="chart-container">
+                    <canvas id="wipAgeBreakdownChart"></canvas>
+                </div>
+                <div class="insight-box" id="wipAgeBreakdownInsight"></div>
             </div>
 
             <!-- WIP Aging -->
@@ -316,14 +524,32 @@
                 </div>
                 <div class="insight-box" id="wipInsight"></div>
             </div>
+        </div>
+            </div>
 
+            <!-- Tab 3: Quality & Health -->
+            <div id="quality-health" class="tab-content">
+                <div class="charts-grid">
             <!-- Bug Rate Trend -->
             <div class="chart-card">
-                <h2>🐛 Bug Rate by Week</h2>
+                <h2>🐛 Bug Rate Trend</h2>
                 <div class="chart-container">
                     <canvas id="bugRateChart"></canvas>
                 </div>
                 <div class="insight-box" id="bugRateInsight"></div>
+            </div>
+
+            <!-- Net Flow (Sustainability) -->
+            <div class="chart-card">
+                <h2>⚖️ Sustainability (Net Flow)</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    How sustainable is our pace of starting and finishing work?<br>
+                    <strong>Goal:</strong> Stop starting, start finishing - aim to keep around zero and avoid high/low peaks.
+                </p>
+                <div class="chart-container">
+                    <canvas id="netFlowChart"></canvas>
+                </div>
+                <div class="insight-box" id="netFlowInsight"></div>
             </div>
 
             <!-- State Distribution -->
@@ -333,6 +559,8 @@
                     <canvas id="stateChart"></canvas>
                 </div>
                 <div class="insight-box" id="stateInsight"></div>
+            </div>
+        </div>
             </div>
         </div>
 
@@ -349,7 +577,25 @@
         </div>
     </div>
 
+    <!-- Custom Tooltip for cycle time chart -->
+    <div id="customTooltip"></div>
+
     <script>
+        // Tab switching function
+        function switchTab(event, tabId) {
+            // Hide all tab contents
+            const tabContents = document.querySelectorAll('.tab-content');
+            tabContents.forEach(content => content.classList.remove('active'));
+            
+            // Remove active class from all buttons
+            const tabButtons = document.querySelectorAll('.tab-button');
+            tabButtons.forEach(button => button.classList.remove('active'));
+            
+            // Show selected tab
+            document.getElementById(tabId).classList.add('active');
+            event.target.classList.add('active');
+        }
+
         // ===== DATA INJECTION POINT =====
         // The data object will be injected here by the Python script
         const dashboardData = /* DATA_PLACEHOLDER */;
@@ -445,9 +691,27 @@
         // Render insights
         document.getElementById('throughputInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.throughput}</p>`;
         document.getElementById('cycleTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.cycleTime}</p>`;
+        document.getElementById('leadTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.leadTime}</p>`;
+        document.getElementById('flowEfficiencyInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.flowEfficiency}</p>`;
         document.getElementById('cfdInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.cfd}</p>`;
+        if (dashboardData.insights.timeInColumn) {
+            document.getElementById('timeInColumnInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.timeInColumn}</p>`;
+        }
+        if (dashboardData.insights.workItemAge) {
+            document.getElementById('workItemAgeInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.workItemAge}</p>`;
+        }
+        if (dashboardData.insights.dailyWip) {
+            document.getElementById('dailyWipInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.dailyWip}</p>`;
+        }
+        if (dashboardData.insights.staleWork) {
+            document.getElementById('staleWorkInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.staleWork}</p>`;
+        }
+        if (dashboardData.insights.wipAgeBreakdown) {
+            document.getElementById('wipAgeBreakdownInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.wipAgeBreakdown}</p>`;
+        }
         document.getElementById('wipInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.wip}</p>`;
         document.getElementById('bugRateInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.bugRate}</p>`;
+        document.getElementById('netFlowInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.netFlow}</p>`;
         document.getElementById('stateInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.state}</p>`;
 
         // Render footer
@@ -478,6 +742,40 @@
             modal.style.display = 'block';
         }
 
+        // Custom tooltip management
+        const customTooltip = document.getElementById('customTooltip');
+        let tooltipHideTimeout = null;
+        let isTooltipHovered = false;
+
+        // Keep tooltip visible when hovering over it
+        customTooltip.addEventListener('mouseenter', () => {
+            isTooltipHovered = true;
+            if (tooltipHideTimeout) {
+                clearTimeout(tooltipHideTimeout);
+                tooltipHideTimeout = null;
+            }
+        });
+
+        customTooltip.addEventListener('mouseleave', () => {
+            isTooltipHovered = false;
+            hideTooltipWithDelay();
+        });
+
+        function hideTooltipWithDelay() {
+            tooltipHideTimeout = setTimeout(() => {
+                if (!isTooltipHovered) {
+                    customTooltip.classList.remove('visible');
+                }
+            }, 100);
+        }
+
+        // Click anywhere to close tooltip
+        document.addEventListener('click', (e) => {
+            if (!customTooltip.contains(e.target)) {
+                customTooltip.classList.remove('visible');
+            }
+        });
+
         // Chart.js configuration
         Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif';
         Chart.defaults.color = '#4a5568';
@@ -506,26 +804,63 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                onClick: (e, activeElements) => {
-                    if (activeElements.length > 0) {
-                        const index = activeElements[0].index;
-                        const weekLabel = dashboardData.charts.throughput.labels[index];
-                        const items = dashboardData.charts.throughput.items[index];
-                        showItemsModal(`Items Completed - Week Ending ${weekLabel}`, items);
-                    }
-                },
                 plugins: {
                     legend: { display: false },
                     tooltip: {
-                        backgroundColor: 'rgba(0,0,0,0.8)',
-                        padding: 12,
-                        titleFont: { size: 14, weight: 'bold' },
-                        bodyFont: { size: 13 },
-                        displayColors: false,
-                        callbacks: {
-                            afterBody: function() {
-                                return 'Click to see details';
+                        enabled: false,
+                        external: function(context) {
+                            // Tooltip Element
+                            const tooltipEl = document.getElementById('customTooltip');
+                            
+                            // Hide if no tooltip
+                            const tooltipModel = context.tooltip;
+                            if (tooltipModel.opacity === 0) {
+                                if (!isTooltipHovered) {
+                                    hideTooltipWithDelay();
+                                }
+                                return;
                             }
+
+                            // Clear any pending hide timeout
+                            if (tooltipHideTimeout) {
+                                clearTimeout(tooltipHideTimeout);
+                                tooltipHideTimeout = null;
+                            }
+
+                            // Get data point
+                            if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
+                                const dataPoint = tooltipModel.dataPoints[0];
+                                const index = dataPoint.dataIndex;
+                                const weekLabel = dashboardData.charts.throughput.labels[index];
+                                const items = dashboardData.charts.throughput.items[index];
+                                const count = dashboardData.charts.throughput.values[index];
+                                
+                                // Build HTML for items list
+                                let itemsHTML = '';
+                                items.forEach(item => {
+                                    const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
+                                    itemsHTML += `<div style="margin-bottom: 6px; padding-left: 8px; border-left: 2px solid #667eea;">
+                                        <a href="${adoUrl}" target="_blank" style="text-decoration: none; font-weight: 600;">#${item.id}</a>
+                                        <span style="color: #ddd; font-size: 12px;"> ${item.title}</span>
+                                    </div>`;
+                                });
+                                
+                                // Build HTML
+                                tooltipEl.innerHTML = `
+                                    <div class="tooltip-title">Week Ending ${weekLabel}</div>
+                                    <div class="tooltip-content">
+                                        <strong>${count} item${count !== 1 ? 's' : ''} completed:</strong><br><br>
+                                        ${itemsHTML}
+                                    </div>
+                                    <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
+                                `;
+                            }
+
+                            // Display tooltip
+                            const position = context.chart.canvas.getBoundingClientRect();
+                            tooltipEl.classList.add('visible');
+                            tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
+                            tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
                         }
                     }
                 },
@@ -553,36 +888,57 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                onClick: (e, activeElements) => {
-                    if (activeElements.length > 0) {
-                        const datasetIndex = activeElements[0].datasetIndex;
-                        const index = activeElements[0].index;
-                        const item = dashboardData.charts.cycleTime.datasets[datasetIndex].data[index];
-                        const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
-                        window.open(adoUrl, '_blank');
-                    }
-                },
                 plugins: {
                     legend: { 
                         display: true,
                         position: 'top'
                     },
                     tooltip: {
-                        backgroundColor: 'rgba(0,0,0,0.8)',
-                        padding: 12,
-                        callbacks: {
-                            label: function(context) {
-                                const item = context.raw;
-                                return [
-                                    `ID: #${item.id}`,
-                                    `Title: ${item.title}`,
-                                    `Cycle Time: ${item.y} days`,
-                                    `Completed: ${item.completedDate}`
-                                ];
-                            },
-                            afterBody: function() {
-                                return 'Click to open in ADO';
+                        enabled: false,
+                        external: function(context) {
+                            // Tooltip Element
+                            const tooltipEl = document.getElementById('customTooltip');
+                            
+                            // Hide if no tooltip
+                            const tooltipModel = context.tooltip;
+                            if (tooltipModel.opacity === 0) {
+                                if (!isTooltipHovered) {
+                                    hideTooltipWithDelay();
+                                }
+                                return;
                             }
+
+                            // Clear any pending hide timeout
+                            if (tooltipHideTimeout) {
+                                clearTimeout(tooltipHideTimeout);
+                                tooltipHideTimeout = null;
+                            }
+
+                            // Get data point
+                            if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
+                                const dataPoint = tooltipModel.dataPoints[0];
+                                const item = dataPoint.raw;
+                                const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
+                                const cycleTime = item.y;
+                                
+                                // Build HTML
+                                tooltipEl.innerHTML = `
+                                    <div class="tooltip-title">Work Item Details</div>
+                                    <div class="tooltip-content">
+                                        <strong>ID:</strong> <a href="${adoUrl}" target="_blank">#${item.id}</a><br>
+                                        <strong>Title:</strong> ${item.title}<br>
+                                        <strong>Completed:</strong> ${item.completedDate}<br><br>
+                                        <strong style="color: #4299e1;">⏱️ Cycle Time:</strong> ${cycleTime} days
+                                    </div>
+                                    <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
+                                `;
+                            }
+
+                            // Display tooltip
+                            const position = context.chart.canvas.getBoundingClientRect();
+                            tooltipEl.classList.add('visible');
+                            tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
+                            tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
                         }
                     },
                     annotation: {
@@ -653,56 +1009,363 @@
             }
         });
 
-        // Cumulative Flow Diagram
-        new Chart(document.getElementById('cfdChart'), {
-            type: 'line',
+        // Lead Time Chart with reference lines
+        const leadTimeChartData = {
+            datasets: dashboardData.charts.cycleTime.datasets.map(ds => ({
+                ...ds,
+                data: ds.data.map(item => ({
+                    x: item.x,
+                    y: item.leadTime,
+                    leadTime: item.leadTime,
+                    id: item.id,
+                    title: item.title,
+                    completedDate: item.completedDate
+                }))
+            }))
+        };
+        
+        new Chart(document.getElementById('leadTimeChart'), {
+            type: 'scatter',
+            data: leadTimeChartData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { 
+                        display: true,
+                        position: 'top'
+                    },
+                    tooltip: {
+                        enabled: false,
+                        external: function(context) {
+                            // Tooltip Element
+                            const tooltipEl = document.getElementById('customTooltip');
+                            
+                            // Hide if no tooltip
+                            const tooltipModel = context.tooltip;
+                            if (tooltipModel.opacity === 0) {
+                                if (!isTooltipHovered) {
+                                    hideTooltipWithDelay();
+                                }
+                                return;
+                            }
+
+                            // Clear any pending hide timeout
+                            if (tooltipHideTimeout) {
+                                clearTimeout(tooltipHideTimeout);
+                                tooltipHideTimeout = null;
+                            }
+
+                            // Get data point
+                            if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
+                                const dataPoint = tooltipModel.dataPoints[0];
+                                const item = dataPoint.raw;
+                                const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
+                                const leadTime = item.leadTime;
+                                
+                                // Build HTML
+                                tooltipEl.innerHTML = `
+                                    <div class="tooltip-title">Work Item Details</div>
+                                    <div class="tooltip-content">
+                                        <strong>ID:</strong> <a href="${adoUrl}" target="_blank">#${item.id}</a><br>
+                                        <strong>Title:</strong> ${item.title}<br>
+                                        <strong>Completed:</strong> ${item.completedDate}<br><br>
+                                        <strong style="color: #9f7aea;">🕐 Lead Time:</strong> ${leadTime} days
+                                    </div>
+                                    <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
+                                `;
+                            }
+
+                            // Display tooltip
+                            const position = context.chart.canvas.getBoundingClientRect();
+                            tooltipEl.classList.add('visible');
+                            tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
+                            tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
+                        }
+                    },
+                    annotation: {
+                        annotations: {
+                            avgLine: {
+                                type: 'line',
+                                yMin: dashboardData.charts.cycleTime.leadTimeAverage,
+                                yMax: dashboardData.charts.cycleTime.leadTimeAverage,
+                                borderColor: '#4a5568',
+                                borderWidth: 2,
+                                borderDash: [8, 4],
+                                label: {
+                                    display: true,
+                                    content: `Avg: ${dashboardData.charts.cycleTime.leadTimeAverage} days`,
+                                    position: 'end',
+                                    backgroundColor: 'rgba(74, 85, 104, 0.8)',
+                                    color: 'white',
+                                    padding: 4
+                                }
+                            },
+                            medianLine: {
+                                type: 'line',
+                                yMin: dashboardData.charts.cycleTime.leadTimeMedian,
+                                yMax: dashboardData.charts.cycleTime.leadTimeMedian,
+                                borderColor: '#48bb78',
+                                borderWidth: 2,
+                                borderDash: [8, 4],
+                                label: {
+                                    display: true,
+                                    content: `Median: ${dashboardData.charts.cycleTime.leadTimeMedian} days`,
+                                    position: 'start',
+                                    backgroundColor: 'rgba(72, 187, 120, 0.8)',
+                                    color: 'white',
+                                    padding: 4
+                                }
+                            },
+                            percentile85Line: {
+                                type: 'line',
+                                yMin: dashboardData.charts.cycleTime.leadTimePercentile85,
+                                yMax: dashboardData.charts.cycleTime.leadTimePercentile85,
+                                borderColor: '#ed8936',
+                                borderWidth: 2,
+                                borderDash: [8, 4],
+                                label: {
+                                    display: true,
+                                    content: `85th: ${dashboardData.charts.cycleTime.leadTimePercentile85} days`,
+                                    position: 'end',
+                                    backgroundColor: 'rgba(237, 137, 54, 0.8)',
+                                    color: 'white',
+                                    padding: 4
+                                }
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: { display: true, text: 'Lead Time (days)' },
+                        grid: { color: '#e2e8f0' }
+                    },
+                    x: {
+                        type: 'category',
+                        title: { display: true, text: 'Completion Date' },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+
+        // Flow Efficiency Chart
+        const efficiencyData = [];
+        dashboardData.charts.cycleTime.datasets.forEach(dataset => {
+            const effDataset = {
+                label: dataset.label,
+                data: dataset.data.map(item => ({
+                    x: item.x,
+                    y: ((item.y / item.leadTime) * 100).toFixed(1),
+                    cycleTime: item.y,
+                    leadTime: item.leadTime,
+                    id: item.id,
+                    title: item.title,
+                    completedDate: item.completedDate
+                })),
+                backgroundColor: dataset.backgroundColor,
+                borderColor: dataset.borderColor,
+                pointRadius: 8,
+                pointHoverRadius: 10
+            };
+            efficiencyData.push(effDataset);
+        });
+
+        new Chart(document.getElementById('flowEfficiencyChart'), {
+            type: 'scatter',
             data: {
-                labels: dashboardData.charts.cfd.labels,
-                datasets: [{
-                    label: 'Cumulative Arrivals',
-                    data: dashboardData.charts.cfd.arrivals,
-                    borderColor: '#f56565',
-                    backgroundColor: 'rgba(245, 101, 101, 0.1)',
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0,
-                    pointRadius: 4,
-                    pointHoverRadius: 6
-                }, {
-                    label: 'Cumulative Departures',
-                    data: dashboardData.charts.cfd.departures,
-                    borderColor: '#48bb78',
-                    backgroundColor: 'rgba(72, 187, 120, 0.1)',
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0,
-                    pointRadius: 4,
-                    pointHoverRadius: 6
-                }, {
-                    label: 'Arrival Trend',
-                    data: dashboardData.charts.cfd.arrivalTrend,
-                    borderColor: '#c53030',
-                    backgroundColor: 'transparent',
-                    borderWidth: 2,
-                    borderDash: [10, 5],
-                    pointRadius: 0,
-                    fill: false
-                }, {
-                    label: 'Departure Trend',
-                    data: dashboardData.charts.cfd.departureTrend,
-                    borderColor: '#2f855a',
-                    backgroundColor: 'transparent',
-                    borderWidth: 2,
-                    borderDash: [10, 5],
-                    pointRadius: 0,
-                    fill: false
-                }]
+                datasets: efficiencyData
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { display: true, position: 'top' },
+                    legend: { 
+                        display: true,
+                        position: 'top'
+                    },
+                    tooltip: {
+                        enabled: false,
+                        external: function(context) {
+                            // Tooltip Element
+                            const tooltipEl = document.getElementById('customTooltip');
+                            
+                            // Hide if no tooltip
+                            const tooltipModel = context.tooltip;
+                            if (tooltipModel.opacity === 0) {
+                                if (!isTooltipHovered) {
+                                    hideTooltipWithDelay();
+                                }
+                                return;
+                            }
+
+                            // Clear any pending hide timeout
+                            if (tooltipHideTimeout) {
+                                clearTimeout(tooltipHideTimeout);
+                                tooltipHideTimeout = null;
+                            }
+
+                            // Get data point
+                            if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
+                                const dataPoint = tooltipModel.dataPoints[0];
+                                const item = dataPoint.raw;
+                                const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
+                                const efficiency = item.y;
+                                const cycleTime = item.cycleTime;
+                                const leadTime = item.leadTime;
+                                
+                                // Build HTML
+                                tooltipEl.innerHTML = `
+                                    <div class="tooltip-title">Work Item Details</div>
+                                    <div class="tooltip-content">
+                                        <strong>ID:</strong> <a href="${adoUrl}" target="_blank">#${item.id}</a><br>
+                                        <strong>Title:</strong> ${item.title}<br>
+                                        <strong>Completed:</strong> ${item.completedDate}<br><br>
+                                        <strong style="color: #10b981;">⚡ Flow Efficiency:</strong> ${efficiency}%<br>
+                                        <span style="color: #a0aec0; font-size: 11px;">${cycleTime} days active / ${leadTime} days total</span>
+                                    </div>
+                                    <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
+                                `;
+                            }
+
+                            // Display tooltip
+                            const position = context.chart.canvas.getBoundingClientRect();
+                            tooltipEl.classList.add('visible');
+                            tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
+                            tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        title: { display: true, text: 'Flow Efficiency (%)' },
+                        grid: { color: '#e2e8f0' },
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        }
+                    },
+                    x: {
+                        type: 'category',
+                        title: { display: true, text: 'Completion Date' },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+
+        // Cumulative Flow Diagram with state-based layers
+        const cfdDatasets = [
+            // Cumulative Arrivals
+            {
+                label: 'Cumulative Arrivals',
+                data: dashboardData.charts.cfd.arrivals,
+                borderColor: '#f56565',
+                backgroundColor: 'rgba(245, 101, 101, 0.1)',
+                borderWidth: 3,
+                fill: true,
+                tension: 0,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                order: 1
+            },
+            // Cumulative Departures
+            {
+                label: 'Cumulative Departures',
+                data: dashboardData.charts.cfd.departures,
+                borderColor: '#48bb78',
+                backgroundColor: 'rgba(72, 187, 120, 0.1)',
+                borderWidth: 3,
+                fill: true,
+                tension: 0,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                order: 1
+            },
+            // Arrival Trend
+            {
+                label: 'Arrival Trend',
+                data: dashboardData.charts.cfd.arrivalTrend,
+                borderColor: '#c53030',
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+                borderDash: [10, 5],
+                pointRadius: 0,
+                fill: false,
+                order: 0
+            },
+            // Departure Trend
+            {
+                label: 'Departure Trend',
+                data: dashboardData.charts.cfd.departureTrend,
+                borderColor: '#2f855a',
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+                borderDash: [10, 5],
+                pointRadius: 0,
+                fill: false,
+                order: 0
+            }
+        ];
+        
+        // Add state-based layers if available
+        if (dashboardData.charts.cfd.states) {
+            const stateColors = [
+                { border: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.2)' },  // Purple
+                { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.2)' },  // Blue
+                { border: '#10b981', bg: 'rgba(16, 185, 129, 0.2)' },  // Green
+                { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.2)' },  // Orange
+                { border: '#ef4444', bg: 'rgba(239, 68, 68, 0.2)' },   // Red
+                { border: '#ec4899', bg: 'rgba(236, 72, 153, 0.2)' },  // Pink
+                { border: '#6366f1', bg: 'rgba(99, 102, 241, 0.2)' },  // Indigo
+            ];
+            
+            dashboardData.charts.cfd.states.forEach((state, index) => {
+                const color = stateColors[index % stateColors.length];
+                cfdDatasets.push({
+                    label: state.name,
+                    data: state.values,
+                    borderColor: color.border,
+                    backgroundColor: color.bg,
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0,
+                    pointRadius: 2,
+                    pointHoverRadius: 4,
+                    hidden: true,  // Hidden by default
+                    order: 2
+                });
+            });
+        }
+        
+        const cfdChart = new Chart(document.getElementById('cfdChart'), {
+            type: 'line',
+            data: {
+                labels: dashboardData.charts.cfd.labels,
+                datasets: cfdDatasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { 
+                        display: true, 
+                        position: 'top',
+                        onClick: function(e, legendItem, legend) {
+                            const index = legendItem.datasetIndex;
+                            const ci = legend.chart;
+                            const meta = ci.getDatasetMeta(index);
+                            
+                            // Toggle visibility
+                            meta.hidden = meta.hidden === null ? !ci.data.datasets[index].hidden : null;
+                            ci.update();
+                        }
+                    },
                     tooltip: {
                         backgroundColor: 'rgba(0,0,0,0.8)',
                         padding: 12
@@ -722,6 +1385,369 @@
                 }
             }
         });
+        
+        // Calculate and display arrival/departure rates
+        if (dashboardData.charts.cfd.arrivals && dashboardData.charts.cfd.departures) {
+            const numPoints = dashboardData.charts.cfd.arrivals.length;
+            if (numPoints >= 2) {
+                const arrivalStart = dashboardData.charts.cfd.arrivals[0] || 0;
+                const arrivalEnd = dashboardData.charts.cfd.arrivals[numPoints - 1] || 0;
+                const departureStart = dashboardData.charts.cfd.departures[0] || 0;
+                const departureEnd = dashboardData.charts.cfd.departures[numPoints - 1] || 0;
+                
+                const arrivalRate = ((arrivalEnd - arrivalStart) / (numPoints - 1)).toFixed(2);
+                const departureRate = ((departureEnd - departureStart) / (numPoints - 1)).toFixed(2);
+                
+                document.getElementById('arrivalRate').textContent = arrivalRate;
+                document.getElementById('departureRate').textContent = departureRate;
+            }
+        }
+        
+        // Time In Board Column Chart
+        if (dashboardData.charts.timeInColumn) {
+            new Chart(document.getElementById('timeInColumnChart'), {
+                type: 'bar',
+                data: {
+                    labels: dashboardData.charts.timeInColumn.labels,
+                    datasets: [{
+                        label: 'Time in Column (days)',
+                        data: dashboardData.charts.timeInColumn.values,
+                        backgroundColor: '#4299e1',
+                        borderColor: '#3182ce',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(0,0,0,0.8)',
+                            padding: 12,
+                            callbacks: {
+                                label: function(context) {
+                                    return `Total: ${context.parsed.y} days`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Time in Column (days)' },
+                            ticks: { precision: 0 },
+                            grid: { color: '#e2e8f0' }
+                        },
+                        x: {
+                            title: { display: false },
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Work Item Age by State
+        if (dashboardData.charts.workItemAge) {
+            // Flatten all items with state info for easier lookup
+            const allWorkItemAgeItems = [];
+            dashboardData.charts.workItemAge.states.forEach(state => {
+                state.items.forEach(item => {
+                    allWorkItemAgeItems.push({ ...item, state: state.name });
+                });
+            });
+
+            new Chart(document.getElementById('workItemAgeChart'), {
+                type: 'scatter',
+                data: {
+                    datasets: dashboardData.charts.workItemAge.states.map((state, index) => {
+                        const colors = ['#4338ca', '#0891b2', '#059669', '#d97706', '#dc2626', '#be185d'];
+                        return {
+                            label: state.name,
+                            data: state.items.map(item => ({ x: state.name, y: item.age, id: item.id, title: item.title })),
+                            backgroundColor: colors[index % colors.length],
+                            pointRadius: 6,
+                            pointHoverRadius: 8
+                        };
+                    })
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            enabled: false,
+                            external: function(context) {
+                                // Tooltip Element
+                                const tooltipEl = document.getElementById('customTooltip');
+                                
+                                // Hide if no tooltip
+                                const tooltipModel = context.tooltip;
+                                if (tooltipModel.opacity === 0) {
+                                    if (!isTooltipHovered) {
+                                        hideTooltipWithDelay();
+                                    }
+                                    return;
+                                }
+
+                                // Clear any pending hide timeout
+                                if (tooltipHideTimeout) {
+                                    clearTimeout(tooltipHideTimeout);
+                                    tooltipHideTimeout = null;
+                                }
+
+                                // Get data point
+                                if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
+                                    const dataPoint = tooltipModel.dataPoints[0];
+                                    const item = dataPoint.raw;
+                                    const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
+                                    
+                                    // Build HTML
+                                    tooltipEl.innerHTML = `
+                                        <div class="tooltip-title">Work Item Details</div>
+                                        <div class="tooltip-content">
+                                            <strong>ID:</strong> <a href="${adoUrl}" target="_blank">#${item.id}</a><br>
+                                            <strong>Title:</strong> ${item.title}<br>
+                                            <strong>State:</strong> ${item.x}<br><br>
+                                            <strong style="color: #f59e0b;">📅 Age:</strong> ${item.y} days
+                                        </div>
+                                        <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
+                                    `;
+                                }
+
+                                // Display tooltip
+                                const position = context.chart.canvas.getBoundingClientRect();
+                                tooltipEl.classList.add('visible');
+                                tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
+                                tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Age (Days)' },
+                            grid: { color: '#e2e8f0' }
+                        },
+                        x: {
+                            type: 'category',
+                            title: { display: false },
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Daily WIP Chart
+        if (dashboardData.charts.dailyWip) {
+            new Chart(document.getElementById('dailyWipChart'), {
+                type: 'line',
+                data: {
+                    labels: dashboardData.charts.dailyWip.labels,
+                    datasets: [{
+                        label: 'WIP Count',
+                        data: dashboardData.charts.dailyWip.values,
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.1,
+                        pointRadius: 2,
+                        pointHoverRadius: 5
+                    }, {
+                        label: 'Trend',
+                        data: dashboardData.charts.dailyWip.trend,
+                        borderColor: '#9ca3af',
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: true, position: 'top' },
+                        tooltip: {
+                            backgroundColor: 'rgba(0,0,0,0.8)',
+                            padding: 12
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'No. of Items in Progress' },
+                            ticks: { precision: 0 },
+                            grid: { color: '#e2e8f0' }
+                        },
+                        x: {
+                            title: { display: false },
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Stale Work Chart
+        if (dashboardData.charts.staleWork) {
+            new Chart(document.getElementById('staleWorkChart'), {
+                type: 'bar',
+                data: {
+                    labels: dashboardData.charts.staleWork.labels,
+                    datasets: [{
+                        label: 'Days Since Updated',
+                        data: dashboardData.charts.staleWork.values,
+                        backgroundColor: '#f97316',
+                        borderColor: '#ea580c',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            enabled: false,
+                            external: function(context) {
+                                // Tooltip Element
+                                const tooltipEl = document.getElementById('customTooltip');
+                                
+                                // Hide if no tooltip
+                                const tooltipModel = context.tooltip;
+                                if (tooltipModel.opacity === 0) {
+                                    if (!isTooltipHovered) {
+                                        hideTooltipWithDelay();
+                                    }
+                                    return;
+                                }
+
+                                // Clear any pending hide timeout
+                                if (tooltipHideTimeout) {
+                                    clearTimeout(tooltipHideTimeout);
+                                    tooltipHideTimeout = null;
+                                }
+
+                                // Get data point
+                                if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
+                                    const dataPoint = tooltipModel.dataPoints[0];
+                                    const index = dataPoint.dataIndex;
+                                    const id = dashboardData.charts.staleWork.ids[index];
+                                    const title = dashboardData.charts.staleWork.titles[index];
+                                    const days = dashboardData.charts.staleWork.values[index];
+                                    const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${id}`;
+                                    
+                                    // Build HTML
+                                    tooltipEl.innerHTML = `
+                                        <div class="tooltip-title">Work Item Details</div>
+                                        <div class="tooltip-content">
+                                            <strong>ID:</strong> <a href="${adoUrl}" target="_blank">#${id}</a><br>
+                                            <strong>Title:</strong> ${title}<br><br>
+                                            <strong style="color: #f97316;">⏰ Days Since Updated:</strong> ${days} days
+                                        </div>
+                                        <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
+                                    `;
+                                }
+
+                                // Display tooltip
+                                const position = context.chart.canvas.getBoundingClientRect();
+                                tooltipEl.classList.add('visible');
+                                tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
+                                tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Days Since Updated' },
+                            grid: { color: '#e2e8f0' }
+                        },
+                        y: {
+                            title: { display: false },
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Daily WIP x Work Item Age (Stacked)
+        if (dashboardData.charts.wipAgeBreakdown) {
+            new Chart(document.getElementById('wipAgeBreakdownChart'), {
+                type: 'bar',
+                data: {
+                    labels: dashboardData.charts.wipAgeBreakdown.labels,
+                    datasets: [
+                        {
+                            label: 'Age >14 Days',
+                            data: dashboardData.charts.wipAgeBreakdown.age14Plus,
+                            backgroundColor: '#6b7280',
+                            borderWidth: 0
+                        },
+                        {
+                            label: 'Age ≤14 Days',
+                            data: dashboardData.charts.wipAgeBreakdown.age7to14,
+                            backgroundColor: '#d1d5db',
+                            borderWidth: 0
+                        },
+                        {
+                            label: 'Age ≤7 Days',
+                            data: dashboardData.charts.wipAgeBreakdown.age1to7,
+                            backgroundColor: '#f59e0b',
+                            borderWidth: 0
+                        },
+                        {
+                            label: 'Age ≤1 Days',
+                            data: dashboardData.charts.wipAgeBreakdown.age0to1,
+                            backgroundColor: '#fbbf24',
+                            borderWidth: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { 
+                            display: true, 
+                            position: 'top',
+                            labels: {
+                                boxWidth: 12,
+                                padding: 10
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0,0,0,0.8)',
+                            padding: 12,
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            title: { display: true, text: 'No. of Items in Progress' },
+                            ticks: { precision: 0 },
+                            grid: { color: '#e2e8f0' }
+                        },
+                        x: {
+                            stacked: true,
+                            title: { display: false },
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
 
         // WIP Chart (ordered by age, descending, only concerning items)
         new Chart(document.getElementById('wipChart'), {
@@ -740,31 +1766,55 @@
                 indexAxis: 'y',
                 responsive: true,
                 maintainAspectRatio: false,
-                onClick: (e, activeElements) => {
-                    if (activeElements.length > 0) {
-                        const index = activeElements[0].index;
-                        const workItemId = dashboardData.charts.wip.ids[index];
-                        const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${workItemId}`;
-                        window.open(adoUrl, '_blank');
-                    }
-                },
                 plugins: {
                     legend: { display: false },
                     tooltip: {
-                        backgroundColor: 'rgba(0,0,0,0.8)',
-                        padding: 12,
-                        callbacks: {
-                            label: function(context) {
-                                const index = context.dataIndex;
-                                return [
-                                    `ID: #${dashboardData.charts.wip.ids[index]}`,
-                                    `Title: ${dashboardData.charts.wip.titles[index]}`,
-                                    `Age: ${context.parsed.x} days`
-                                ];
-                            },
-                            afterBody: function() {
-                                return 'Click to open in ADO';
+                        enabled: false,
+                        external: function(context) {
+                            // Tooltip Element
+                            const tooltipEl = document.getElementById('customTooltip');
+                            
+                            // Hide if no tooltip
+                            const tooltipModel = context.tooltip;
+                            if (tooltipModel.opacity === 0) {
+                                if (!isTooltipHovered) {
+                                    hideTooltipWithDelay();
+                                }
+                                return;
                             }
+
+                            // Clear any pending hide timeout
+                            if (tooltipHideTimeout) {
+                                clearTimeout(tooltipHideTimeout);
+                                tooltipHideTimeout = null;
+                            }
+
+                            // Get data point
+                            if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
+                                const dataPoint = tooltipModel.dataPoints[0];
+                                const index = dataPoint.dataIndex;
+                                const workItemId = dashboardData.charts.wip.ids[index];
+                                const title = dashboardData.charts.wip.titles[index];
+                                const age = dataPoint.parsed.x;
+                                const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${workItemId}`;
+                                
+                                // Build HTML
+                                tooltipEl.innerHTML = `
+                                    <div class="tooltip-title">WIP Item</div>
+                                    <div class="tooltip-content">
+                                        <strong>ID:</strong> <a href="${adoUrl}" target="_blank">#${workItemId}</a><br>
+                                        <strong>Title:</strong> ${title}<br>
+                                        <strong>Age:</strong> ${age} days
+                                    </div>
+                                    <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
+                                `;
+                            }
+
+                            // Display tooltip
+                            const position = context.chart.canvas.getBoundingClientRect();
+                            tooltipEl.classList.add('visible');
+                            tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
+                            tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
                         }
                     }
                 },
@@ -781,21 +1831,167 @@
             }
         });
 
-        // Bug Rate Trend Chart
+        // Bug Rate Trend Chart (Combined Active + Completed)
         new Chart(document.getElementById('bugRateChart'), {
             type: 'line',
             data: {
                 labels: dashboardData.charts.bugRate.labels,
                 datasets: [{
-                    label: 'Bug Rate (%)',
-                    data: dashboardData.charts.bugRate.values,
-                    borderColor: '#fc8181',
-                    backgroundColor: 'rgba(252, 129, 129, 0.1)',
+                    label: 'Active Bug Rate (%)',
+                    data: dashboardData.charts.bugRate.activeRate,
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
                     borderWidth: 3,
                     fill: true,
                     tension: 0.4,
                     pointRadius: 5,
                     pointHoverRadius: 7
+                }, {
+                    label: 'Completed Bug Rate (%)',
+                    data: dashboardData.charts.bugRate.completedRate,
+                    borderColor: '#fc8181',
+                    backgroundColor: 'rgba(252, 129, 129, 0.1)',
+                    borderWidth: 3,
+                    fill: false,
+                    tension: 0.4,
+                    pointRadius: 5,
+                    pointHoverRadius: 7,
+                    spanGaps: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                plugins: {
+                    legend: { 
+                        display: true,
+                        position: 'top'
+                    },
+                    tooltip: {
+                        enabled: false,
+                        external: function(context) {
+                            // Tooltip Element
+                            const tooltipEl = document.getElementById('customTooltip');
+                            
+                            // Hide if no tooltip
+                            const tooltipModel = context.tooltip;
+                            if (tooltipModel.opacity === 0) {
+                                if (!isTooltipHovered) {
+                                    hideTooltipWithDelay();
+                                }
+                                return;
+                            }
+
+                            // Clear any pending hide timeout
+                            if (tooltipHideTimeout) {
+                                clearTimeout(tooltipHideTimeout);
+                                tooltipHideTimeout = null;
+                            }
+
+                            // Get data point
+                            if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
+                                const index = tooltipModel.dataPoints[0].dataIndex;
+                                const weekLabel = dashboardData.charts.bugRate.labels[index];
+                                
+                                // Active data
+                                const activeBugCount = dashboardData.charts.bugRate.activeBugCount[index];
+                                const activeTotalCount = dashboardData.charts.bugRate.activeTotalCount[index];
+                                const activeRate = dashboardData.charts.bugRate.activeRate[index];
+                                const activeBugs = dashboardData.charts.bugRate.activeBugs[index];
+                                
+                                // Completed data
+                                const completedBugCount = dashboardData.charts.bugRate.completedBugCount[index];
+                                const completedFeatureCount = dashboardData.charts.bugRate.completedFeatureCount[index];
+                                const completedRate = dashboardData.charts.bugRate.completedRate[index];
+                                const completedBugsItems = dashboardData.charts.bugRate.completedBugs[index];
+                                const completedFeaturesItems = dashboardData.charts.bugRate.completedFeatures[index];
+                                
+                                // Build HTML for active bugs
+                                let activeBugsHTML = '';
+                                if (activeBugs && activeBugs.length > 0) {
+                                    activeBugs.forEach(item => {
+                                        const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
+                                        activeBugsHTML += `<div style="margin-bottom: 4px; padding-left: 8px; border-left: 2px solid #f59e0b;">
+                                            <a href="${adoUrl}" target="_blank" style="text-decoration: none; font-weight: 600;">#${item.id}</a>
+                                            <span style="color: #ddd; font-size: 12px;"> ${item.title}</span>
+                                        </div>`;
+                                    });
+                                } else {
+                                    activeBugsHTML = '<div style="color: #aaa; font-style: italic; padding-left: 8px;">None</div>';
+                                }
+                                
+                                // Build HTML for completed bugs
+                                let completedBugsHTML = '';
+                                if (completedBugsItems && completedBugsItems.length > 0) {
+                                    completedBugsItems.forEach(item => {
+                                        const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
+                                        completedBugsHTML += `<div style="margin-bottom: 4px; padding-left: 8px; border-left: 2px solid #fc8181;">
+                                            <a href="${adoUrl}" target="_blank" style="text-decoration: none; font-weight: 600;">#${item.id}</a>
+                                            <span style="color: #ddd; font-size: 12px;"> ${item.title}</span>
+                                        </div>`;
+                                    });
+                                } else {
+                                    completedBugsHTML = '<div style="color: #aaa; font-style: italic; padding-left: 8px;">None</div>';
+                                }
+                                
+                                // Build HTML
+                                tooltipEl.innerHTML = `
+                                    <div class="tooltip-title">Week Ending ${weekLabel}</div>
+                                    <div class="tooltip-content">
+                                        <strong style="color: #f59e0b;">📊 Active Backlog:</strong><br>
+                                        Active Bug Rate: <strong>${activeRate !== null ? activeRate.toFixed(1) : 'N/A'}%</strong><br>
+                                        Active Bugs: ${activeBugCount} / Total: ${activeTotalCount}<br><br>
+                                        ${activeBugs && activeBugs.length > 0 ? `<strong style="color: #f59e0b;">🐛 Active Bugs:</strong><br>${activeBugsHTML}<br>` : ''}
+                                        <strong style="color: #fc8181;">✅ Completed Work:</strong><br>
+                                        Completed Bug Rate: <strong>${completedRate !== null ? completedRate.toFixed(1) : 'N/A'}%</strong><br>
+                                        Bugs: ${completedBugCount} / Features: ${completedFeatureCount}<br><br>
+                                        ${completedBugsItems && completedBugsItems.length > 0 ? `<strong style="color: #fc8181;">🐛 Completed Bugs:</strong><br>${completedBugsHTML}` : ''}
+                                    </div>
+                                    <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
+                                `;
+                            }
+
+                            // Display tooltip
+                            const position = context.chart.canvas.getBoundingClientRect();
+                            tooltipEl.classList.add('visible');
+                            tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
+                            tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        title: { display: true, text: 'Bug Rate (%)' },
+                        grid: { color: '#e2e8f0' }
+                    },
+                    x: {
+                        title: { display: true, text: 'Week Ending' },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+
+        // Net Flow Chart (Sustainability)
+        const netFlowData = dashboardData.charts.netFlow.values.map(val => val);
+        const netFlowColors = netFlowData.map(val => val >= 0 ? '#4299e1' : '#f59e0b');
+        
+        new Chart(document.getElementById('netFlowChart'), {
+            type: 'bar',
+            data: {
+                labels: dashboardData.charts.netFlow.labels,
+                datasets: [{
+                    label: 'Net Flow',
+                    data: netFlowData,
+                    backgroundColor: netFlowColors,
+                    borderColor: netFlowColors,
+                    borderWidth: 2
                 }]
             },
             options: {
@@ -807,13 +2003,24 @@
                         backgroundColor: 'rgba(0,0,0,0.8)',
                         padding: 12,
                         callbacks: {
+                            title: function(context) {
+                                return 'Week Ending ' + context[0].label;
+                            },
                             label: function(context) {
-                                const week = dashboardData.charts.bugRate.labels[context.dataIndex];
-                                const details = dashboardData.charts.bugRate.details[context.dataIndex];
-                                return [
-                                    `Bug Rate: ${context.parsed.y}%`,
-                                    `Bugs: ${details.bugs} | Features: ${details.features}`
-                                ];
+                                const value = context.parsed.y;
+                                if (value > 0) {
+                                    return `Net Flow: +${value} (More finished than started)`;
+                                } else if (value < 0) {
+                                    return `Net Flow: ${value} (More started than finished)`;
+                                } else {
+                                    return `Net Flow: ${value} (Balanced)`;
+                                }
+                            },
+                            afterLabel: function(context) {
+                                const index = context.dataIndex;
+                                const started = dashboardData.charts.netFlow.started[index];
+                                const finished = dashboardData.charts.netFlow.finished[index];
+                                return [`Started: ${started}`, `Finished: ${finished}`];
                             }
                         }
                     }
@@ -821,9 +2028,26 @@
                 scales: {
                     y: {
                         beginAtZero: true,
-                        max: 100,
-                        title: { display: true, text: 'Bug Rate (%)' },
-                        grid: { color: '#e2e8f0' }
+                        title: { display: true, text: 'Net Flow (Finished - Started)' },
+                        grid: { 
+                            color: function(context) {
+                                if (context.tick.value === 0) {
+                                    return '#2d3748';
+                                }
+                                return '#e2e8f0';
+                            },
+                            lineWidth: function(context) {
+                                if (context.tick.value === 0) {
+                                    return 2;
+                                }
+                                return 1;
+                            }
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return value > 0 ? '+' + value : value;
+                            }
+                        }
                     },
                     x: {
                         title: { display: true, text: 'Week Ending' },

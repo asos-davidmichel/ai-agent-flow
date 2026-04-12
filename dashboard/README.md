@@ -25,6 +25,35 @@ The template uses a data injection approach:
 
 ### Dashboard Features
 
+✅ **Interactive Work Item Links:**
+
+All charts displaying work item data include clickable links to Azure DevOps:
+- **Throughput Chart**: Hover over points to see tooltip with all completed items and clickable ID links
+- **Cycle Time Chart**: Hover points to see persistent tooltip with clickable ID link (shows active work duration)
+- **Lead Time Chart**: Hover points to see persistent tooltip with clickable ID link (shows total time in system)
+- **Flow Efficiency Chart**: Hover points to see persistent tooltip with clickable ID link (shows efficiency ratio)
+- **Work Item Age Chart**: Hover dots to see persistent tooltip with clickable ID link (shows item age by state)
+- **Stale Work Chart**: Hover bars to see persistent tooltip with clickable ID link (shows days since update)
+- **Aging Work In Progress**: Hover bars to see persistent tooltip with clickable ID link
+
+✅ **Trend Lines:**
+
+The Cumulative Flow Diagram includes trend lines:
+- **Pre-calculated linear trends** overlay on arrivals and departures
+- Red dashed line perfectly aligns with the arrivals curve
+- Green dashed line perfectly aligns with the departures curve
+- Helps visualize if actual flow is accelerating or decelerating vs linear trend
+- Trend lines calculated from first to last data point
+
+**Smart Tooltips:**
+- Tooltips stay visible when you move your mouse over them
+- This lets you click the work item ID links without the tooltip disappearing
+- Click anywhere outside the tooltip to close it
+- Throughput chart tooltips show all items completed in that week (can be multiple)
+- Hint appears in tooltip: "Hover to keep open • Click elsewhere to close"
+
+---
+
 ✅ **Refined based on feedback:**
 
 - **Top Metrics Cards**:
@@ -36,34 +65,97 @@ The template uses a data injection approach:
   - Blocked Items: Count with percentage of backlog
 
 - **Throughput Chart**: 
-  - Interactive - click any point to see list of completed items for that week
-  - Popup shows work item IDs (clickable links to ADO) and titles
+  - Interactive - hover over any point to see tooltip with all items completed that week
+  - Tooltip shows work item IDs as clickable links to ADO plus titles
+  - Supports multiple items per week (e.g., 4 items completed)
   - Shows weekly completion trend
 
 - **Cycle Time Chart**:
-  - Scatter plot organized by completion date
-  - X-axis labels showing dates
-  - Horizontal reference lines for average, 50th, and 85th percentile
+  - Scatter plot showing active work duration (In Progress → Done)
+  - X-axis labels showing completion dates
+  - Horizontal reference lines for average, median, and 85th percentile
   - Different colors for bugs vs PBIs
-  - **Clickable**: Click any point to open that work item in ADO
-  - Hover shows ID, title, cycle time, completion date
+  - **Hover to see popup with clickable ADO link**
+  - Tooltip shows ID (clickable), title, cycle time, completion date
+
+- **Lead Time Chart**:
+  - Scatter plot showing total time in system (Created → Done)
+  - Same layout as Cycle Time chart but showing lead time values
+  - Separate reference lines for lead time average, median, 85th percentile
+  - **Hover to see popup with clickable ADO link**
+  - Tooltip shows ID (clickable), title, lead time, completion date
+
+- **Flow Efficiency Chart**:
+  - Scatter plot showing efficiency ratio (cycle time / lead time * 100)
+  - Y-axis displays percentage (0-100%)
+  - Shows what percentage of total time was spent in active work
+  - Higher is better - indicates less non-active time
+  - **Hover to see popup with clickable ADO link**
+  - Tooltip shows ID (clickable), title, efficiency percentage, cycle time, and lead time
+  - Avoids "wait time" terminology as non-active time could include other work types
 
 - **Cumulative Flow Diagram**:
-  - Shows arrival vs departure as cumulative lines
-  - Trend lines drawn from first to last point
-  - Clear visualization of backlog growth/shrinkage
+  - Shows cumulative arrivals vs cumulative departures over time
+  - **Trend lines**: Dashed lines show linear trends from start to end
+    - Red dashed line: Arrival trend (aligns with arrivals curve)
+    - Green dashed line: Departure trend (aligns with departures curve)
+  - Gap between arrivals and departures indicates backlog growth
+  - Widening gap = system unstable (backlog growing)
+  - Narrowing gap = backlog shrinking
+  - Parallel lines = stable system
 
-- **WIP Aging Chart**:
+- **Work Item Age**:
+  - Scatter plot showing how long individual items have been in each state
+  - Each dot represents one work item
+  - Organized by workflow state on x-axis, age in days on y-axis
+  - **Hover to see persistent tooltip with clickable ADO link**
+  - Tooltip shows ID (clickable), title, state, and age
+  - Quickly identifies aging work that needs attention
+
+- **Daily Work In Progress (WIP)**:
+  - Line chart showing WIP count over time
+  - Includes trend line to show if WIP is growing or shrinking
+  - Red dots indicate WIP limit breaches (when implemented)
+  - Goal: Keep WIP stable and under control
+
+- **Stale Work**:
+  - Horizontal bar chart showing items without recent updates
+  - Shows days since last update for each item
+  - **Hover to see persistent tooltip with clickable ADO link**
+  - Tooltip shows ID (clickable), title, and days since updated
+  - Helps identify work that may be blocked or abandoned
+  - Orange bars indicate items needing attention
+
+- **Daily WIP x Work Item Age**:
+  - Stacked bar chart breaking down WIP by age categories
+  - Age categories: ≤1 day, ≤7 days, ≤14 days, >14 days
+  - Shows if work is flowing or aging in the system
+  - Goal: Most WIP should be fresh (≤7 days)
+
+- **Aging Work In Progress**:
+  - Horizontal bar chart showing current WIP items
   - Ordered by age (worst/oldest first)
   - Only shows concerning items (age >7 days)
   - Color-coded: red >14 days, yellow 7-14 days
-  - **Clickable**: Click any bar to open that work item in ADO
-  - Horizontal bar chart for easy comparison
+  - **Hover to see popup with clickable ADO link**
+  - Tooltip shows ID (clickable), title, age in days
 
 - **Bug Rate Chart**:
-  - Time-based line chart showing bug rate % by week
-  - Tooltip shows bug count vs feature count
-  - Title: "Bug Rate by Week" (accurate, not "over time")
+  - Combined chart showing both active backlog health and completed work quality
+  - Two lines: Active Bug Rate (orange) and Completed Bug Rate (red)
+  - Active Bug Rate: Bugs in backlog / Total active items (tracks backlog health)
+  - Completed Bug Rate: Bugs completed / Total items completed (tracks quality)
+  - **Hover to see popup with clickable ADO links**
+  - Tooltip shows bug count, total count, and list of bugs as clickable links
+  - Gap spanning enabled for weeks with no completed items
+
+- **Net Flow (Sustainability) Chart**:
+  - Bar chart showing started vs finished work each week
+  - Net Flow = Finished - Started
+  - Positive values (blue) = good, finishing more than starting
+  - Negative values (orange) = concerning, starting more than finishing
+  - Goal: Maintain near-zero by limiting new work starts
+  - Emphasized zero line for reference
 
 - **State Distribution**: 
   - Doughnut chart showing backlog state breakdown

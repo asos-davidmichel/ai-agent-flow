@@ -92,17 +92,28 @@ For each metric below, calculate these statistical values where applicable:
 - Identify trend (improving, stable, declining)
 - Note any significant spikes or drops
 
-#### Responsiveness (Cycle Time)
-- For completed items, calculate days from "In Progress" → "Done"
-- Calculate: average, min, max, 50th percentile (median), 85th percentile
-- Group by work item type and calculate percentiles for each
-- Identify outliers (items taking >85th percentile)
-- List top 5 slowest items with ID, title, and cycle time
+#### Responsiveness (Cycle Time & Lead Time)
+- **Cycle Time**: For completed items, calculate days from "In Progress" → "Done" (active work time)
+  - Calculate: average, min, max, 50th percentile (median), 85th percentile
+  - Group by work item type and calculate percentiles for each
+  - Identify outliers (items taking >85th percentile)
+  - List top 5 slowest items with ID, title, and cycle time
+- **Lead Time**: For completed items, calculate days from "Created" → "Done" (total time in system)
+  - Calculate: average, min, max, 50th percentile (median), 85th percentile
+  - Track for each completed item alongside cycle time
+- **Efficiency Ratio**: Calculate cycle time / lead time for each item
+  - Shows percentage of time spent in active work vs waiting
+  - Low ratio (<30%) indicates excessive wait time in backlog
+  - Goal: Increase ratio by reducing backlog wait time
 
 #### Quality (Bug Rate)
-- Calculate: Bugs completed / All items completed (%)
-- Track trend over time
-- Goal: Keep bug rate low and stable
+- **Completed Work Quality:** Calculate: Bugs completed / All items completed (%)
+- **Backlog Health:** Track active bugs count and bug rate of active backlog over time
+  - Active bugs = bugs in "New" or "In Progress" state
+  - Active bug rate = Active bugs / Total active backlog (%)
+- Display both metrics on a single combined chart with two lines
+- Track trends for both metrics
+- Goal: Keep both rates low and stable
 
 #### Arrival and Departure Rate (System Stability)
 - **Arrival Rate:** Average number of items added to backlog per week
@@ -225,11 +236,14 @@ Statistics:**
       "average": 0.0,
       "median": 0.0,
       "percentile85": 0.0,
+      "leadTimeAverage": 0.0,          // Average lead time (Created → Done)
+      "leadTimeMedian": 0.0,            // Median lead time
+      "leadTimePercentile85": 0.0,      // 85th percentile lead time
       "datasets": [
         {
           "label": "Bugs",
           "data": [
-            {"x": "DD MMM", "y": 10, "id": 123, "title": "...", "completedDate": "DD MMM YYYY"},
+            {"x": "DD MMM", "y": 10, "leadTime": 25, "id": 123, "title": "...", "completedDate": "DD MMM YYYY"},
             ...
           ],
           "backgroundColor": "#fc8181",
@@ -240,7 +254,7 @@ Statistics:**
         {
           "label": "PBIs",
           "data": [
-            {"x": "DD MMM", "y": 7, "id": 456, "title": "...", "completedDate": "DD MMM YYYY"},
+            {"x": "DD MMM", "y": 7, "leadTime": 18, "id": 456, "title": "...", "completedDate": "DD MMM YYYY"},
             ...
           ],
           "backgroundColor": "#68d391",
@@ -252,11 +266,71 @@ Statistics:**
       ]
     },
     "cfd": {  // Cumulative Flow Diagram
-      "labels": ["DD MMM", "DD MMM", ...],  // Week ending dates
-      "arrivals": [0, 4, 18, ...],          // Cumulative arrivals
-      "departures": [0, 0, 2, ...],         // Cumulative departures
-      "arrivalTrend": [0, 4.67, 9.33, ..., 56.0],   // Linear trend: (lastValue/numIntervals) * i
-      "departureTrend": [0, 1.0, 2.0, ..., 12.0]    // Linear trend: (lastValue/numIntervals) * i
+      "labels": ["DD MMM", "DD MMM", ...],  // Date labels
+      "arrivals": [0, 4, 18, ...],          // Cumulative arrivals (required)
+      "departures": [0, 0, 2, ...],         // Cumulative departures (required)
+      "arrivalTrend": [0, 4.67, 9.33, ..., 56.0],   // Linear trend: (lastValue/numIntervals) * i (required)
+      "departureTrend": [0, 1.0, 2.0, ..., 12.0],   // Linear trend: (lastValue/numIntervals) * i (required)
+      "states": [                           // State-based CFD (optional - for advanced analysis)
+        {
+          "name": "In Development",
+          "values": [0, 2, 3, 5, ...]       // Cumulative count in this state
+        },
+        {
+          "name": "In Review",
+          "values": [0, 1, 2, 3, ...]
+        },
+        {
+          "name": "External Review",
+          "values": [0, 0, 1, 2, ...]
+        },
+        {
+          "name": "Ready for QA",
+          "values": [0, 1, 1, 2, ...]
+        },
+        {
+          "name": "QA",
+          "values": [0, 0, 1, 2, ...]
+        },
+        {
+          "name": "Ready for Release",
+          "values": [0, 0, 0, 1, ...]
+        }
+      ]
+    },
+    "workItemAge": {                        // Optional: Work Item Age by State
+      "states": [
+        {
+          "name": "In Development",
+          "items": [
+            {"id": 123, "title": "...", "age": 15},
+            {"id": 456, "title": "...", "age": 8}
+          ]
+        },
+        {
+          "name": "In Review",
+          "items": [...]
+        }
+        // ... other states
+      ]
+    },
+    "dailyWip": {                           // Optional: Daily WIP tracking
+      "labels": ["DD MMM", "DD MMM", ...],  // Daily dates
+      "values": [6, 7, 5, 8, ...],          // WIP count each day
+      "trend": [6, 6.2, 6.4, ...]           // Linear trend line
+    },
+    "staleWork": {                          // Optional: Work without recent updates
+      "labels": ["#ID", "#ID", ...],        // Work item IDs
+      "values": [4, 4, 4, ...],             // Days since last update
+      "ids": [123, 456, ...],               // Raw IDs
+      "titles": ["Title", "Title", ...]     // Work item titles
+    },
+    "wipAgeBreakdown": {                    // Optional: WIP breakdown by age
+      "labels": ["DD MMM", "DD MMM", ...],  // Daily dates
+      "age14Plus": [2, 3, 4, ...],          // Items >14 days old
+      "age7to14": [1, 1, 2, ...],           // Items 7-14 days old
+      "age1to7": [2, 1, 1, ...],            // Items 1-7 days old
+      "age0to1": [1, 1, 1, ...]             // Items <1 day old
     },
     "wip": {
       "labels": ["#ID", "#ID", ...],        // Work item IDs (sorted by age, oldest first)
@@ -267,14 +341,31 @@ Statistics:**
       // NOTE: Only include items with age >7 days (concerning items)
     },
     "bugRate": {
-      "labels": ["DD MMM", "DD MMM", ...],  // Week ending dates
-      "values": [0, 0, 50, ...],            // Bug rate % for each week
-      "details": [                          // For tooltip details
-        {"bugs": 0, "features": 2},
-        {"bugs": 0, "features": 1},
-        {"bugs": 1, "features": 1},
+      "labels": ["DD MMM", "DD MMM", ...],    // Week ending dates
+      "activeRate": [8.4, 10.2, ...],         // Active bug rate % (active bugs / active backlog)
+      "completedRate": [100, null, 0, ...],   // Completed bug rate % (completed bugs / completed total), null if no completions
+      "activeBugCount": [8, 10, ...],         // Number of active bugs each week
+      "activeTotalCount": [95, 98, ...],      // Total active backlog each week
+      "completedBugCount": [2, 0, 0, ...],    // Bugs completed each week
+      "completedFeatureCount": [0, 1, 1, ...], // Features completed each week
+      "activeBugs": [                         // Active bugs for each week (for tooltip)
+        [{"id": 123, "title": "..."}, ...],
+        ...
+      ],
+      "completedBugs": [                      // Completed bugs for each week (for tooltip)
+        [{"id": 123, "title": "..."}, ...],
+        ...
+      ],
+      "completedFeatures": [                  // Completed features for each week (for tooltip)
+        [{"id": 456, "title": "..."}, ...],
         ...
       ]
+    },
+    "netFlow": {
+      "labels": ["DD MMM", "DD MMM", ...],    // Week ending dates
+      "values": [1, -2, 0, -8, ...],          // Net flow (finished - started) per week
+      "started": [1, 8, 5, 13, ...],          // Items started each week
+      "finished": [2, 6, 5, 5, ...]           // Items finished each week
     },
     "state": {
       "labels": ["New", "In Progress", "Resolved"],
@@ -285,10 +376,17 @@ Statistics:**
   
   "insights": {
     "throughput": "Description of throughput trend and patterns",
-    "cycleTime": "Description of cycle time patterns, outliers, by-type differences",
-    "cfd": "Description of system stability, arrival vs departure, backlog growth",
+    "cycleTime": "Description of cycle time patterns (active work time), outliers, by-type differences. Focus on In Progress → Done duration.",
+    "leadTime": "Description of lead time patterns (total time in system), comparison to cycle time, wait time before work starts. Focus on Created → Done duration.",
+    "flowEfficiency": "Description of efficiency ratio (cycle/lead), percentage of time spent in active work vs total time. Avoid 'wait time' terminology - use 'non-active time' since it could include other work. Highlight best/worst efficiency items.",
+    "cfd": "Description of system stability, arrival vs departure rates, backlog growth/shrinkage. Mention if gap is widening (unstable) or narrowing (improving). Compare actual trend to linear trend lines.",
+    "workItemAge": "Optional. Description of aging items by state, oldest items requiring attention",
+    "dailyWip": "Optional. Description of WIP trends, whether growing or stable, WIP limit breaches",
+    "staleWork": "Optional. Description of items without updates, blocked or abandoned work",
+    "wipAgeBreakdown": "Optional. Description of WIP age distribution, whether work is flowing or aging",
     "wip": "Description of WIP aging concerns, stale work, recommendations",
-    "bugRate": "Description of bug rate trend and quality concerns",
+    "bugRate": "Description of both active and completed bug rate trends, backlog health, quality concerns",
+    "netFlow": "Description of net flow volatility, worst/best weeks, sustainability concerns, recommendations",
     "state": "Description of backlog distribution and prioritization needs"
   },
   
@@ -312,9 +410,21 @@ Statistics:**
 
 5. **WIP chart**: Only include items with age >7 days. Sort by age descending (oldest first). Limit to top 10 if more than 10 items.
 
-6. **Bug rate by week**: Calculate percentage for each week (bugs/(bugs+features)*100). If a week has 0 completions, use null or 0.
+6. **Bug rate tracking**: Calculate TWO metrics per week:
+   - **Active bug rate**: Active bugs / Total active backlog (%)
+   - **Completed bug rate**: Bugs completed / (Bugs + Features completed) (%). Use null if week has 0 completions.
+   Both metrics provide complementary views: active shows backlog health, completed shows delivery quality.
 
-7. **Color coding**:
+7. **Net flow (Sustainability)**: For each week, calculate net flow = finished - started
+   - Items started: count of items that moved out of "New" state during the week
+   - Items finished: count of items completed (moved to "Done") during the week
+   - Positive values (blue bars) = more finished than started (good, reducing WIP)
+   - Negative values (orange bars) = more started than finished (bad, increasing WIP)
+   - Goal: Keep near zero to maintain sustainable pace
+
+8. **Active bugs over time**: For each week in the analysis period, count the number of bugs in "New" or "In Progress" state at the end of that week. Also count total active backlog (all work items not in "Done" state). This shows backlog health over time.
+
+9. **Color coding**:
    - WIP age: Green <7 days, yellow 7-14 days, red >14 days
    - Use `#68d391` (green), `#fbd38d` (yellow), `#fc8181` (red)
 

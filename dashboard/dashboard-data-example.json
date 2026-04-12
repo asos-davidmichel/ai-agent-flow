@@ -79,15 +79,18 @@
       "average": 6.4,
       "median": 6.0,
       "percentile85": 10.7,
+      "leadTimeAverage": 18.2,
+      "leadTimeMedian": 15.0,
+      "leadTimePercentile85": 28.5,
       "datasets": [
         {
           "label": "Bugs",
           "data": [
-            {"x": "22 Feb", "y": 23, "id": 1170800, "title": "OneTrust Events appearing multiple times", "completedDate": "22 Feb 2026"},
-            {"x": "22 Feb", "y": 10, "id": 1166516, "title": "Failing customerIdentityData event", "completedDate": "22 Feb 2026"},
-            {"x": "29 Mar", "y": 7, "id": 1191895, "title": "Consent Flags discrepancy", "completedDate": "29 Mar 2026"},
-            {"x": "5 Apr", "y": 6, "id": 1189792, "title": "Empty items array in PDP wishlist", "completedDate": "5 Apr 2026"},
-            {"x": "12 Apr", "y": 1, "id": 1192521, "title": "view_item_list not fired on filter remove", "completedDate": "12 Apr 2026"}
+            {"x": "22 Feb", "y": 23, "leadTime": 45, "id": 1170800, "title": "OneTrust Events appearing multiple times", "completedDate": "22 Feb 2026"},
+            {"x": "22 Feb", "y": 10, "leadTime": 18, "id": 1166516, "title": "Failing customerIdentityData event", "completedDate": "22 Feb 2026"},
+            {"x": "29 Mar", "y": 7, "leadTime": 21, "id": 1191895, "title": "Consent Flags discrepancy", "completedDate": "29 Mar 2026"},
+            {"x": "5 Apr", "y": 6, "leadTime": 14, "id": 1189792, "title": "Empty items array in PDP wishlist", "completedDate": "5 Apr 2026"},
+            {"x": "12 Apr", "y": 1, "leadTime": 8, "id": 1192521, "title": "view_item_list not fired on filter remove", "completedDate": "12 Apr 2026"}
           ],
           "backgroundColor": "#fc8181",
           "borderColor": "#e53e3e",
@@ -97,13 +100,13 @@
         {
           "label": "PBIs",
           "data": [
-            {"x": "1 Mar", "y": 7, "id": 1190732, "title": "PDP flexibleSalesChannel values", "completedDate": "1 Mar 2026"},
-            {"x": "22 Mar", "y": 7, "id": 1190829, "title": "BAG flexibleSalesChannel values", "completedDate": "22 Mar 2026"},
-            {"x": "29 Mar", "y": 6, "id": 1147602, "title": "Bag Extend view_item badges", "completedDate": "29 Mar 2026"},
-            {"x": "29 Mar", "y": 6, "id": 1137669, "title": "Middleware synchronous queue", "completedDate": "29 Mar 2026"},
-            {"x": "12 Apr", "y": 3, "id": 1187078, "title": "PLP Pass request_id", "completedDate": "12 Apr 2026"},
-            {"x": "12 Apr", "y": 3, "id": 1190808, "title": "Checkout flexibleSalesChannel", "completedDate": "12 Apr 2026"},
-            {"x": "12 Apr", "y": 2, "id": 1182730, "title": "SavedList notify_me_button_click", "completedDate": "12 Apr 2026"}
+            {"x": "1 Mar", "y": 7, "leadTime": 12, "id": 1190732, "title": "PDP flexibleSalesChannel values", "completedDate": "1 Mar 2026"},
+            {"x": "22 Mar", "y": 7, "leadTime": 15, "id": 1190829, "title": "BAG flexibleSalesChannel values", "completedDate": "22 Mar 2026"},
+            {"x": "29 Mar", "y": 6, "leadTime": 28, "id": 1147602, "title": "Bag Extend view_item badges", "completedDate": "29 Mar 2026"},
+            {"x": "29 Mar", "y": 6, "leadTime": 35, "id": 1137669, "title": "Middleware synchronous queue", "completedDate": "29 Mar 2026"},
+            {"x": "12 Apr", "y": 3, "leadTime": 10, "id": 1187078, "title": "PLP Pass request_id", "completedDate": "12 Apr 2026"},
+            {"x": "12 Apr", "y": 3, "leadTime": 9, "id": 1190808, "title": "Checkout flexibleSalesChannel", "completedDate": "12 Apr 2026"},
+            {"x": "12 Apr", "y": 2, "leadTime": 7, "id": 1182730, "title": "SavedList notify_me_button_click", "completedDate": "12 Apr 2026"}
           ],
           "backgroundColor": "#68d391",
           "borderColor": "#38a169",
@@ -117,7 +120,113 @@
       "arrivals": [0, 0, 0, 4, 18, 20, 22, 25, 29, 30, 37, 46, 56],
       "departures": [0, 0, 0, 0, 0, 2, 3, 3, 3, 4, 7, 8, 12],
       "arrivalTrend": [0, 4.67, 9.33, 14.0, 18.67, 23.33, 28.0, 32.67, 37.33, 42.0, 46.67, 51.33, 56.0],
-      "departureTrend": [0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0]
+      "departureTrend": [0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
+      "states": [
+        {
+          "name": "In Development",
+          "values": [0, 0, 2, 3, 5, 4, 6, 8, 7, 6, 5, 7, 8]
+        },
+        {
+          "name": "In Review",
+          "values": [0, 0, 1, 2, 3, 4, 5, 6, 7, 6, 8, 9, 10]
+        },
+        {
+          "name": "External Review",
+          "values": [0, 0, 0, 1, 2, 2, 3, 3, 4, 5, 6, 7, 8]
+        },
+        {
+          "name": "Ready for QA",
+          "values": [0, 0, 1, 1, 2, 3, 2, 3, 4, 3, 5, 6, 7]
+        },
+        {
+          "name": "QA",
+          "values": [0, 0, 0, 1, 2, 3, 3, 4, 3, 5, 6, 7, 8]
+        },
+        {
+          "name": "Ready for Release",
+          "values": [0, 0, 0, 0, 1, 2, 2, 3, 4, 5, 7, 8, 10]
+        }
+      ]
+    },
+    "workItemAge": {
+      "states": [
+        {
+          "name": "In Development",
+          "items": [
+            {"id": 1127036, "title": "Add onChange callback to datalayer", "age": 15},
+            {"id": 1146851, "title": "Extend search result view event", "age": 8},
+            {"id": 1158931, "title": "Add new events to Saved List page", "age": 5}
+          ]
+        },
+        {
+          "name": "In Review",
+          "items": [
+            {"id": 1159059, "title": "PDP event item object update", "age": 45},
+            {"id": 1159096, "title": "Bag Engagement Events", "age": 28},
+            {"id": 1160123, "title": "Checkout events update", "age": 12},
+            {"id": 1161234, "title": "Profile page tracking", "age": 3}
+          ]
+        },
+        {
+          "name": "External Review",
+          "items": [
+            {"id": 1162345, "title": "GDPR compliance check", "age": 52},
+            {"id": 1163456, "title": "Security review", "age": 25}
+          ]
+        },
+        {
+          "name": "Ready for QA",
+          "items": [
+            {"id": 1164567, "title": "Homepage events", "age": 18},
+            {"id": 1165678, "title": "Search refinement", "age": 7},
+            {"id": 1166789, "title": "Filter events", "age": 2}
+          ]
+        },
+        {
+          "name": "QA",
+          "items": [
+            {"id": 1167890, "title": "Mobile app tracking", "age": 35},
+            {"id": 1168901, "title": "Cross-device sync", "age": 22},
+            {"id": 1169012, "title": "Analytics dashboard", "age": 14},
+            {"id": 1170123, "title": "Event validation", "age": 6}
+          ]
+        },
+        {
+          "name": "Ready for Release",
+          "items": [
+            {"id": 1171234, "title": "Performance optimization", "age": 42},
+            {"id": 1172345, "title": "Error handling", "age": 19}
+          ]
+        }
+      ]
+    },
+    "dailyWip": {
+      "labels": ["22 Feb", "23 Feb", "24 Feb", "25 Feb", "26 Feb", "27 Feb", "28 Feb", "01 Mar", "02 Mar", "03 Mar", "04 Mar", "05 Mar", "06 Mar", "07 Mar", "08 Mar", "09 Mar", "10 Mar", "11 Mar", "12 Mar", "13 Mar", "14 Mar", "15 Mar"],
+      "values": [6, 6, 7, 5, 5, 6, 7, 8, 10, 10, 9, 8, 7, 9, 10, 11, 10, 9, 9, 10, 12, 9],
+      "trend": [6, 6.2, 6.4, 6.6, 6.8, 7.0, 7.2, 7.4, 7.6, 7.8, 8.0, 8.2, 8.4, 8.6, 8.8, 9.0, 9.2, 9.4, 9.6, 9.8, 10.0, 10.2]
+    },
+    "staleWork": {
+      "labels": ["#1127036", "#1162345", "#1159059", "#1171234", "#1167890"],
+      "values": [4, 4, 4, 4, 4],
+      "ids": [1127036, 1162345, 1159059, 1171234, 1167890],
+      "titles": [
+        "Add onChange callback to datalayer",
+        "GDPR compliance check",
+        "PDP event item object update",
+        "Performance optimization",
+        "Mobile app tracking"
+      ]
+    },
+    "wipAgeBreakdown": {
+      "labels": ["22 Feb", "23 Feb", "24 Feb", "25 Feb", "26 Feb", "27 Feb", "28 Feb", "01 Mar", "02 Mar", "03 Mar", "04 Mar", "05 Mar", "06 Mar", "07 Mar", "08 Mar", "09 Mar", "10 Mar", "11 Mar", "12 Mar", "13 Mar", "14 Mar", "15 Mar"],
+      "age14Plus": [2, 2, 3, 2, 2, 3, 3, 4, 4, 5, 4, 4, 3, 4, 5, 5, 5, 4, 4, 5, 6, 4],
+      "age7to14": [1, 1, 1, 1, 1, 1, 2, 2, 3, 2, 2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 3, 2],
+      "age1to7": [2, 2, 2, 1, 1, 1, 1, 1, 2, 2, 2, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+      "age0to1": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    },
+    "timeInColumn": {
+      "labels": ["New", "Ready for Dev", "In Development", "In Review", "External Review", "Ready for QA", "QA", "Ready for Release"],
+      "values": [12, 10, 22, 20, 72, 5, 108, 7]
     },
     "wip": {
       "labels": ["#1127036", "#1146851", "#1158931", "#1159059", "#1159096"],
@@ -133,16 +242,220 @@
       "colors": ["#fc8181", "#fc8181", "#fc8181", "#fbd38d", "#fbd38d"]
     },
     "bugRate": {
-      "labels": ["22 Feb", "1 Mar", "22 Mar", "29 Mar", "5 Apr", "12 Apr"],
-      "values": [100, 0, 0, 33.3, 100, 25],
-      "details": [
-        {"bugs": 2, "features": 0},
-        {"bugs": 0, "features": 1},
-        {"bugs": 0, "features": 1},
-        {"bugs": 1, "features": 2},
-        {"bugs": 1, "features": 0},
-        {"bugs": 1, "features": 3}
+      "labels": ["22 Feb", "29 Feb", "7 Mar", "14 Mar", "21 Mar", "28 Mar", "4 Apr", "11 Apr", "18 Apr", "25 Apr", "2 May", "9 May"],
+      "activeRate": [8.4, 10.2, 11.8, 13.6, 12.0, 10.5, 12.5, 10.4, 9.1, 8.3, 6.7, 5.9],
+      "completedRate": [100, null, 0, null, 0, null, 33.3, null, 100, null, null, 25],
+      "activeBugCount": [8, 10, 12, 15, 13, 11, 14, 12, 10, 9, 7, 6],
+      "activeTotalCount": [95, 98, 102, 110, 108, 105, 112, 115, 110, 108, 105, 102],
+      "completedBugCount": [2, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1],
+      "completedFeatureCount": [0, 0, 1, 0, 1, 0, 2, 0, 0, 0, 0, 3],
+      "activeBugs": [
+        [
+          {"id": 1170800, "title": "OneTrust Events appearing multiple times"},
+          {"id": 1166516, "title": "Failing customerIdentityData event"},
+          {"id": 1165234, "title": "Missing event properties in checkout"},
+          {"id": 1160987, "title": "Intermittent tracking failures"},
+          {"id": 1158765, "title": "Cookie consent not persisting"},
+          {"id": 1157432, "title": "Analytics blocked by ad blockers"},
+          {"id": 1155890, "title": "Session timeout causing data loss"},
+          {"id": 1154321, "title": "Safari private mode tracking issue"}
+        ],
+        [
+          {"id": 1170800, "title": "OneTrust Events appearing multiple times"},
+          {"id": 1166516, "title": "Failing customerIdentityData event"},
+          {"id": 1165234, "title": "Missing event properties in checkout"},
+          {"id": 1160987, "title": "Intermittent tracking failures"},
+          {"id": 1158765, "title": "Cookie consent not persisting"},
+          {"id": 1171234, "title": "Mobile app event timing issues"},
+          {"id": 1172456, "title": "Cross-domain tracking broken"},
+          {"id": 1173678, "title": "Page view duplication on SPA"},
+          {"id": 1174890, "title": "User ID not propagating"},
+          {"id": 1175123, "title": "Event queue overflow"}
+        ],
+        [
+          {"id": 1170800, "title": "OneTrust Events appearing multiple times"},
+          {"id": 1166516, "title": "Failing customerIdentityData event"},
+          {"id": 1165234, "title": "Missing event properties in checkout"},
+          {"id": 1171234, "title": "Mobile app event timing issues"},
+          {"id": 1172456, "title": "Cross-domain tracking broken"},
+          {"id": 1173678, "title": "Page view duplication on SPA"},
+          {"id": 1176543, "title": "Ecommerce events missing revenue"},
+          {"id": 1177654, "title": "Search tracking incomplete"},
+          {"id": 1178765, "title": "Video tracking initialization fails"},
+          {"id": 1179876, "title": "Social share tracking broken"},
+          {"id": 1180987, "title": "Campaign parameters not captured"},
+          {"id": 1182098, "title": "Custom dimension overflow"}
+        ],
+        [
+          {"id": 1170800, "title": "OneTrust Events appearing multiple times"},
+          {"id": 1171234, "title": "Mobile app event timing issues"},
+          {"id": 1172456, "title": "Cross-domain tracking broken"},
+          {"id": 1176543, "title": "Ecommerce events missing revenue"},
+          {"id": 1177654, "title": "Search tracking incomplete"},
+          {"id": 1183209, "title": "Referrer information lost"},
+          {"id": 1184320, "title": "GTM container conflicts"},
+          {"id": 1185431, "title": "Data layer race conditions"},
+          {"id": 1186542, "title": "Consent mode implementation gaps"},
+          {"id": 1187653, "title": "Server-side tracking errors"},
+          {"id": 1188764, "title": "Attribution model discrepancies"},
+          {"id": 1189875, "title": "Event sampling bias"},
+          {"id": 1191895, "title": "Consent Flags discrepancy"},
+          {"id": 1189792, "title": "Empty items array in PDP wishlist"},
+          {"id": 1192521, "title": "view_item_list not fired on filter remove"}
+        ],
+        [
+          {"id": 1171234, "title": "Mobile app event timing issues"},
+          {"id": 1172456, "title": "Cross-domain tracking broken"},
+          {"id": 1176543, "title": "Ecommerce events missing revenue"},
+          {"id": 1183209, "title": "Referrer information lost"},
+          {"id": 1184320, "title": "GTM container conflicts"},
+          {"id": 1186542, "title": "Consent mode implementation gaps"},
+          {"id": 1187653, "title": "Server-side tracking errors"},
+          {"id": 1191895, "title": "Consent Flags discrepancy"},
+          {"id": 1189792, "title": "Empty items array in PDP wishlist"},
+          {"id": 1192521, "title": "view_item_list not fired on filter remove"},
+          {"id": 1193456, "title": "Checkout funnel step skipped"},
+          {"id": 1194567, "title": "Product impression tracking missing"},
+          {"id": 1195678, "title": "Form abandonment not tracked"}
+        ],
+        [
+          {"id": 1172456, "title": "Cross-domain tracking broken"},
+          {"id": 1176543, "title": "Ecommerce events missing revenue"},
+          {"id": 1183209, "title": "Referrer information lost"},
+          {"id": 1186542, "title": "Consent mode implementation gaps"},
+          {"id": 1191895, "title": "Consent Flags discrepancy"},
+          {"id": 1189792, "title": "Empty items array in PDP wishlist"},
+          {"id": 1192521, "title": "view_item_list not fired on filter remove"},
+          {"id": 1193456, "title": "Checkout funnel step skipped"},
+          {"id": 1196789, "title": "Promotion tracking incomplete"},
+          {"id": 1197890, "title": "Internal search not captured"},
+          {"id": 1198901, "title": "404 error tracking missing"}
+        ],
+        [
+          {"id": 1176543, "title": "Ecommerce events missing revenue"},
+          {"id": 1183209, "title": "Referrer information lost"},
+          {"id": 1186542, "title": "Consent mode implementation gaps"},
+          {"id": 1191895, "title": "Consent Flags discrepancy"},
+          {"id": 1189792, "title": "Empty items array in PDP wishlist"},
+          {"id": 1192521, "title": "view_item_list not fired on filter remove"},
+          {"id": 1193456, "title": "Checkout funnel step skipped"},
+          {"id": 1196789, "title": "Promotion tracking incomplete"},
+          {"id": 1199012, "title": "Landing page category mismatch"},
+          {"id": 1200123, "title": "Scroll depth tracking not firing"},
+          {"id": 1201234, "title": "Email campaign attribution lost"},
+          {"id": 1202345, "title": "A/B test variant not tracked"},
+          {"id": 1203456, "title": "Customer login event delayed"},
+          {"id": 1204567, "title": "Wishlist add event missing"}
+        ],
+        [
+          {"id": 1183209, "title": "Referrer information lost"},
+          {"id": 1186542, "title": "Consent mode implementation gaps"},
+          {"id": 1191895, "title": "Consent Flags discrepancy"},
+          {"id": 1189792, "title": "Empty items array in PDP wishlist"},
+          {"id": 1192521, "title": "view_item_list not fired on filter remove"},
+          {"id": 1193456, "title": "Checkout funnel step skipped"},
+          {"id": 1199012, "title": "Landing page category mismatch"},
+          {"id": 1202345, "title": "A/B test variant not tracked"},
+          {"id": 1205678, "title": "Size guide interaction not logged"},
+          {"id": 1206789, "title": "Review submission tracking broken"},
+          {"id": 1207890, "title": "Gift card balance check missing"},
+          {"id": 1208901, "title": "Store locator events incomplete"}
+        ],
+        [
+          {"id": 1186542, "title": "Consent mode implementation gaps"},
+          {"id": 1191895, "title": "Consent Flags discrepancy"},
+          {"id": 1192521, "title": "view_item_list not fired on filter remove"},
+          {"id": 1193456, "title": "Checkout funnel step skipped"},
+          {"id": 1199012, "title": "Landing page category mismatch"},
+          {"id": 1202345, "title": "A/B test variant not tracked"},
+          {"id": 1205678, "title": "Size guide interaction not logged"},
+          {"id": 1209012, "title": "Newsletter signup not captured"},
+          {"id": 1210123, "title": "Product comparison tracking gaps"},
+          {"id": 1211234, "title": "Mobile menu interactions missing"}
+        ],
+        [
+          {"id": 1191895, "title": "Consent Flags discrepancy"},
+          {"id": 1192521, "title": "view_item_list not fired on filter remove"},
+          {"id": 1193456, "title": "Checkout funnel step skipped"},
+          {"id": 1199012, "title": "Landing page category mismatch"},
+          {"id": 1202345, "title": "A/B test variant not tracked"},
+          {"id": 1209012, "title": "Newsletter signup not captured"},
+          {"id": 1212345, "title": "Chat widget open event missing"},
+          {"id": 1213456, "title": "Payment method selection not tracked"},
+          {"id": 1214567, "title": "Return request tracking incomplete"}
+        ],
+        [
+          {"id": 1192521, "title": "view_item_list not fired on filter remove"},
+          {"id": 1193456, "title": "Checkout funnel step skipped"},
+          {"id": 1199012, "title": "Landing page category mismatch"},
+          {"id": 1209012, "title": "Newsletter signup not captured"},
+          {"id": 1212345, "title": "Chat widget open event missing"},
+          {"id": 1215678, "title": "Delivery option change not logged"},
+          {"id": 1216789, "title": "Account settings update missing"}
+        ],
+        [
+          {"id": 1192521, "title": "view_item_list not fired on filter remove"},
+          {"id": 1193456, "title": "Checkout funnel step skipped"},
+          {"id": 1212345, "title": "Chat widget open event missing"},
+          {"id": 1215678, "title": "Delivery option change not logged"},
+          {"id": 1217890, "title": "Promo code validation tracking gaps"},
+          {"id": 1218901, "title": "Quick view product event missing"}
+        ]
+      ],
+      "completedBugs": [
+        [
+          {"id": 1170800, "title": "OneTrust Events appearing multiple times"},
+          {"id": 1166516, "title": "Failing customerIdentityData event"}
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [
+          {"id": 1191895, "title": "Consent Flags discrepancy"}
+        ],
+        [],
+        [
+          {"id": 1189792, "title": "Empty items array in PDP wishlist"}
+        ],
+        [],
+        [],
+        [
+          {"id": 1192521, "title": "view_item_list not fired on filter remove"}
+        ]
+      ],
+      "completedFeatures": [
+        [],
+        [],
+        [
+          {"id": 1190732, "title": "PDP flexibleSalesChannel values"}
+        ],
+        [],
+        [
+          {"id": 1190829, "title": "BAG flexibleSalesChannel values"}
+        ],
+        [],
+        [
+          {"id": 1147602, "title": "Bag Extend view_item badges"},
+          {"id": 1137669, "title": "Middleware synchronous queue"}
+        ],
+        [],
+        [],
+        [],
+        [],
+        [
+          {"id": 1187078, "title": "PLP Pass request_id"},
+          {"id": 1190808, "title": "Checkout flexibleSalesChannel"},
+          {"id": 1182730, "title": "SavedList notify_me_button_click"}
+        ]
       ]
+    },
+    "netFlow": {
+      "labels": ["22 Feb", "29 Feb", "7 Mar", "14 Mar", "21 Mar", "28 Mar", "4 Apr", "11 Apr", "18 Apr", "25 Apr", "2 May", "9 May"],
+      "values": [1, -2, 0, -8, 0, -2, 7, 0, 3, 0, -1, 0],
+      "started": [1, 8, 5, 13, 4, 7, 0, 5, 1, 4, 6, 4],
+      "finished": [2, 6, 5, 5, 4, 5, 7, 5, 4, 4, 5, 4]
     },
     "state": {
       "labels": ["New", "In Progress", "Resolved"],
@@ -153,10 +466,18 @@
   
   "insights": {
     "throughput": "Throughput shows high variability with an uptick in recent weeks (4 items completed week ending 12 Apr). Median throughput is 1.5 items/week.",
-    "cycleTime": "Most items complete within 1-7 days. One outlier (Bug #1170800) took 23 days. Bugs average 8.4 days vs PBIs at 5.0 days.",
-    "cfd": "System is significantly unstable. Arrival rate (5.6/week) far exceeds departure rate (2.0/week), causing backlog to grow by ~3.6 items/week. The gap between cumulative arrivals and departures is widening, indicating accumulating backlog.",
+    "cycleTime": "Most items complete within 1-7 days of starting active work. One outlier (Bug #1170800) took 23 days in active development. Bugs average 8.4 days vs PBIs at 5.0 days. Consider breaking down long-running bugs into smaller chunks.",
+    "leadTime": "Lead time averages 18.2 days (median 15 days) from creation to completion. Much longer than cycle time, indicating items wait in backlog before work begins. Longest: Bug #1170800 at 45 days total (22 days before work started + 23 days active).",
+    "flowEfficiency": "Average flow efficiency 35% - items spend only about 1/3 of total time in active work. Significant opportunity to reduce non-active time. Best efficiency: Bug #1192521 at 87% (1 day active / 1.15 days total). Worst: Bug #1170800 at 51% (23/45 days active). Improving efficiency means reducing time between creation and starting work.",
+    "cfd": "System is significantly unstable. Arrival rate (5.6/week) far exceeds departure rate (2.0/week), causing backlog to grow by ~3.6 items/week. The gap between cumulative arrivals and departures is widening, indicating accumulating backlog. Trend lines show arrivals accelerating while departures remain relatively flat.",
+    "workItemAge": "Work items aging significantly in External Review (52 days) and QA (35 days max). Most concerning: #1162345 (GDPR compliance) at 52 days in External Review, #1159059 (PDP update) at 45 days in Review. Focus on clearing older items before starting new work.",
+    "dailyWip": "WIP trending upward from 6 to 9-12 items over the period. Trend line shows consistent growth. Consider implementing WIP limits to prevent further accumulation and maintain sustainable delivery pace.",
+    "staleWork": "5 items haven't been updated in 4 days. All are high-value items stuck in different states. Most critical: #1127036 (onChange callback), #1162345 (GDPR compliance), #1159059 (PDP update). Daily standup should focus on unblocking these items.",
+    "timeInColumn": "Most time spent in QA (108 days) and External Review (72 days), indicating significant bottlenecks in review processes. In Development (22 days) and In Review (20 days) are more efficient. Consider increasing QA capacity or implementing automated testing to reduce time in QA column. External Review bottleneck suggests need for better coordination with external stakeholders.",
+    "wipAgeBreakdown": "Growing proportion of aged work (>14 days) from 2 to 4-6 items. Concerning pattern of work aging rather than flowing. Fresh work (≤1 day) remains constant at 1 item, suggesting slow progression through workflow. Focus on completing older items.",
     "wip": "5 items currently in progress with concerning age (19-109 days). All items are stale (>7 days without update). Consider WIP limits and completing existing work before starting new items.",
-    "bugRate": "Bug rate is concerning at 41.7%. Nearly half of completed work is fixing defects rather than delivering new value. Recent weeks show volatility: 100% bugs in week of 22 Feb and 5 Apr.",
+    "bugRate": "**Active backlog health improving:** Bug rate decreased from 13.6% (14 Mar) to 5.9% (9 May). Active bug count dropping from 15 to 6. **Completed work quality volatile:** Bug rate ranges from 0-100%, with recent weeks at 25% (9 May). High variability suggests inconsistent quality control.",
+    "netFlow": "Net flow volatile with significant swings. Worst week: -8 (14 Mar) when 13 items started but only 5 finished. Best week: +7 (4 Apr) when 7 items finished and 0 started. Recent trend balancing. Goal: Maintain near-zero by limiting new work starts.",
     "state": "112 items (86%) remain in New state. Only 6 items (5%) actively in progress. Large New backlog suggests need for prioritisation and grooming."
   },
   
