@@ -879,6 +879,14 @@
         document.getElementById('bugRateInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.bugRate}</p>`;
         document.getElementById('netFlowInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.netFlow}</p>`;
         document.getElementById('stateInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.state}</p>`;
+        
+        // Render insights for new charts
+        if (dashboardData.insights.blockedItems) {
+            document.getElementById('blockedItemsInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.blockedItems}</p>`;
+        }
+        if (dashboardData.insights.transitionRates) {
+            document.getElementById('transitionRatesInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.transitionRates}</p>`;
+        }
 
         // Render footer
         document.getElementById('footer').innerHTML = `<p>${dashboardData.footer}</p>`;
