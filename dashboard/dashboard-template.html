@@ -80,6 +80,35 @@
             font-weight: 700;
             color: #2d3748;
             margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .trend-indicator {
+            font-size: 32px;
+            font-weight: 900;
+            line-height: 1;
+        }
+        
+        .trend-up-good {
+            color: #10b981;
+        }
+        
+        .trend-down-good {
+            color: #10b981;
+        }
+        
+        .trend-up-bad {
+            color: #ef4444;
+        }
+        
+        .trend-down-bad {
+            color: #ef4444;
+        }
+        
+        .trend-stable {
+            color: #6b7280;
         }
 
         .metric-split {
@@ -608,10 +637,31 @@
             <strong>Generated:</strong> ${new Date().toLocaleString('en-GB')}
         `;
 
+        // Helper function to get trend indicator HTML
+        function getTrendIndicator(trend) {
+            if (!trend || !trend.direction) return '';
+            
+            let arrow = '';
+            let className = '';
+            
+            if (trend.direction === 'up') {
+                arrow = '↑';
+                className = trend.isGood ? 'trend-up-good' : 'trend-up-bad';
+            } else if (trend.direction === 'down') {
+                arrow = '↓';
+                className = trend.isGood ? 'trend-down-good' : 'trend-down-bad';
+            } else {
+                arrow = '→';
+                className = 'trend-stable';
+            }
+            
+            return `<span class="trend-indicator ${className}">${arrow}</span>`;
+        }
+        
         // Render metric cards
         const metricCardsHTML = `
             <div class="metric-card">
-                <h3>Throughput</h3>
+                <h3>Throughput ${dashboardData.hasBugPbiSplit ? getTrendIndicator(dashboardData.metrics.throughput.trend) : ''}</h3>
                 ${dashboardData.hasBugPbiSplit ? `
                     <div class="metric-split">
                         <div class="metric-split-item">
@@ -625,7 +675,10 @@
                     </div>
                     <div class="metric-label">items/week average</div>
                 ` : `
-                    <div class="metric-value">${dashboardData.metrics.throughput.avg}</div>
+                    <div class="metric-value">
+                        <span>${dashboardData.metrics.throughput.avg}</span>
+                        ${getTrendIndicator(dashboardData.metrics.throughput.trend)}
+                    </div>
                     <div class="metric-label">items/week average</div>
                 `}
                 <div class="metric-trend trend-neutral">
@@ -634,7 +687,7 @@
             </div>
             
             <div class="metric-card">
-                <h3>Cycle Time</h3>
+                <h3>Cycle Time ${dashboardData.hasBugPbiSplit ? getTrendIndicator(dashboardData.metrics.cycleTime.trend) : ''}</h3>
                 ${dashboardData.hasBugPbiSplit ? `
                     <div class="metric-split">
                         <div class="metric-split-item">
@@ -648,7 +701,10 @@
                     </div>
                     <div class="metric-label">days average</div>
                 ` : `
-                    <div class="metric-value">${dashboardData.metrics.cycleTime.avg}</div>
+                    <div class="metric-value">
+                        <span>${dashboardData.metrics.cycleTime.avg}</span>
+                        ${getTrendIndicator(dashboardData.metrics.cycleTime.trend)}
+                    </div>
                     <div class="metric-label">days average</div>
                 `}
                 <div class="metric-trend trend-good">
@@ -657,7 +713,7 @@
             </div>
             
             <div class="metric-card">
-                <h3>Lead Time</h3>
+                <h3>Lead Time ${dashboardData.hasBugPbiSplit ? getTrendIndicator(dashboardData.metrics.leadTime.trend) : ''}</h3>
                 ${dashboardData.hasBugPbiSplit ? `
                     <div class="metric-split">
                         <div class="metric-split-item">
@@ -671,7 +727,10 @@
                     </div>
                     <div class="metric-label">days average</div>
                 ` : `
-                    <div class="metric-value">${dashboardData.metrics.leadTime.avg}</div>
+                    <div class="metric-value">
+                        <span>${dashboardData.metrics.leadTime.avg}</span>
+                        ${getTrendIndicator(dashboardData.metrics.leadTime.trend)}
+                    </div>
                     <div class="metric-label">days average</div>
                 `}
                 <div class="metric-trend trend-good">
@@ -681,30 +740,42 @@
             
             <div class="metric-card">
                 <h3>Flow Efficiency</h3>
-                <div class="metric-value">${dashboardData.metrics.flowEfficiency.avg}%</div>
+                <div class="metric-value">
+                    <span>${dashboardData.metrics.flowEfficiency.avg}%</span>
+                    ${getTrendIndicator(dashboardData.metrics.flowEfficiency.trend)}
+                </div>
                 <div class="metric-label">average efficiency</div>
                 <div class="metric-trend ${dashboardData.metrics.flowEfficiency.class}">
                     ${dashboardData.metrics.flowEfficiency.text}
                 </div>
             </div>
             
-            <div class="metric-card">
+            <div class="metric-card" id="systemStabilityCard">
                 <h3>System Stability</h3>
-                <div class="metric-value">${dashboardData.metrics.systemStability.ratio}</div>
-                <div class="metric-label">Arrival/Departure Ratio</div>
-                <div class="metric-trend ${dashboardData.metrics.systemStability.class}">${dashboardData.metrics.systemStability.text}</div>
+                <div class="metric-value">
+                    <span id="systemStabilityRatio">${dashboardData.metrics.systemStability.ratio}</span>
+                    <span id="systemStabilityTrend"></span>
+                </div>
+                <div class="metric-label">items/week</div>
+                <div class="metric-trend ${dashboardData.metrics.systemStability.class}" id="systemStabilityText">${dashboardData.metrics.systemStability.text}</div>
             </div>
             
             <div class="metric-card">
                 <h3>Bug Rate</h3>
-                <div class="metric-value">${dashboardData.metrics.bugRate.percentage}%</div>
+                <div class="metric-value">
+                    <span>${dashboardData.metrics.bugRate.percentage}%</span>
+                    ${getTrendIndicator(dashboardData.metrics.bugRate.trend)}
+                </div>
                 <div class="metric-label">of completed work</div>
                 <div class="metric-trend ${dashboardData.metrics.bugRate.class}">${dashboardData.metrics.bugRate.count} of ${dashboardData.metrics.bugRate.total} completed items</div>
             </div>
             
             <div class="metric-card">
                 <h3>Work In Progress</h3>
-                <div class="metric-value">${dashboardData.metrics.wip.count}</div>
+                <div class="metric-value">
+                    <span>${dashboardData.metrics.wip.count}</span>
+                    ${getTrendIndicator(dashboardData.metrics.wip.trend)}
+                </div>
                 <div class="metric-label">active items</div>
                 <div class="metric-trend ${dashboardData.metrics.wip.class}">
                     Avg: ${dashboardData.metrics.wip.avgAge} days | Range: ${dashboardData.metrics.wip.minAge}-${dashboardData.metrics.wip.maxAge} days
@@ -713,7 +784,10 @@
             
             <div class="metric-card">
                 <h3>Blocked Items</h3>
-                <div class="metric-value">${dashboardData.metrics.blocked.count}</div>
+                <div class="metric-value">
+                    <span>${dashboardData.metrics.blocked.count}</span>
+                    ${getTrendIndicator(dashboardData.metrics.blocked.trend)}
+                </div>
                 <div class="metric-label">items blocked/on hold</div>
                 <div class="metric-trend ${dashboardData.metrics.blocked.class}">${dashboardData.metrics.blocked.percentage}% of total backlog</div>
             </div>
@@ -813,6 +887,16 @@
         Chart.defaults.color = '#4a5568';
 
         // Throughput Chart with clickable points
+        // Calculate throughput trend
+        function calculateThroughputTrend(data) {
+            const n = data.length;
+            if (n < 2) return data;
+            const firstValue = data[0];
+            const lastValue = data[n - 1];
+            const slope = (lastValue - firstValue) / (n - 1);
+            return data.map((_, i) => firstValue + slope * i);
+        }
+
         new Chart(document.getElementById('throughputChart'), {
             type: 'line',
             data: {
@@ -831,6 +915,16 @@
                     pointBorderColor: '#fff',
                     pointBorderWidth: 2,
                     pointHitRadius: 15
+                }, {
+                    label: 'Trend',
+                    data: calculateThroughputTrend(dashboardData.charts.throughput.values),
+                    borderColor: '#9ca3af',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    borderDash: [10, 5],
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0
                 }]
             },
             options: {
@@ -1205,6 +1299,13 @@
             efficiencyData.push(effDataset);
         });
 
+        // Calculate flow efficiency statistics
+        const allEfficiencies = efficiencyData.flatMap(d => d.data.map(item => parseFloat(item.y)));
+        allEfficiencies.sort((a, b) => a - b);
+        const effAvg = (allEfficiencies.reduce((a, b) => a + b, 0) / allEfficiencies.length).toFixed(1);
+        const effMedian = allEfficiencies[Math.floor(allEfficiencies.length / 2)].toFixed(1);
+        const eff85th = allEfficiencies[Math.floor(allEfficiencies.length * 0.85)].toFixed(1);
+
         new Chart(document.getElementById('flowEfficiencyChart'), {
             type: 'scatter',
             data: {
@@ -1217,6 +1318,52 @@
                     legend: { 
                         display: true,
                         position: 'top'
+                    },
+                    annotation: {
+                        annotations: {
+                            effAvgLine: {
+                                type: 'line',
+                                yMin: effAvg,
+                                yMax: effAvg,
+                                borderColor: '#10b981',
+                                borderWidth: 2,
+                                borderDash: [5, 5],
+                                label: {
+                                    display: true,
+                                    content: `Avg: ${effAvg}%`,
+                                    position: 'end',
+                                    backgroundColor: 'rgba(16, 185, 129, 0.8)'
+                                }
+                            },
+                            effMedianLine: {
+                                type: 'line',
+                                yMin: effMedian,
+                                yMax: effMedian,
+                                borderColor: '#3b82f6',
+                                borderWidth: 2,
+                                borderDash: [5, 5],
+                                label: {
+                                    display: true,
+                                    content: `Median: ${effMedian}%`,
+                                    position: 'end',
+                                    backgroundColor: 'rgba(59, 130, 246, 0.8)'
+                                }
+                            },
+                            eff85thLine: {
+                                type: 'line',
+                                yMin: eff85th,
+                                yMax: eff85th,
+                                borderColor: '#f59e0b',
+                                borderWidth: 2,
+                                borderDash: [5, 5],
+                                label: {
+                                    display: true,
+                                    content: `85th: ${eff85th}%`,
+                                    position: 'end',
+                                    backgroundColor: 'rgba(245, 158, 11, 0.8)'
+                                }
+                            }
+                        }
                     },
                     tooltip: {
                         enabled: false,
@@ -1324,7 +1471,8 @@
                         cumulative -= dashboardData.charts.cfd.states[prevStateIndex].values[timeIndex];
                     }
                     
-                    return cumulative;
+                    // Ensure no negative values
+                    return Math.max(0, cumulative);
                 });
                 
                 cfdDatasets.push({
@@ -1364,7 +1512,7 @@
         cfdDatasets.push({
             label: 'Arrival Trend',
             data: [],
-            borderColor: '#c53030',
+            borderColor: '#6b7280',
             backgroundColor: 'transparent',
             borderWidth: 2,
             borderDash: [10, 5],
@@ -1377,7 +1525,7 @@
         cfdDatasets.push({
             label: 'Departure Trend',
             data: [],
-            borderColor: '#2f855a',
+            borderColor: '#9ca3af',
             backgroundColor: 'transparent',
             borderWidth: 2,
             borderDash: [10, 5],
@@ -1389,20 +1537,16 @@
         
         // Function to calculate trend line from data points
         function calculateTrendLine(data) {
+            // Create a simple linear trend from first point to last point
             const n = data.length;
-            let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+            if (n < 2) return data;
             
-            for (let i = 0; i < n; i++) {
-                sumX += i;
-                sumY += data[i];
-                sumXY += i * data[i];
-                sumX2 += i * i;
-            }
+            const firstValue = data[0];
+            const lastValue = data[n - 1];
+            const slope = (lastValue - firstValue) / (n - 1);
             
-            const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
-            const intercept = (sumY - slope * sumX) / n;
-            
-            return data.map((_, i) => slope * i + intercept);
+            // Generate trend line values
+            return data.map((_, i) => firstValue + slope * i);
         }
         
         // Function to update trend lines and rates based on visible states
@@ -1411,9 +1555,22 @@
             const visibleStates = [];
             chart.data.datasets.forEach((dataset, index) => {
                 if (dataset.isState) {
-                    const meta = chart.getDatasetMeta(index);
-                    // Check if dataset is visible (not hidden)
-                    const isVisible = meta.hidden === null ? !dataset.hidden : !meta.hidden;
+                    let isVisible = false;
+                    
+                    // Try to get visibility from meta first (after toggles)
+                    try {
+                        const meta = chart.getDatasetMeta(index);
+                        if (meta && meta.hidden !== undefined && meta.hidden !== null) {
+                            isVisible = !meta.hidden;
+                        } else {
+                            // Fall back to dataset property (initial load)
+                            isVisible = !dataset.hidden;
+                        }
+                    } catch (e) {
+                        // If meta not available, use dataset property
+                        isVisible = !dataset.hidden;
+                    }
+                    
                     if (isVisible) {
                         visibleStates.push({ index, data: dataset.data, label: dataset.label });
                     }
@@ -1465,6 +1622,54 @@
                 
                 document.getElementById('arrivalRate').textContent = arrivalRate;
                 document.getElementById('departureRate').textContent = departureRate;
+                
+                // Update system stability card
+                const gap = (parseFloat(arrivalRate) - parseFloat(departureRate)).toFixed(1);
+                const gapFormatted = gap >= 0 ? `+${gap}` : gap;
+                const ratioEl = document.getElementById('systemStabilityRatio');
+                const textEl = document.getElementById('systemStabilityText');
+                const trendEl = document.getElementById('systemStabilityTrend');
+                
+                if (ratioEl) ratioEl.textContent = gapFormatted;
+                
+                // Update trend indicator
+                if (trendEl) {
+                    if (parseFloat(arrivalRate) > parseFloat(departureRate) * 1.1) {
+                        trendEl.innerHTML = '<span class="trend-indicator trend-up-bad">↑</span>';
+                    } else if (parseFloat(departureRate) > parseFloat(arrivalRate) * 1.1) {
+                        trendEl.innerHTML = '<span class="trend-indicator trend-down-good">↓</span>';
+                    } else {
+                        trendEl.innerHTML = '<span class="trend-indicator trend-stable">→</span>';
+                    }
+                }
+                
+                if (textEl) {
+                    if (parseFloat(arrivalRate) > parseFloat(departureRate) * 1.1) {
+                        textEl.textContent = '⚠️ UNSTABLE - GROWING';
+                        textEl.className = 'metric-trend trend-warning';
+                    } else if (parseFloat(departureRate) > parseFloat(arrivalRate) * 1.1) {
+                        textEl.textContent = '✅ STABLE - SHRINKING';
+                        textEl.className = 'metric-trend trend-good';
+                    } else {
+                        textEl.textContent = '➡️ NEUTRAL';
+                        textEl.className = 'metric-trend trend-neutral';
+                    }
+                }
+                
+                // Update CFD insight
+                const cfdInsightEl = document.getElementById('cfdInsight');
+                if (cfdInsightEl) {
+                    const gap = (parseFloat(arrivalRate) - parseFloat(departureRate)).toFixed(1);
+                    let insightText = '';
+                    if (parseFloat(arrivalRate) > parseFloat(departureRate) * 1.1) {
+                        insightText = `System is unstable. Arrival rate (${arrivalRate}/week) exceeds departure rate (${departureRate}/week), causing backlog to grow by ~${gap} items/week. The gap between cumulative arrivals and departures is widening. Focus on increasing throughput.`;
+                    } else if (parseFloat(departureRate) > parseFloat(arrivalRate) * 1.1) {
+                        insightText = `System is healthy. Departure rate (${departureRate}/week) exceeds arrival rate (${arrivalRate}/week), reducing backlog by ~${Math.abs(gap)} items/week. Continue current pace to clear accumulated work.`;
+                    } else {
+                        insightText = `System is balanced. Arrival rate (${arrivalRate}/week) and departure rate (${departureRate}/week) are roughly equal. Work is flowing steadily through the system.`;
+                    }
+                    cfdInsightEl.innerHTML = `<p><strong>Insight:</strong> ${insightText}</p>`;
+                }
             }
         }
         
@@ -1521,11 +1726,27 @@
         });
         
         // Initialize trend lines and rates based on initially visible states
-        updateTrendLines(cfdChart);
-        cfdChart.update();
+        // Use setTimeout to ensure chart is fully initialized
+        setTimeout(() => {
+            updateTrendLines(cfdChart);
+            cfdChart.update();
+        }, 100);
         
         // Time In Board Column Chart
         if (dashboardData.charts.timeInColumn) {
+            // Identify worst columns (top 2 highest values)
+            const timeValues = dashboardData.charts.timeInColumn.values;
+            const maxValue = Math.max(...timeValues);
+            const sortedValues = [...timeValues].sort((a, b) => b - a);
+            const secondMax = sortedValues[1] || maxValue;
+            
+            const columnColors = timeValues.map(val => {
+                if (val === maxValue || val === secondMax) {
+                    return '#ef4444'; // Red for worst columns
+                }
+                return '#4299e1'; // Blue for normal columns
+            });
+
             new Chart(document.getElementById('timeInColumnChart'), {
                 type: 'bar',
                 data: {
@@ -1533,8 +1754,8 @@
                     datasets: [{
                         label: 'Time in Column (days)',
                         data: dashboardData.charts.timeInColumn.values,
-                        backgroundColor: '#4299e1',
-                        borderColor: '#3182ce',
+                        backgroundColor: columnColors,
+                        borderColor: columnColors.map(c => c === '#ef4444' ? '#dc2626' : '#3182ce'),
                         borderWidth: 1
                     }]
                 },
@@ -1644,14 +1865,60 @@
                                 tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
                                 tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
                             }
+                        },
+                        annotation: {
+                            annotations: {
+                                ageAvgLine: {
+                                    type: 'line',
+                                    yMin: dashboardData.charts.workItemAge.average || 0,
+                                    yMax: dashboardData.charts.workItemAge.average || 0,
+                                    borderColor: '#10b981',
+                                    borderWidth: 2,
+                                    borderDash: [5, 5],
+                                    label: {
+                                        display: true,
+                                        content: `Avg: ${dashboardData.charts.workItemAge.average || 0} days`,
+                                        position: 'end',
+                                        backgroundColor: 'rgba(16, 185, 129, 0.8)'
+                                    }
+                                },
+                                ageMedianLine: {
+                                    type: 'line',
+                                    yMin: dashboardData.charts.workItemAge.median || 0,
+                                    yMax: dashboardData.charts.workItemAge.median || 0,
+                                    borderColor: '#3b82f6',
+                                    borderWidth: 2,
+                                    borderDash: [5, 5],
+                                    label: {
+                                        display: true,
+                                        content: `Median: ${dashboardData.charts.workItemAge.median || 0} days`,
+                                        position: 'end',
+                                        backgroundColor: 'rgba(59, 130, 246, 0.8)'
+                                    }
+                                },
+                                age85thLine: {
+                                    type: 'line',
+                                    yMin: dashboardData.charts.workItemAge.p85 || 0,
+                                    yMax: dashboardData.charts.workItemAge.p85 || 0,
+                                    borderColor: '#f59e0b',
+                                    borderWidth: 2,
+                                    borderDash: [5, 5],
+                                    label: {
+                                        display: true,
+                                        content: `85th: ${dashboardData.charts.workItemAge.p85 || 0} days`,
+                                        position: 'end',
+                                        backgroundColor: 'rgba(245, 158, 11, 0.8)'
+                                    }
+                                }
+                            }
                         }
                     },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: { display: true, text: 'Age (Days)' },
-                            grid: { color: '#e2e8f0' }
-                        },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: { display: true, text: 'Age (Days)' },
+                        grid: { color: '#e2e8f0' }
+                    },
                         x: {
                             type: 'category',
                             title: { display: false },

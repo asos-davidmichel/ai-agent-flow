@@ -11,28 +11,44 @@
       "pbis": 2.3,
       "median": 1.5,
       "min": 1,
-      "max": 4
+      "max": 4,
+      "trend": {
+        "direction": "up",
+        "isGood": true
+      }
     },
     "cycleTime": {
       "bugs": 8.4,
       "pbis": 5.0,
       "median": 6.0,
-      "p85": 10.7
+      "p85": 10.7,
+      "trend": {
+        "direction": "down",
+        "isGood": true
+      }
     },
     "leadTime": {
       "bugs": 21.6,
       "pbis": 16.5,
       "avg": 18.2,
       "median": 15.0,
-      "p85": 28.5
+      "p85": 28.5,
+      "trend": {
+        "direction": "up",
+        "isGood": false
+      }
     },
     "flowEfficiency": {
       "avg": 35,
       "text": "Items spend only 35% of time in active work",
-      "class": "trend-warning"
+      "class": "trend-warning",
+      "trend": {
+        "direction": "stable",
+        "isGood": true
+      }
     },
     "systemStability": {
-      "ratio": "2.80",
+      "ratio": "+3.6",
       "text": "⚠️ UNSTABLE - GROWING",
       "class": "trend-warning"
     },
@@ -40,19 +56,31 @@
       "percentage": "41.7",
       "count": 5,
       "total": 12,
-      "class": "trend-warning"
+      "class": "trend-warning",
+      "trend": {
+        "direction": "up",
+        "isGood": false
+      }
     },
     "wip": {
       "count": 6,
       "avgAge": "47.2",
       "minAge": 3,
       "maxAge": 109,
-      "class": "trend-warning"
+      "class": "trend-warning",
+      "trend": {
+        "direction": "up",
+        "isGood": false
+      }
     },
     "blocked": {
       "count": 10,
       "percentage": "7.7",
-      "class": "trend-warning"
+      "class": "trend-warning",
+      "trend": {
+        "direction": "down",
+        "isGood": true
+      }
     }
   },
   
@@ -210,7 +238,10 @@
             {"id": 1172345, "title": "Error handling", "age": 19}
           ]
         }
-      ]
+      ],
+      "average": 20.2,
+      "median": 16.5,
+      "p85": 42.6
     },
     "dailyWip": {
       "labels": ["22 Feb", "23 Feb", "24 Feb", "25 Feb", "26 Feb", "27 Feb", "28 Feb", "01 Mar", "02 Mar", "03 Mar", "04 Mar", "05 Mar", "06 Mar", "07 Mar", "08 Mar", "09 Mar", "10 Mar", "11 Mar", "12 Mar", "13 Mar", "14 Mar", "15 Mar"],
