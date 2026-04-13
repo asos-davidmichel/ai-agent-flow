@@ -13,7 +13,8 @@
                                        "max":  4,
                                        "trend":  {
                                                      "direction":  "up",
-                                                     "isGood":  true
+                                                     "isGood":  true,
+                                                     "previousValue":  "3.8"
                                                  }
                                    },
                     "cycleTime":  {
@@ -23,7 +24,8 @@
                                       "p85":  62,
                                       "trend":  {
                                                     "direction":  "down",
-                                                    "isGood":  true
+                                                    "isGood":  true,
+                                                    "previousValue":  "33.2"
                                                 }
                                   },
                     "leadTime":  {
@@ -34,7 +36,8 @@
                                      "p85":  96,
                                      "trend":  {
                                                    "direction":  "down",
-                                                   "isGood":  true
+                                                   "isGood":  true,
+                                                   "previousValue":  "42.8"
                                                }
                                  },
                     "workStartEfficiency":  {
@@ -76,7 +79,8 @@
                                     "class":  "trend-warning",
                                     "trend":  {
                                                   "direction":  "down",
-                                                  "isGood":  true
+                                                  "isGood":  true,
+                                                  "previousValue":  "37.5%"
                                               }
                                 },
                     "wip":  {
@@ -87,7 +91,8 @@
                                 "class":  "trend-warning",
                                 "trend":  {
                                               "direction":  "up",
-                                              "isGood":  false
+                                              "isGood":  false,
+                                              "previousValue":  "18"
                                           }
                             },
                     "blocked":  {
@@ -96,7 +101,8 @@
                                     "class":  "trend-warning",
                                     "trend":  {
                                                   "direction":  "up",
-                                                  "isGood":  false
+                                                  "isGood":  false,
+                                                  "previousValue":  "8"
                                               }
                                 }
                 },
@@ -1774,7 +1780,170 @@
                                                        10,
                                                        11,
                                                        10
-                                                   ]
+                                                   ],
+                                        "items":  [
+                                                      [
+                                                          {"id": 1234501, "title": "Payment gateway timeout - intermittent failures"},
+                                                          {"id": 1234502, "title": "API authentication blocked - waiting for security team approval"},
+                                                          {"id": 1234503, "title": "Database migration on hold - infrastructure dependency"},
+                                                          {"id": 1234504, "title": "Third-party integration blocked - vendor API down"},
+                                                          {"id": 1234505, "title": "Feature flag system blocked - platform team backlog"},
+                                                          {"id": 1234506, "title": "Email service integration on hold - GDPR review"},
+                                                          {"id": 1234507, "title": "Search optimization blocked - Elasticsearch upgrade"},
+                                                          {"id": 1234508, "title": "Checkout flow changes on hold - A/B test issues"}
+                                                      ],
+                                                      [
+                                                          {"id": 1234509, "title": "Mobile app sync blocked - backend API changes"},
+                                                          {"id": 1234510, "title": "Analytics integration on hold - data warehouse migration"},
+                                                          {"id": 1234511, "title": "Performance monitoring blocked - APM license expired"},
+                                                          {"id": 1234512, "title": "Cache layer upgrade on hold - Redis cluster issues"},
+                                                          {"id": 1234513, "title": "Security patch blocked - compatibility testing"},
+                                                          {"id": 1234514, "title": "Customer portal redesign on hold - UX review"},
+                                                          {"id": 1234515, "title": "Notification system blocked - message queue overload"},
+                                                          {"id": 1234516, "title": "Report generation on hold - BI tool upgrade"},
+                                                          {"id": 1234517, "title": "API rate limiting blocked - scaling issues"},
+                                                          {"id": 1234518, "title": "User profile sync on hold - identity provider changes"}
+                                                      ],
+                                                      [
+                                                          {"id": 1234519, "title": "Inventory sync blocked - warehouse API maintenance"},
+                                                          {"id": 1234520, "title": "Pricing engine update on hold - tax dependencies"},
+                                                          {"id": 1234521, "title": "Fraud detection blocked - ML model training delayed"},
+                                                          {"id": 1234522, "title": "Recommendation engine on hold - data pipeline issues"},
+                                                          {"id": 1234523, "title": "Localization update blocked - translation API issues"},
+                                                          {"id": 1234524, "title": "Content management on hold - CMS upgrade"},
+                                                          {"id": 1234525, "title": "Image optimization blocked - CDN configuration"},
+                                                          {"id": 1234526, "title": "Product catalog sync on hold - ERP integration"},
+                                                          {"id": 1234527, "title": "Customer segmentation blocked - data quality issues"},
+                                                          {"id": 1234528, "title": "Order tracking on hold - logistics API unavailable"},
+                                                          {"id": 1234529, "title": "Returns processing blocked - warehouse system down"},
+                                                          {"id": 1234530, "title": "Wishlist feature on hold - storage optimization needed"}
+                                                      ],
+                                                      [
+                                                          {"id": 1234531, "title": "Gift card system blocked - payment provider issues"},
+                                                          {"id": 1234532, "title": "Subscription service on hold - billing integration"},
+                                                          {"id": 1234533, "title": "Live chat blocked - third-party service maintenance"},
+                                                          {"id": 1234534, "title": "Product reviews on hold - moderation system upgrade"},
+                                                          {"id": 1234535, "title": "Social login blocked - OAuth provider changes"},
+                                                          {"id": 1234536, "title": "Email templates on hold - marketing platform migration"},
+                                                          {"id": 1234537, "title": "Mobile push notifications blocked - Firebase issues"},
+                                                          {"id": 1234538, "title": "Size guide feature on hold - content structure review"},
+                                                          {"id": 1234539, "title": "Stock alerts blocked - inventory service refactoring"},
+                                                          {"id": 1234540, "title": "Virtual try-on on hold - AR platform integration"},
+                                                          {"id": 1234541, "title": "Store locator blocked - maps API quota exceeded"}
+                                                      ],
+                                                      [
+                                                          {"id": 1234542, "title": "Loyalty program on hold - points calculation logic"},
+                                                          {"id": 1234543, "title": "Product comparisons blocked - performance optimization"},
+                                                          {"id": 1234544, "title": "Size recommendations on hold - ML model deployment"},
+                                                          {"id": 1234545, "title": "Quick checkout blocked - payment gateway certification"},
+                                                          {"id": 1234546, "title": "Brand pages on hold - CMS template redesign"},
+                                                          {"id": 1234547, "title": "Fashion feed blocked - social media API changes"},
+                                                          {"id": 1234548, "title": "Outfit builder on hold - image processing service"},
+                                                          {"id": 1234549, "title": "Pre-order system blocked - inventory allocation logic"},
+                                                          {"id": 1234550, "title": "Referral program on hold - tracking pixel issues"},
+                                                          {"id": 1234551, "title": "Student discount blocked - verification service API"}
+                                                      ],
+                                                      [
+                                                          {"id": 1234552, "title": "Collection pages blocked - content approval workflow"},
+                                                          {"id": 1234553, "title": "Shopping bag sync on hold - session management upgrade"},
+                                                          {"id": 1234554, "title": "Guest checkout blocked - fraud detection tuning"},
+                                                          {"id": 1234555, "title": "Product bundles on hold - pricing engine refactor"},
+                                                          {"id": 1234556, "title": "Flash sales blocked - cache invalidation strategy"},
+                                                          {"id": 1234557, "title": "Marketplace integration on hold - partner API issues"},
+                                                          {"id": 1234558, "title": "Sustainability badges blocked - certification data"},
+                                                          {"id": 1234559, "title": "Fit finder on hold - body measurement algorithm"},
+                                                          {"id": 1234560, "title": "Personal stylist blocked - appointment booking system"},
+                                                          {"id": 1234561, "title": "VIP tier benefits on hold - entitlement service"},
+                                                          {"id": 1234562, "title": "Gift wrapping blocked - fulfillment center integration"},
+                                                          {"id": 1234563, "title": "Same-day delivery on hold - logistics provider API"},
+                                                          {"id": 1234564, "title": "Product customization blocked - 3D rendering service"}
+                                                      ],
+                                                      [
+                                                          {"id": 1234565, "title": "Reward redemption blocked - points validation logic"},
+                                                          {"id": 1234566, "title": "Trend reports on hold - analytics pipeline rebuild"},
+                                                          {"id": 1234567, "title": "Influencer codes blocked - tracking system upgrade"},
+                                                          {"id": 1234568, "title": "Size stock alerts on hold - notification throttling"},
+                                                          {"id": 1234569, "title": "Multi-address shipping blocked - address validation"},
+                                                          {"id": 1234570, "title": "Video content on hold - CDN bandwidth allocation"},
+                                                          {"id": 1234571, "title": "AR measurements blocked - camera permission handling"},
+                                                          {"id": 1234572, "title": "Style quiz on hold - recommendation model retraining"},
+                                                          {"id": 1234573, "title": "Corporate gifting blocked - bulk order workflow"},
+                                                          {"id": 1234574, "title": "Price match on hold - competitor pricing API"},
+                                                          {"id": 1234575, "title": "Product waitlist blocked - inventory forecasting"},
+                                                          {"id": 1234576, "title": "Look books on hold - editorial content system"},
+                                                          {"id": 1234577, "title": "Alteration service blocked - tailor network integration"},
+                                                          {"id": 1234578, "title": "Exclusive drops on hold - limited release mechanics"},
+                                                          {"id": 1234579, "title": "Wardrobe manager blocked - image classification service"}
+                                                      ],
+                                                      [
+                                                          {"id": 1234580, "title": "Notification center blocked - message queue overload"},
+                                                          {"id": 1234581, "title": "Report generation on hold - BI tool upgrade needed"},
+                                                          {"id": 1234582, "title": "API rate limiting blocked - infrastructure scaling"},
+                                                          {"id": 1234583, "title": "User profile sync on hold - identity provider update"},
+                                                          {"id": 1234584, "title": "Inventory sync blocked - warehouse API maintenance"},
+                                                          {"id": 1234585, "title": "Pricing engine on hold - tax calculation changes"},
+                                                          {"id": 1234586, "title": "Fraud detection blocked - ML model validation"},
+                                                          {"id": 1234587, "title": "Recommendation engine on hold - data pipeline fix"},
+                                                          {"id": 1234588, "title": "Localization blocked - translation service outage"},
+                                                          {"id": 1234589, "title": "Content management on hold - CMS migration"},
+                                                          {"id": 1234590, "title": "Image optimization blocked - CDN reconfiguration"},
+                                                          {"id": 1234591, "title": "Product catalog on hold - ERP synchronization"},
+                                                          {"id": 1234592, "title": "Customer segmentation blocked - GDPR compliance"},
+                                                          {"id": 1234593, "title": "Order tracking on hold - shipping carrier API"}
+                                                      ],
+                                                      [
+                                                          {"id": 1234594, "title": "Returns portal blocked - refund gateway issues"},
+                                                          {"id": 1234595, "title": "Wishlist sync on hold - cross-device storage"},
+                                                          {"id": 1234596, "title": "Gift cards blocked - payment processor certification"},
+                                                          {"id": 1234597, "title": "Subscription billing on hold - recurring payment setup"},
+                                                          {"id": 1234598, "title": "Live chat blocked - support platform downtime"},
+                                                          {"id": 1234599, "title": "Product reviews on hold - spam filter training"},
+                                                          {"id": 1234600, "title": "Social login blocked - OAuth security audit"},
+                                                          {"id": 1234601, "title": "Email campaigns on hold - deliverability issues"},
+                                                          {"id": 1234602, "title": "Mobile notifications blocked - push service migration"},
+                                                          {"id": 1234603, "title": "Size guides on hold - content approval process"},
+                                                          {"id": 1234604, "title": "Stock alerts blocked - database performance tuning"},
+                                                          {"id": 1234605, "title": "Virtual try-on on hold - AR library compatibility"}
+                                                      ],
+                                                      [
+                                                          {"id": 1234606, "title": "Store locator blocked - geocoding service limits"},
+                                                          {"id": 1234607, "title": "Loyalty tiers on hold - benefits calculation logic"},
+                                                          {"id": 1234608, "title": "Product compare blocked - caching strategy review"},
+                                                          {"id": 1234609, "title": "Size recommendations on hold - algorithm accuracy"},
+                                                          {"id": 1234610, "title": "Express checkout blocked - PCI compliance audit"},
+                                                          {"id": 1234611, "title": "Brand partnerships on hold - contract negotiations"},
+                                                          {"id": 1234612, "title": "Fashion trends blocked - social API rate limits"},
+                                                          {"id": 1234613, "title": "Outfit builder on hold - AI service latency"},
+                                                          {"id": 1234614, "title": "Pre-orders blocked - inventory allocation rules"},
+                                                          {"id": 1234615, "title": "Referral tracking on hold - attribution modeling"}
+                                                      ],
+                                                      [
+                                                          {"id": 1234616, "title": "Student verification blocked - ID service integration"},
+                                                          {"id": 1234617, "title": "Collection curation on hold - editorial workflow"},
+                                                          {"id": 1234618, "title": "Cart persistence blocked - session store migration"},
+                                                          {"id": 1234619, "title": "Guest checkout on hold - fraud scoring adjustment"},
+                                                          {"id": 1234620, "title": "Product bundles blocked - promotional pricing logic"},
+                                                          {"id": 1234621, "title": "Flash sales on hold - inventory reservation system"},
+                                                          {"id": 1234622, "title": "Marketplace feeds blocked - data format changes"},
+                                                          {"id": 1234623, "title": "Sustainability info on hold - supplier data collection"},
+                                                          {"id": 1234624, "title": "Fit technology blocked - measurement standardization"},
+                                                          {"id": 1234625, "title": "Styling service on hold - calendar integration"},
+                                                          {"id": 1234626, "title": "VIP benefits blocked - tier qualification rules"}
+                                                      ],
+                                                      [
+                                                          {"id": 1234627, "title": "Gift packaging blocked - warehouse capability limits"},
+                                                          {"id": 1234628, "title": "Rush delivery on hold - carrier capacity constraints"},
+                                                          {"id": 1234629, "title": "Customization options blocked - production workflow"},
+                                                          {"id": 1234630, "title": "Points redemption on hold - voucher generation service"},
+                                                          {"id": 1234631, "title": "Trend analytics blocked - data warehouse performance"},
+                                                          {"id": 1234632, "title": "Influencer tracking on hold - affiliate platform issues"},
+                                                          {"id": 1234633, "title": "Restock notifications blocked - email throttling"},
+                                                          {"id": 1234634, "title": "Multi-ship orders on hold - logistics optimization"},
+                                                          {"id": 1234635, "title": "Video streaming blocked - transcoding service costs"},
+                                                          {"id": 1234636, "title": "AR features on hold - mobile SDK compatibility"},
+                                                          {"id": 1234637, "title": "Style profile blocked - preference learning model"}
+                                                      ]
+                                                  ]
                                     },
                    "transitionRates":  {
                                            "transitions":  [

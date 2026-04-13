@@ -421,10 +421,10 @@
         <!-- Tabs -->
         <div class="tabs">
             <div class="tab-nav">
-                <button class="tab-button active" onclick="switchTab(event, 'time-metrics')">⏱️ Time Metrics</button>
+                <button class="tab-button active" onclick="switchTab(event, 'time-metrics')">⏱️ Delivery Metrics</button>
                 <button class="tab-button" onclick="switchTab(event, 'efficiency')">⚡ Efficiency</button>
-                <button class="tab-button" onclick="switchTab(event, 'flow-system')">🔄 Flow & System</button>
-                <button class="tab-button" onclick="switchTab(event, 'wip-tracking')">📊 WIP Tracking</button>
+                <button class="tab-button" onclick="switchTab(event, 'flow-system')">🔄 Flow</button>
+                <button class="tab-button" onclick="switchTab(event, 'wip-tracking')">📊 Work in Progress</button>
                 <button class="tab-button" onclick="switchTab(event, 'aging-analysis')">📈 Aging Analysis</button>
                 <button class="tab-button" onclick="switchTab(event, 'blocked-items')">🚫 Blocked Items</button>
             </div>
@@ -850,104 +850,114 @@
         `;
 
         // Helper function to get trend indicator HTML
-        function getTrendIndicator(trend) {
+        function getTrendIndicator(trend, currentValue, previousValue = null) {
             if (!trend || !trend.direction) return '';
             
             let arrow = '';
             let className = '';
+            let explanation = '';
             
             if (trend.direction === 'up') {
                 arrow = '↑';
                 className = trend.isGood ? 'trend-up-good' : 'trend-up-bad';
+                if (previousValue !== null) {
+                    explanation = `<span style="color: #9ca3af; font-size: 11px; margin-left: 4px;">up from ${previousValue}</span>`;
+                }
             } else if (trend.direction === 'down') {
                 arrow = '↓';
                 className = trend.isGood ? 'trend-down-good' : 'trend-down-bad';
+                if (previousValue !== null) {
+                    explanation = `<span style="color: #9ca3af; font-size: 11px; margin-left: 4px;">down from ${previousValue}</span>`;
+                }
             } else {
                 arrow = '→';
                 className = 'trend-stable';
+                if (previousValue !== null) {
+                    explanation = `<span style="color: #9ca3af; font-size: 11px; margin-left: 4px;">stable at ${previousValue}</span>`;
+                }
             }
             
-            return `<span class="trend-indicator ${className}">${arrow}</span>`;
+            return `<span class="trend-indicator ${className}">${arrow}</span>${explanation}`;
         }
         
         // Render metric cards
         const metricCardsHTML = `
             <div class="metric-card">
-                <h3>Throughput ${dashboardData.hasBugPbiSplit ? getTrendIndicator(dashboardData.metrics.throughput.trend) : ''}</h3>
+                <h3>Throughput</h3>
                 ${dashboardData.hasBugPbiSplit ? `
-                    <div class="metric-split">
-                        <div class="metric-split-item">
-                            <div class="type-label">🐛 Bugs</div>
-                            <div class="type-value">${dashboardData.metrics.throughput.bugs}</div>
-                        </div>
-                        <div class="metric-split-item">
-                            <div class="type-label">✨ PBIs</div>
-                            <div class="type-value">${dashboardData.metrics.throughput.pbis}</div>
-                        </div>
+                    <div class="metric-value">
+                        <span>${(parseFloat(dashboardData.metrics.throughput.bugs) + parseFloat(dashboardData.metrics.throughput.pbis)).toFixed(1)}</span>
+                        ${getTrendIndicator(dashboardData.metrics.throughput.trend, null, dashboardData.metrics.throughput.trend.previousValue)}
                     </div>
                     <div class="metric-label">items/week average</div>
+                    <div class="metric-trend trend-neutral">
+                        Median: ${dashboardData.metrics.throughput.median} | Range: ${dashboardData.metrics.throughput.min}-${dashboardData.metrics.throughput.max}
+                    </div>
                 ` : `
                     <div class="metric-value">
                         <span>${dashboardData.metrics.throughput.avg}</span>
-                        ${getTrendIndicator(dashboardData.metrics.throughput.trend)}
+                        ${getTrendIndicator(dashboardData.metrics.throughput.trend, dashboardData.metrics.throughput.avg, dashboardData.metrics.throughput.trend.previousValue)}
                     </div>
                     <div class="metric-label">items/week average</div>
+                    <div class="metric-trend trend-neutral">
+                        Median: ${dashboardData.metrics.throughput.median} | Range: ${dashboardData.metrics.throughput.min}-${dashboardData.metrics.throughput.max}
+                    </div>
                 `}
-                <div class="metric-trend trend-neutral">
-                    Median: ${dashboardData.metrics.throughput.median} | Range: ${dashboardData.metrics.throughput.min}-${dashboardData.metrics.throughput.max}
-                </div>
             </div>
             
             <div class="metric-card">
-                <h3>Cycle Time ${dashboardData.hasBugPbiSplit ? getTrendIndicator(dashboardData.metrics.cycleTime.trend) : ''}</h3>
+                <h3>Cycle Time</h3>
                 ${dashboardData.hasBugPbiSplit ? `
-                    <div class="metric-split">
-                        <div class="metric-split-item">
-                            <div class="type-label">🐛 Bugs</div>
-                            <div class="type-value">${dashboardData.metrics.cycleTime.bugs}</div>
-                        </div>
-                        <div class="metric-split-item">
-                            <div class="type-label">✨ PBIs</div>
-                            <div class="type-value">${dashboardData.metrics.cycleTime.pbis}</div>
-                        </div>
+                    <div class="metric-value">
+                        <span>${((parseFloat(dashboardData.metrics.cycleTime.bugs) + parseFloat(dashboardData.metrics.cycleTime.pbis)) / 2).toFixed(1)}</span>
+                        ${getTrendIndicator(dashboardData.metrics.cycleTime.trend, null, dashboardData.metrics.cycleTime.trend.previousValue)}
                     </div>
                     <div class="metric-label">days average</div>
+                    <div class="metric-trend trend-good">
+                        Median: ${dashboardData.metrics.cycleTime.median} | 85th: ${dashboardData.metrics.cycleTime.p85}
+                    </div>
                 ` : `
                     <div class="metric-value">
                         <span>${dashboardData.metrics.cycleTime.avg}</span>
-                        ${getTrendIndicator(dashboardData.metrics.cycleTime.trend)}
+                        ${getTrendIndicator(dashboardData.metrics.cycleTime.trend, dashboardData.metrics.cycleTime.avg, dashboardData.metrics.cycleTime.trend.previousValue)}
                     </div>
                     <div class="metric-label">days average</div>
+                    <div class="metric-trend trend-good">
+                        Median: ${dashboardData.metrics.cycleTime.median} | 85th: ${dashboardData.metrics.cycleTime.p85}
+                    </div>
                 `}
-                <div class="metric-trend trend-good">
-                    Median: ${dashboardData.metrics.cycleTime.median} | 85th: ${dashboardData.metrics.cycleTime.p85}
-                </div>
             </div>
             
             <div class="metric-card">
-                <h3>Lead Time ${dashboardData.hasBugPbiSplit ? getTrendIndicator(dashboardData.metrics.leadTime.trend) : ''}</h3>
+                <h3>Lead Time</h3>
                 ${dashboardData.hasBugPbiSplit ? `
-                    <div class="metric-split">
-                        <div class="metric-split-item">
-                            <div class="type-label">🐛 Bugs</div>
-                            <div class="type-value">${dashboardData.metrics.leadTime.bugs}</div>
-                        </div>
-                        <div class="metric-split-item">
-                            <div class="type-label">✨ PBIs</div>
-                            <div class="type-value">${dashboardData.metrics.leadTime.pbis}</div>
-                        </div>
+                    <div class="metric-value">
+                        <span>${dashboardData.metrics.leadTime.avg}</span>
+                        ${getTrendIndicator(dashboardData.metrics.leadTime.trend, null, dashboardData.metrics.leadTime.trend.previousValue)}
                     </div>
                     <div class="metric-label">days average</div>
+                    <div class="metric-trend trend-good">
+                        Median: ${dashboardData.metrics.leadTime.median} | 85th: ${dashboardData.metrics.leadTime.p85}
+                    </div>
                 ` : `
                     <div class="metric-value">
                         <span>${dashboardData.metrics.leadTime.avg}</span>
-                        ${getTrendIndicator(dashboardData.metrics.leadTime.trend)}
+                        ${getTrendIndicator(dashboardData.metrics.leadTime.trend, dashboardData.metrics.leadTime.avg, dashboardData.metrics.leadTime.trend.previousValue)}
                     </div>
                     <div class="metric-label">days average</div>
+                    <div class="metric-trend trend-good">
+                        Median: ${dashboardData.metrics.leadTime.median} | 85th: ${dashboardData.metrics.leadTime.p85}
+                    </div>
                 `}
-                <div class="metric-trend trend-good">
-                    Median: ${dashboardData.metrics.leadTime.median} | 85th: ${dashboardData.metrics.leadTime.p85}
+            </div>
+            
+            <div class="metric-card">
+                <h3>⚡ Lead Flow Efficiency</h3>
+                <div class="metric-value">
+                    <span id="overallLtfeValue">-</span>
                 </div>
+                <div class="metric-label">end-to-end efficiency</div>
+                <div class="metric-trend trend-neutral">Active work / Total lifetime</div>
             </div>
             
             <div class="metric-card" id="systemStabilityCard">
@@ -964,7 +974,7 @@
                 <h3>Bug Rate</h3>
                 <div class="metric-value">
                     <span>${dashboardData.metrics.bugRate.percentage}%</span>
-                    ${getTrendIndicator(dashboardData.metrics.bugRate.trend)}
+                    ${getTrendIndicator(dashboardData.metrics.bugRate.trend, dashboardData.metrics.bugRate.percentage + '%', dashboardData.metrics.bugRate.trend.previousValue)}
                 </div>
                 <div class="metric-label">of completed work</div>
                 <div class="metric-trend ${dashboardData.metrics.bugRate.class}">${dashboardData.metrics.bugRate.count} of ${dashboardData.metrics.bugRate.total} completed items</div>
@@ -974,7 +984,7 @@
                 <h3>Work In Progress</h3>
                 <div class="metric-value">
                     <span>${dashboardData.metrics.wip.count}</span>
-                    ${getTrendIndicator(dashboardData.metrics.wip.trend)}
+                    ${getTrendIndicator(dashboardData.metrics.wip.trend, dashboardData.metrics.wip.count, dashboardData.metrics.wip.trend.previousValue)}
                 </div>
                 <div class="metric-label">active items</div>
                 <div class="metric-trend ${dashboardData.metrics.wip.class}">
@@ -986,7 +996,7 @@
                 <h3>Blocked Items</h3>
                 <div class="metric-value">
                     <span>${dashboardData.metrics.blocked.count}</span>
-                    ${getTrendIndicator(dashboardData.metrics.blocked.trend)}
+                    ${getTrendIndicator(dashboardData.metrics.blocked.trend, dashboardData.metrics.blocked.count, dashboardData.metrics.blocked.trend.previousValue)}
                 </div>
                 <div class="metric-label">items blocked/on hold</div>
                 <div class="metric-trend ${dashboardData.metrics.blocked.class}">${dashboardData.metrics.blocked.percentage}% of total backlog</div>
@@ -1598,43 +1608,56 @@
                         position: 'top'
                     },
                     tooltip: {
-                        callbacks: {
-                            title: function(context) {
-                                const index = context[0].dataIndex;
+                        enabled: false,
+                        external: function(context) {
+                            const tooltipEl = document.getElementById('customTooltip');
+                            const tooltipModel = context.tooltip;
+                            
+                            if (tooltipModel.opacity === 0) {
+                                if (!isTooltipHovered) {
+                                    hideTooltipWithDelay();
+                                }
+                                return;
+                            }
+                            
+                            if (tooltipHideTimeout) {
+                                clearTimeout(tooltipHideTimeout);
+                                tooltipHideTimeout = null;
+                            }
+                            
+                            if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
+                                const dataPoint = tooltipModel.dataPoints[0];
+                                const index = dataPoint.dataIndex;
                                 const item = wseFilteredItems[index];
-                                return `#${item.id}: ${item.title}`;
-                            },
-                            afterTitle: function(context) {
-                                const index = context[0].dataIndex;
-                                const item = wseFilteredItems[index];
-                                return `Completed: ${item.completedDate} | Type: ${item.type}`;
-                            },
-                            label: function(context) {
-                                const label = context.dataset.label || '';
-                                const value = context.parsed.x;
-                                return `${label}: ${value} days`;
-                            },
-                            footer: function(context) {
-                                const index = context[0].dataIndex;
-                                const item = wseFilteredItems[index];
-                                const breakdown = [`─────────────`];
-                                breakdown.push(`Lead Time: ${item.leadTime} days`);
-                                breakdown.push(`Work Start Efficiency: ${item.efficiency}%`);
-                                breakdown.push(``);
-                                breakdown.push(`Time per Column:`);
+                                const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
+                                
+                                let html = `<div style="font-weight: bold; margin-bottom: 8px;"><a href="${adoUrl}" target="_blank" style="color: #60a5fa; text-decoration: none;">#${item.id}</a>: ${item.title}</div>`;
+                                html += `<div style="margin-bottom: 8px; font-size: 12px; color: #9ca3af;">Completed: ${item.completedDate} | Type: ${item.type}</div>`;
+                                html += `<div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px; margin-top: 8px;">`;
+                                html += `<div>Cycle Time (In Workflow): <strong>${item.cycleTime} days</strong></div>`;
+                                html += `<div>Backlog Delay (Before Workflow): <strong>${item.backlogDelay} days</strong></div>`;
+                                html += `<div style="margin-top: 8px;">Lead Time: <strong>${item.leadTime} days</strong></div>`;
+                                html += `<div>Work Start Efficiency: <strong>${item.efficiency}%</strong></div>`;
+                                html += `</div>`;
                                 
                                 if (item.columnTime && Object.keys(item.columnTime).length > 0) {
+                                    html += `<div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px; margin-top: 8px; font-size: 12px;">`;
+                                    html += `<div style="font-weight: bold; margin-bottom: 4px;">Time per Column:</div>`;
                                     Object.entries(item.columnTime).forEach(([column, days]) => {
                                         if (days > 0) {
                                             const icon = columnCategories[column] || '•';
-                                            breakdown.push(`  ${icon} ${column}: ${days} days`);
+                                            html += `<div>  ${icon} ${column}: ${days} days</div>`;
                                         }
                                     });
-                                } else {
-                                    breakdown.push(`  (Column breakdown not available)`);
+                                    html += `</div>`;
                                 }
                                 
-                                return breakdown;
+                                tooltipEl.innerHTML = html;
+                                tooltipEl.classList.add('visible');
+                                
+                                const position = context.chart.canvas.getBoundingClientRect();
+                                tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
+                                tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
                             }
                         }
                     }
@@ -1781,43 +1804,56 @@
                         position: 'top'
                     },
                     tooltip: {
-                        callbacks: {
-                            title: function(context) {
-                                const index = context[0].dataIndex;
+                        enabled: false,
+                        external: function(context) {
+                            const tooltipEl = document.getElementById('customTooltip');
+                            const tooltipModel = context.tooltip;
+                            
+                            if (tooltipModel.opacity === 0) {
+                                if (!isTooltipHovered) {
+                                    hideTooltipWithDelay();
+                                }
+                                return;
+                            }
+                            
+                            if (tooltipHideTimeout) {
+                                clearTimeout(tooltipHideTimeout);
+                                tooltipHideTimeout = null;
+                            }
+                            
+                            if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
+                                const dataPoint = tooltipModel.dataPoints[0];
+                                const index = dataPoint.dataIndex;
                                 const item = ctfeFilteredItems[index];
-                                return `#${item.id}: ${item.title}`;
-                            },
-                            afterTitle: function(context) {
-                                const index = context[0].dataIndex;
-                                const item = ctfeFilteredItems[index];
-                                return `Completed: ${item.completedDate} | Type: ${item.type}`;
-                            },
-                            label: function(context) {
-                                const label = context.dataset.label || '';
-                                const value = context.parsed.x;
-                                return `${label}: ${value} days`;
-                            },
-                            footer: function(context) {
-                                const index = context[0].dataIndex;
-                                const item = ctfeFilteredItems[index];
-                                const breakdown = [`─────────────`];
-                                breakdown.push(`Cycle Time: ${item.cycleTime} days`);
-                                breakdown.push(`Cycle Time Flow Efficiency: ${item.ctfeEfficiency}%`);
-                                breakdown.push(``);
-                                breakdown.push(`Time per Column:`);
+                                const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
+                                
+                                let html = `<div style="font-weight: bold; margin-bottom: 8px;"><a href="${adoUrl}" target="_blank" style="color: #60a5fa; text-decoration: none;">#${item.id}</a>: ${item.title}</div>`;
+                                html += `<div style="margin-bottom: 8px; font-size: 12px; color: #9ca3af;">Completed: ${item.completedDate} | Type: ${item.type}</div>`;
+                                html += `<div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px; margin-top: 8px;">`;
+                                html += `<div>Active Time (Working): <strong>${item.activeTime} days</strong></div>`;
+                                html += `<div>Waiting Time (Between Stages): <strong>${item.waitingTime} days</strong></div>`;
+                                html += `<div style="margin-top: 8px;">Cycle Time: <strong>${item.cycleTime} days</strong></div>`;
+                                html += `<div>Cycle Time Flow Efficiency: <strong>${item.ctfeEfficiency}%</strong></div>`;
+                                html += `</div>`;
                                 
                                 if (item.columnTime && Object.keys(item.columnTime).length > 0) {
+                                    html += `<div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px; margin-top: 8px; font-size: 12px;">`;
+                                    html += `<div style="font-weight: bold; margin-bottom: 4px;">Time per Column:</div>`;
                                     Object.entries(item.columnTime).forEach(([column, days]) => {
-                                        if (days > 0 && column !== 'New') {  // Exclude New since it's not part of cycle time
+                                        if (days > 0) {
                                             const icon = columnCategories[column] || '•';
-                                            breakdown.push(`  ${icon} ${column}: ${days} days`);
+                                            html += `<div>  ${icon} ${column}: ${days} days</div>`;
                                         }
                                     });
-                                } else {
-                                    breakdown.push(`  (Column breakdown not available)`);
+                                    html += `</div>`;
                                 }
                                 
-                                return breakdown;
+                                tooltipEl.innerHTML = html;
+                                tooltipEl.classList.add('visible');
+                                
+                                const position = context.chart.canvas.getBoundingClientRect();
+                                tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
+                                tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
                             }
                         }
                     }
@@ -1879,6 +1915,9 @@
             document.getElementById('ltfeWorstValue').textContent = 'N/A';
             document.getElementById('ltfeWorstItem').textContent = `0 of ${allItems.length} items have data`;
             document.getElementById('leadTimeFlowEfficiencyInsight').innerHTML = `<p><strong>Insight:</strong> No columnTime data available. Run extraction scripts to get real flow efficiency data.</p>`;
+            
+            // Update overall lead flow efficiency metric card at top
+            document.getElementById('overallLtfeValue').textContent = 'N/A';
         } else {
             const ltfeAvg = (ltfeEfficiencies.reduce((a, b) => a + b, 0) / ltfeEfficiencies.length).toFixed(1);
             const ltfeBest = ltfeSorted[0];
@@ -1890,6 +1929,9 @@
             document.getElementById('ltfeBestItem').textContent = `#${ltfeBest.id}`;
             document.getElementById('ltfeWorstValue').textContent = ltfeWorst.ltfeEfficiency + '%';
             document.getElementById('ltfeWorstItem').textContent = `#${ltfeWorst.id}`;
+            
+            // Update overall lead flow efficiency metric card at top
+            document.getElementById('overallLtfeValue').textContent = ltfeAvg + '%';
             
             // Generate dynamic insight for Lead Time Flow Efficiency
             const wastePct = (100 - parseFloat(ltfeAvg)).toFixed(0);
@@ -1952,43 +1994,56 @@
                         position: 'top'
                     },
                     tooltip: {
-                        callbacks: {
-                            title: function(context) {
-                                const index = context[0].dataIndex;
+                        enabled: false,
+                        external: function(context) {
+                            const tooltipEl = document.getElementById('customTooltip');
+                            const tooltipModel = context.tooltip;
+                            
+                            if (tooltipModel.opacity === 0) {
+                                if (!isTooltipHovered) {
+                                    hideTooltipWithDelay();
+                                }
+                                return;
+                            }
+                            
+                            if (tooltipHideTimeout) {
+                                clearTimeout(tooltipHideTimeout);
+                                tooltipHideTimeout = null;
+                            }
+                            
+                            if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
+                                const dataPoint = tooltipModel.dataPoints[0];
+                                const index = dataPoint.dataIndex;
                                 const item = ltfeFilteredItems[index];
-                                return `#${item.id}: ${item.title}`;
-                            },
-                            afterTitle: function(context) {
-                                const index = context[0].dataIndex;
-                                const item = ltfeFilteredItems[index];
-                                return `Completed: ${item.completedDate} | Type: ${item.type}`;
-                            },
-                            label: function(context) {
-                                const label = context.dataset.label || '';
-                                const value = context.parsed.x;
-                                return `${label}: ${value} days`;
-                            },
-                            footer: function(context) {
-                                const index = context[0].dataIndex;
-                                const item = ltfeFilteredItems[index];
-                                const breakdown = [`─────────────`];
-                                breakdown.push(`Lead Time: ${item.leadTime} days`);
-                                breakdown.push(`Lead Time Flow Efficiency: ${item.ltfeEfficiency}%`);
-                                breakdown.push(``);
-                                breakdown.push(`Time per Column:`);
+                                const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
+                                
+                                let html = `<div style="font-weight: bold; margin-bottom: 8px;"><a href="${adoUrl}" target="_blank" style="color: #60a5fa; text-decoration: none;">#${item.id}</a>: ${item.title}</div>`;
+                                html += `<div style="margin-bottom: 8px; font-size: 12px; color: #9ca3af;">Completed: ${item.completedDate} | Type: ${item.type}</div>`;
+                                html += `<div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px; margin-top: 8px;">`;
+                                html += `<div>Active Time: <strong>${item.activeTime} days</strong></div>`;
+                                html += `<div>Non-Active Time (Backlog + Waiting): <strong>${item.nonActiveTime} days</strong></div>`;
+                                html += `<div style="margin-top: 8px;">Lead Time: <strong>${item.leadTime} days</strong></div>`;
+                                html += `<div>Lead Time Flow Efficiency: <strong>${item.ltfeEfficiency}%</strong></div>`;
+                                html += `</div>`;
                                 
                                 if (item.columnTime && Object.keys(item.columnTime).length > 0) {
+                                    html += `<div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px; margin-top: 8px; font-size: 12px;">`;
+                                    html += `<div style="font-weight: bold; margin-bottom: 4px;">Time per Column:</div>`;
                                     Object.entries(item.columnTime).forEach(([column, days]) => {
                                         if (days > 0) {
                                             const icon = columnCategories[column] || '•';
-                                            breakdown.push(`  ${icon} ${column}: ${days} days`);
+                                            html += `<div>  ${icon} ${column}: ${days} days</div>`;
                                         }
                                     });
-                                } else {
-                                    breakdown.push(`  (Column breakdown not available)`);
+                                    html += `</div>`;
                                 }
                                 
-                                return breakdown;
+                                tooltipEl.innerHTML = html;
+                                tooltipEl.classList.add('visible');
+                                
+                                const position = context.chart.canvas.getBoundingClientRect();
+                                tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
+                                tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
                             }
                         }
                     }
@@ -2569,15 +2624,32 @@
             });
         }
 
-        // Stale Work Chart
+        // Stale Work Chart - Sort worst offenders first (highest age)
         if (dashboardData.charts.staleWork) {
+            // Create array of items with all their data
+            const staleItems = dashboardData.charts.staleWork.labels.map((label, index) => ({
+                label: label,
+                value: dashboardData.charts.staleWork.values[index],
+                id: dashboardData.charts.staleWork.ids[index],
+                title: dashboardData.charts.staleWork.titles[index]
+            }));
+            
+            // Sort by value descending (worst first)
+            staleItems.sort((a, b) => b.value - a.value);
+            
+            // Extract sorted arrays
+            const sortedLabels = staleItems.map(item => item.label);
+            const sortedValues = staleItems.map(item => item.value);
+            const sortedIds = staleItems.map(item => item.id);
+            const sortedTitles = staleItems.map(item => item.title);
+            
             new Chart(document.getElementById('staleWorkChart'), {
                 type: 'bar',
                 data: {
-                    labels: dashboardData.charts.staleWork.labels,
+                    labels: sortedLabels,
                     datasets: [{
                         label: 'Days Since Updated',
-                        data: dashboardData.charts.staleWork.values,
+                        data: sortedValues,
                         backgroundColor: '#f97316',
                         borderColor: '#ea580c',
                         borderWidth: 1
@@ -2614,9 +2686,9 @@
                                 if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
                                     const dataPoint = tooltipModel.dataPoints[0];
                                     const index = dataPoint.dataIndex;
-                                    const id = dashboardData.charts.staleWork.ids[index];
-                                    const title = dashboardData.charts.staleWork.titles[index];
-                                    const days = dashboardData.charts.staleWork.values[index];
+                                    const id = sortedIds[index];
+                                    const title = sortedTitles[index];
+                                    const days = sortedValues[index];
                                     const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${id}`;
                                     
                                     // Build HTML
@@ -3100,17 +3172,53 @@
                 plugins: {
                     legend: { display: false },
                     tooltip: {
-                        backgroundColor: 'rgba(0,0,0,0.8)',
-                        padding: 12,
-                        callbacks: {
-                            title: function(context) {
-                                return 'Date: ' + context[0].label;
-                            },
-                            label: function(context) {
-                                if (context.datasetIndex === 0) {
-                                    return 'Blocked Items: ' + context.parsed.y;
+                        enabled: false,
+                        external: function(context) {
+                            // Use custom tooltip
+                            const tooltipEl = document.getElementById('customTooltip');
+                            const tooltipModel = context.tooltip;
+                            
+                            if (tooltipModel.opacity === 0) {
+                                if (!isTooltipHovered) {
+                                    hideTooltipWithDelay();
                                 }
-                                return null;
+                                return;
+                            }
+                            
+                            if (tooltipHideTimeout) {
+                                clearTimeout(tooltipHideTimeout);
+                                tooltipHideTimeout = null;
+                            }
+                            
+                            if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
+                                const dataPoint = tooltipModel.dataPoints[0];
+                                if (dataPoint.datasetIndex !== 0) return; // Only show for actual data, not trend line
+                                
+                                const index = dataPoint.dataIndex;
+                                const date = dashboardData.charts.blockedItems.labels[index];
+                                const count = dashboardData.charts.blockedItems.values[index];
+                                const items = dashboardData.charts.blockedItems.items ? dashboardData.charts.blockedItems.items[index] : null;
+                                
+                                let html = `<div style="font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 6px;">Date: ${date}</div>`;
+                                html += `<div style="margin-bottom: 8px;">Blocked Items: <strong>${count}</strong></div>`;
+                                
+                                if (items && items.length > 0) {
+                                    html += `<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.2);"><strong>Items:</strong></div>`;
+                                    items.forEach(item => {
+                                        const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
+                                        const shortTitle = item.title.length > 50 ? item.title.substring(0, 50) + '...' : item.title;
+                                        html += `<div style="margin: 4px 0;"><a href="${adoUrl}" target="_blank" style="color: #60a5fa; text-decoration: none;">#${item.id}</a>: ${shortTitle}</div>`;
+                                    });
+                                } else {
+                                    html += `<div style="margin-top: 8px; font-style: italic; opacity: 0.7;">No item details available</div>`;
+                                }
+                                
+                                tooltipEl.innerHTML = html;
+                                tooltipEl.classList.add('visible');
+                                
+                                const position = context.chart.canvas.getBoundingClientRect();
+                                tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
+                                tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
                             }
                         }
                     }
