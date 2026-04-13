@@ -57,6 +57,46 @@ Parse the URL to identify:
 - Team
 - Board level
 
+### Step 3.5: Verify ADO Authentication
+
+**Check for ADO PAT (Personal Access Token):**
+
+Before retrieving data, verify that authentication is configured. The automation scripts need a PAT to access Azure DevOps API.
+
+**Check environment variable:**
+```powershell
+$env:ADO_PAT
+```
+
+**If PAT is available:**
+- ✅ Proceed with data retrieval
+- The MCP server and automation scripts will use this PAT automatically
+
+**If PAT is NOT available:**
+- ❌ Stop and inform the user:
+
+```
+⚠️ Azure DevOps authentication not configured.
+
+The ADO_PAT environment variable is not set. This is required to:
+- Fetch work item data from Azure DevOps
+- Extract real columnTime data (time spent in each column)
+- Generate accurate flow efficiency metrics
+
+To set up authentication, run:
+    .\setup.ps1
+
+This will:
+1. Prompt for your ADO organization URL
+2. Prompt for your Personal Access Token (PAT)
+3. Store PAT securely in your Windows environment variables
+4. Configure the MCP server for ADO integration
+
+After running setup, restart VS Code and try again.
+```
+
+**Note:** The MCP server (configured in mcp.json) uses `${ADO_PAT}` environment variable. The automation scripts (Get-WorkItemColumnTime.ps1) check for either `ADO_PAT` or `AZURE_DEVOPS_EXT_PAT`.
+
 ### Step 4: Retrieve comprehensive work item data
 
 Fetch work items from the specified time window with fields:
@@ -423,9 +463,10 @@ Before finalizing the data object, **automatically run background scripts** to p
 $completedItemIds = @(1170800, 1191895, 1190732, 1137669, 1187078, 1182730)  # From your cycleTimeTrend data
 
 # 2. Extract real columnTime data from ADO (runs silently in background)
+# Use the organization and project extracted from the board URL in Step 3
 $columnTimeData = & "dashboard\Get-WorkItemColumnTime.ps1" `
-    -Organization "asos" `
-    -Project "Customer" `
+    -Organization $adoOrganization `
+    -Project $adoProject `
     -WorkItemIds $completedItemIds `
     -Verbose:$false
 
@@ -436,6 +477,11 @@ $columnTimeData = & "dashboard\Get-WorkItemColumnTime.ps1" `
     -Verbose:$false
 ```
 
+**Variables from Step 3:**
+- `$adoOrganization` - Extracted from board URL (e.g., "asos" from "https://dev.azure.com/asos")
+- `$adoProject` - Extracted from board URL (e.g., "Customer" from URL path)
+- `$completedItemIds` - Array of work item IDs from your completed items data
+
 **This happens automatically during dashboard generation:**
 - ✅ Extracts state change history from ADO Work Items API
 - ✅ Calculates exact time spent in each column
@@ -443,10 +489,15 @@ $columnTimeData = & "dashboard\Get-WorkItemColumnTime.ps1" `
 - ✅ Runs in background - no user intervention required
 - ✅ NO ESTIMATES - only real ADO data
 
+**Authentication Requirements:**
+- Requires `ADO_PAT` or `AZURE_DEVOPS_EXT_PAT` environment variable to be set
+- If not set, scripts will fail with error message
+- Run `.\setup.ps1` to configure authentication (see Step 3.5)
+
 **If ADO API is not accessible:**
-- Scripts will fail silently
-- Efficiency metrics will show "N/A"
-- Dashboard still generates with all other metrics intact
+- Scripts will fail with authentication error
+- Prompt should stop and direct user to run setup.ps1
+- Do not proceed with dashboard generation without real data
 
 **Encoding Note:** When saving in Python, use `encoding='utf-8'`. When using PowerShell, use `[System.IO.File]::WriteAllText()` with `[System.Text.UTF8Encoding]::new($false)` to ensure proper UTF-8 without BOM.
 
