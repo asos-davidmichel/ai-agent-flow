@@ -5,6 +5,9 @@ FLOW_METRICS_REPORT.md
 flow_metrics_dashboard.html
 dashboard/dashboard.html
 
+# Analysis folders (dated output)
+analysis-*/
+
 # Python
 __pycache__/
 *.py[cod]

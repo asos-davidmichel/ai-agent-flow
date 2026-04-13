@@ -977,7 +977,7 @@
                 <h3>Cycle Time</h3>
                 ${dashboardData.hasBugPbiSplit ? `
                     <div class="metric-value">
-                        <span>${((parseFloat(dashboardData.metrics.cycleTime.bugs) + parseFloat(dashboardData.metrics.cycleTime.pbis)) / 2).toFixed(1)}</span>
+                        <span>${dashboardData.charts.cycleTime.average}</span>
                         ${getTrendIndicator(dashboardData.metrics.cycleTime.trend, null, dashboardData.metrics.cycleTime.trend.previousValue)}
                     </div>
                     <div class="metric-label">days average</div>
@@ -1077,9 +1077,7 @@
         document.getElementById('throughputInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.throughput}</p>`;
         
         // Generate dynamic cycle time insight
-        const cycleTimeAvg = dashboardData.hasBugPbiSplit 
-            ? ((parseFloat(dashboardData.metrics.cycleTime.bugs) + parseFloat(dashboardData.metrics.cycleTime.pbis)) / 2).toFixed(1)
-            : dashboardData.metrics.cycleTime.avg;
+        const cycleTimeAvg = dashboardData.charts.cycleTime.average;  // Use overall average from chart data (weighted by count)
         const cycleTimeMedian = dashboardData.metrics.cycleTime.median;
         const cycleTime85th = dashboardData.metrics.cycleTime.p85;
         const bugsCycleTime = dashboardData.metrics.cycleTime.bugs;
@@ -1334,7 +1332,64 @@
                 plugins: {
                     legend: { 
                         display: true,
-                        position: 'top'
+                        position: 'top',
+                        onClick: function(e, legendItem, legend) {
+                            const index = legendItem.datasetIndex;
+                            const chart = legend.chart;
+                            const meta = chart.getDatasetMeta(index);
+                            
+                            // Toggle visibility (default behavior)
+                            meta.hidden = meta.hidden === null ? !chart.data.datasets[index].hidden : null;
+                            chart.update();
+                            
+                            // Update reference lines after toggle
+                            setTimeout(() => {
+                                const meta0 = chart.getDatasetMeta(0); // PBIs
+                                const meta1 = chart.getDatasetMeta(1); // Bugs
+                                
+                                let stats;
+                                let suffix = '';
+                                
+                                if (!meta0.hidden && !meta1.hidden) {
+                                    // Both visible - use overall stats
+                                    stats = {
+                                        average: dashboardData.charts.cycleTime.average,
+                                        median: dashboardData.charts.cycleTime.median,
+                                        percentile85: dashboardData.charts.cycleTime.percentile85
+                                    };
+                                } else if (!meta0.hidden && meta1.hidden) {
+                                    // Only PBIs visible
+                                    stats = dashboardData.charts.cycleTime.byType.PBIs;
+                                    suffix = ' (PBIs)';
+                                } else if (meta0.hidden && !meta1.hidden) {
+                                    // Only Bugs visible
+                                    stats = dashboardData.charts.cycleTime.byType.Bugs;
+                                    suffix = ' (Bugs)';
+                                } else {
+                                    // Both hidden - use overall
+                                    stats = {
+                                        average: dashboardData.charts.cycleTime.average,
+                                        median: dashboardData.charts.cycleTime.median,
+                                        percentile85: dashboardData.charts.cycleTime.percentile85
+                                    };
+                                }
+                                
+                                // Update annotations
+                                chart.options.plugins.annotation.annotations.avgLine.yMin = stats.average;
+                                chart.options.plugins.annotation.annotations.avgLine.yMax = stats.average;
+                                chart.options.plugins.annotation.annotations.avgLine.label.content = `Avg: ${stats.average} days${suffix}`;
+                                
+                                chart.options.plugins.annotation.annotations.medianLine.yMin = stats.median;
+                                chart.options.plugins.annotation.annotations.medianLine.yMax = stats.median;
+                                chart.options.plugins.annotation.annotations.medianLine.label.content = `Median: ${stats.median} days${suffix}`;
+                                
+                                chart.options.plugins.annotation.annotations.percentile85Line.yMin = stats.percentile85;
+                                chart.options.plugins.annotation.annotations.percentile85Line.yMax = stats.percentile85;
+                                chart.options.plugins.annotation.annotations.percentile85Line.label.content = `85th: ${stats.percentile85} days${suffix}`;
+                                
+                                chart.update();
+                            }, 100);
+                        }
                     },
                     tooltip: {
                         enabled: false,
@@ -1477,7 +1532,72 @@
                 plugins: {
                     legend: { 
                         display: true,
-                        position: 'top'
+                        position: 'top',
+                        onClick: function(e, legendItem, legend) {
+                            const index = legendItem.datasetIndex;
+                            const chart = legend.chart;
+                            const meta = chart.getDatasetMeta(index);
+                            
+                            // Toggle visibility (default behavior)
+                            meta.hidden = meta.hidden === null ? !chart.data.datasets[index].hidden : null;
+                            chart.update();
+                            
+                            // Update reference lines after toggle
+                            setTimeout(() => {
+                                const meta0 = chart.getDatasetMeta(0); // PBIs
+                                const meta1 = chart.getDatasetMeta(1); // Bugs
+                                
+                                let stats;
+                                let suffix = '';
+                                
+                                if (!meta0.hidden && !meta1.hidden) {
+                                    // Both visible - use overall stats
+                                    stats = {
+                                        average: dashboardData.charts.cycleTime.leadTimeAverage,
+                                        median: dashboardData.charts.cycleTime.leadTimeMedian,
+                                        percentile85: dashboardData.charts.cycleTime.leadTimePercentile85
+                                    };
+                                } else if (!meta0.hidden && meta1.hidden) {
+                                    // Only PBIs visible
+                                    stats = {
+                                        average: dashboardData.charts.cycleTime.byType.PBIs.leadTimeAverage,
+                                        median: dashboardData.charts.cycleTime.byType.PBIs.leadTimeMedian,
+                                        percentile85: dashboardData.charts.cycleTime.byType.PBIs.leadTimePercentile85
+                                    };
+                                    suffix = ' (PBIs)';
+                                } else if (meta0.hidden && !meta1.hidden) {
+                                    // Only Bugs visible
+                                    stats = {
+                                        average: dashboardData.charts.cycleTime.byType.Bugs.leadTimeAverage,
+                                        median: dashboardData.charts.cycleTime.byType.Bugs.leadTimeMedian,
+                                        percentile85: dashboardData.charts.cycleTime.byType.Bugs.leadTimePercentile85
+                                    };
+                                    suffix = ' (Bugs)';
+                                } else {
+                                    // Both hidden - use overall
+                                    stats = {
+                                        average: dashboardData.charts.cycleTime.leadTimeAverage,
+                                        median: dashboardData.charts.cycleTime.leadTimeMedian,
+                                        percentile85: dashboardData.charts.cycleTime.leadTimePercentile85
+                                    };
+                                }
+                                
+                                // Update annotations
+                                chart.options.plugins.annotation.annotations.avgLine.yMin = stats.average;
+                                chart.options.plugins.annotation.annotations.avgLine.yMax = stats.average;
+                                chart.options.plugins.annotation.annotations.avgLine.label.content = `Avg: ${stats.average} days${suffix}`;
+                                
+                                chart.options.plugins.annotation.annotations.medianLine.yMin = stats.median;
+                                chart.options.plugins.annotation.annotations.medianLine.yMax = stats.median;
+                                chart.options.plugins.annotation.annotations.medianLine.label.content = `Median: ${stats.median} days${suffix}`;
+                                
+                                chart.options.plugins.annotation.annotations.percentile85Line.yMin = stats.percentile85;
+                                chart.options.plugins.annotation.annotations.percentile85Line.yMax = stats.percentile85;
+                                chart.options.plugins.annotation.annotations.percentile85Line.label.content = `85th: ${stats.percentile85} days${suffix}`;
+                                
+                                chart.update();
+                            }, 100);
+                        }
                     },
                     tooltip: {
                         enabled: false,

@@ -75,6 +75,13 @@ foreach ($workItemId in $WorkItemIds) {
         $columnHistory = @()
         
         foreach ($update in $updates.value) {
+            # Skip placeholder dates (9999-01-01 means "no date" in ADO)
+            $revisedDate = [DateTime]$update.revisedDate
+            if ($revisedDate.Year -ge 9999) {
+                Write-Verbose "  Skipping placeholder date: $($update.revisedDate)"
+                continue
+            }
+            
             $fieldToUse = $null
             $newValue = $null
             
@@ -93,7 +100,7 @@ foreach ($workItemId in $WorkItemIds) {
                 $columnChange = @{
                     Column = $newValue
                     Field = $fieldToUse
-                    Timestamp = [DateTime]$update.revisedDate
+                    Timestamp = $revisedDate  # Use pre-parsed date
                     RevisionNumber = $update.rev
                 }
                 $columnHistory += $columnChange
