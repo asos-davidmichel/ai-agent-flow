@@ -16,7 +16,7 @@ param()
 
 try {
     $templatePath = Join-Path $PSScriptRoot 'dashboard-template.html'
-    $dataPath = Join-Path $PSScriptRoot 'dashboard-data-example.json'
+    $dataPath = Join-Path $PSScriptRoot 'dashboard-data.json'
     $outputPath = Join-Path $PSScriptRoot 'dashboard.html'
 
     if (-not (Test-Path $templatePath)) {

@@ -331,7 +331,7 @@ Statistics:**
 2. **Configure the boardConfig object** to match the team's Azure DevOps board columns (see Board Configuration below)
 3. Prepare a data object matching the Data Structure (see below)
 4. **AUTOMATICALLY extract real columnTime data** (runs in background - see below)
-5. Convert the data object to JSON and save as `dashboard-data-example.json`
+5. Convert the data object to JSON and save as `dashboard-data.json`
 6. Run `dashboard\Regenerate-Dashboard.ps1` to inject data into template with proper UTF-8 encoding
 7. Output file: `dashboard\dashboard.html` (emojis and charts properly rendered)
 
@@ -472,7 +472,7 @@ $columnTimeData = & "dashboard\Get-WorkItemColumnTime.ps1" `
 
 # 3. Merge into dashboard data file (runs silently in background)
 & "dashboard\Update-DashboardData.ps1" `
-    -DataFilePath "flow_metrics_data.json" `
+    -DataFilePath "dashboard-data.json" `
     -ColumnTimeData $columnTimeData `
     -Verbose:$false
 ```
