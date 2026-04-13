@@ -447,8 +447,8 @@
             <!-- Cycle Time Distribution -->
             <div class="chart-card">
                 <h2>⏱️ Cycle Time by Completion Date</h2>
-                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    Shows how long items took to complete (from start to done), measured in calendar days.
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;" id="cycleTimeDescription">
+                    <!-- Populated dynamically from boardConfig -->
                 </p>
                 <div class="chart-container">
                     <canvas id="cycleTimeChart"></canvas>
@@ -460,7 +460,7 @@
             <div class="chart-card">
                 <h2>🕐 Lead Time by Completion Date</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    Shows the total time from creation to completion for each item.
+                    Total time from creation (New) to completion, including all backlog and workflow time. Lead Time = Cycle Time + Backlog Time.
                 </p>
                 <div class="chart-container">
                     <canvas id="leadTimeChart"></canvas>
@@ -487,50 +487,46 @@
                 <!-- Column Categorization Legend -->
                 <div style="background: #f7fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 25px; margin-bottom: 30px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);">
                     <h2 style="margin: 0 0 15px 0; font-size: 20px; font-weight: 700; color: #2d3748;">📋 Column Categorization for Flow Efficiency</h2>
-                    <p style="margin: 0 0 20px 0; font-size: 14px; color: #4a5568;">Understanding how workflow columns are classified is essential for interpreting efficiency metrics below.</p>
+                    <p style="margin: 0 0 20px 0; font-size: 14px; color: #4a5568;" id="columnCategorizationDescription">
+                        <!-- Populated dynamically from boardConfig -->
+                    </p>
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
                         <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
                             <div style="font-weight: 700; font-size: 15px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; color: #2d3748;">
                                 <span style="background: #10b981; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; color: white;">✓</span>
                                 ACTIVE (Work Happening)
                             </div>
-                            <div style="font-size: 13px; line-height: 1.6; color: #4a5568;">
-                                • In Development<br>
-                                • In Review<br>
-                                • External Review<br>
-                                • QA
+                            <div style="font-size: 13px; line-height: 1.6; color: #4a5568;" id="activeColumnsList">
+                                <!-- Populated dynamically from boardConfig -->
                             </div>
                         </div>
                         <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
                             <div style="font-weight: 700; font-size: 15px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; color: #2d3748;">
                                 <span style="background: #f59e0b; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; color: white;">⏸</span>
-                                WAITING (Queued)
+                                WAITING (Within Workflow)
                             </div>
-                            <div style="font-size: 13px; line-height: 1.6; color: #4a5568;">
-                                • Ready for Dev<br>
-                                • Ready for QA<br>
-                                • Ready for Release
+                            <div style="font-size: 13px; line-height: 1.6; color: #4a5568;" id="waitingColumnsList">
+                                <!-- Populated dynamically from boardConfig -->
                             </div>
                         </div>
                         <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
                             <div style="font-weight: 700; font-size: 15px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; color: #2d3748;">
                                 <span style="background: #718096; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; color: white;">⊗</span>
-                                NOT IN WORKFLOW
+                                BEFORE WORKFLOW
                             </div>
-                            <div style="font-size: 13px; line-height: 1.6; color: #4a5568;">
-                                • New (Backlog)<br>
-                                • Closed (Done)
+                            <div style="font-size: 13px; line-height: 1.6; color: #4a5568;" id="beforeWorkflowColumnsList">
+                                <!-- Populated dynamically from boardConfig -->
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div class="charts-grid">
-            <!-- Work Start Efficiency -->
-            <div class="chart-card">
+            <!-- Work Start Efficiency - FULL WIDTH -->
+            <div class="chart-card" style="grid-column: 1 / -1;">
                 <h2>⚡ Work Start Efficiency (Cycle / Lead Time)</h2>
-                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    Measures how quickly work starts after being created. High values (>50%) mean items move into the workflow quickly. Low values indicate long backlog delays before work begins.
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;" id="wseDescription">
+                    <!-- Populated dynamically from boardConfig -->
                 </p>
                 
                 <!-- Summary Card -->
@@ -556,43 +552,14 @@
                 </div>
                 <div class="insight-box" id="workStartEfficiencyInsight"></div>
             </div>
+        </div>
 
-            <!-- Lead Time Flow Efficiency -->
-            <div class="chart-card">
-                <h2>⚡ Lead Time Flow Efficiency (Active / Lead Time)</h2>
-                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    Measures overall efficiency from creation to completion. High values (>40%) mean most time is spent actively working. Low values indicate items spend most time waiting - either in backlog before starting or queued between workflow stages.
-                </p>
-                
-                <!-- Summary Card -->
-                <div style="background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 15px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
-                    <div style="text-align: center;">
-                        <div style="color: #718096; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-bottom: 5px;">Average</div>
-                        <div id="ltfeAvgValue" style="color: #2d3748; font-size: 24px; font-weight: 700;">-</div>
-                    </div>
-                    <div style="text-align: center; border-left: 1px solid #e2e8f0;">
-                        <div style="color: #10b981; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-bottom: 5px;">Best</div>
-                        <div id="ltfeBestValue" style="color: #2d3748; font-size: 24px; font-weight: 700;">-</div>
-                        <div id="ltfeBestItem" style="color: #718096; font-size: 11px; margin-top: 2px;">-</div>
-                    </div>
-                    <div style="text-align: center; border-left: 1px solid #e2e8f0;">
-                        <div style="color: #ef4444; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-bottom: 5px;">Worst</div>
-                        <div id="ltfeWorstValue" style="color: #2d3748; font-size: 24px; font-weight: 700;">-</div>
-                        <div id="ltfeWorstItem" style="color: #718096; font-size: 11px; margin-top: 2px;">-</div>
-                    </div>
-                </div>
-                
-                <div class="chart-container" style="height: 600px;">
-                    <canvas id="leadTimeFlowEfficiencyChart"></canvas>
-                </div>
-                <div class="insight-box" id="leadTimeFlowEfficiencyInsight"></div>
-            </div>
-
+                <div class="charts-grid">
             <!-- Cycle Time Flow Efficiency -->
             <div class="chart-card">
                 <h2>⚡ Cycle Time Flow Efficiency (Active / Cycle Time)</h2>
-                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    Measures how smoothly work flows through the workflow. High values (>80%) mean minimal waiting between stages. Low values indicate items spend most time queued in "Ready for..." states rather than being actively worked.
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;" id="ctfeDescription">
+                    <!-- Populated dynamically from boardConfig -->
                 </p>
                 
                 <!-- Summary Card -->
@@ -617,6 +584,37 @@
                     <canvas id="cycleTimeFlowEfficiencyChart"></canvas>
                 </div>
                 <div class="insight-box" id="cycleTimeFlowEfficiencyInsight"></div>
+            </div>
+
+            <!-- Lead Time Flow Efficiency -->
+            <div class="chart-card">
+                <h2>⚡ Lead Time Flow Efficiency (Active / Lead Time)</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;" id="ltfeDescription">
+                    <!-- Populated dynamically from boardConfig -->
+                </p>
+                
+                <!-- Summary Card -->
+                <div style="background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 15px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                    <div style="text-align: center;">
+                        <div style="color: #718096; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-bottom: 5px;">Average</div>
+                        <div id="ltfeAvgValue" style="color: #2d3748; font-size: 24px; font-weight: 700;">-</div>
+                    </div>
+                    <div style="text-align: center; border-left: 1px solid #e2e8f0;">
+                        <div style="color: #10b981; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-bottom: 5px;">Best</div>
+                        <div id="ltfeBestValue" style="color: #2d3748; font-size: 24px; font-weight: 700;">-</div>
+                        <div id="ltfeBestItem" style="color: #718096; font-size: 11px; margin-top: 2px;">-</div>
+                    </div>
+                    <div style="text-align: center; border-left: 1px solid #e2e8f0;">
+                        <div style="color: #ef4444; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-bottom: 5px;">Worst</div>
+                        <div id="ltfeWorstValue" style="color: #2d3748; font-size: 24px; font-weight: 700;">-</div>
+                        <div id="ltfeWorstItem" style="color: #718096; font-size: 11px; margin-top: 2px;">-</div>
+                    </div>
+                </div>
+                
+                <div class="chart-container" style="height: 600px;">
+                    <canvas id="leadTimeFlowEfficiencyChart"></canvas>
+                </div>
+                <div class="insight-box" id="leadTimeFlowEfficiencyInsight"></div>
             </div>
         </div>
             </div>
@@ -834,6 +832,76 @@
         const dashboardData = /* DATA_PLACEHOLDER */;
         // ===== END DATA INJECTION =====
 
+        // ===== BOARD CONFIGURATION =====
+        // CUSTOMIZE THESE SETTINGS FOR YOUR AZURE DEVOPS BOARD
+        // This configuration determines how cycle time is measured and which columns count as active work
+        const boardConfig = {
+            // WORKFLOW COLUMN DEFINITIONS
+            // Cycle time starts from the FIRST ACTIVE COLUMN (when work actually begins)
+            
+            // ACTIVE columns: Work is actively being done (In Development, In Review, QA, etc.)
+            activeColumns: ['In Development', 'In Review', 'External Review', 'QA'],
+            
+            // WAITING columns: Work is queued between active stages (Ready for QA, Ready for Release)
+            // These are WITHIN the workflow (after cycle time starts)
+            waitingColumns: ['Ready for QA', 'Ready for Release', 'Ready for release'],
+            
+            // BEFORE WORKFLOW columns: Backlog states before cycle time starts (New, Backlog, Ready for Dev)
+            beforeWorkflowColumns: ['New', 'Backlog', 'Ready for Dev'],
+            
+            // AFTER WORKFLOW columns: Work is completed (Closed, Done, Removed)
+            afterWorkflowColumns: ['Closed', 'Done', 'Removed'],
+            
+            // COLUMN ICONS for tooltips and visualizations
+            columnIcons: {
+                'New': '⊗',                    // BEFORE WORKFLOW
+                'Backlog': '⊗',                // BEFORE WORKFLOW  
+                'Ready for Dev': '⊗',          // BEFORE WORKFLOW (cycle time starts from In Development)
+                'In Development': '✓',         // ACTIVE
+                'In Review': '✓',              // ACTIVE
+                'External Review': '✓',        // ACTIVE
+                'Ready for QA': '⏸',           // WAITING (within workflow)
+                'QA': '✓',                     // ACTIVE
+                'Ready for Release': '⏸',     // WAITING (within workflow)
+                'Ready for release': '⏸',     // WAITING (within workflow - ADO case variant)
+                'Closed': '⊗',                 // AFTER WORKFLOW
+                'Done': '⊗'                    // AFTER WORKFLOW
+            },
+            
+            // CHART COLORS
+            colors: {
+                activeTime: '#10b981',         // Green for active work
+                cycleTime: '#3b82f6',          // Blue for cycle time
+                leadTimeActiveTime: '#8b5cf6', // Purple/Violet for lead time flow active
+                waitingTime: '#94a3b8',        // Gray for waiting/backlog/non-active time
+                throughput: '#3b82f6'          // Blue for throughput
+            }
+        };
+        
+        // HOW TO CUSTOMIZE FOR YOUR BOARD:
+        // 1. Review your Azure DevOps board columns
+        // 2. Identify which column represents when work ACTUALLY STARTS (first active column)
+        //    - This is typically "In Development", "In Progress", or "Active" 
+        //    - Cycle time will be measured from this column onwards
+        // 3. Categorize each column:
+        //    - ACTIVE: Work is being done (Dev, Review, QA, Testing, etc.)
+        //    - WAITING: Queued between stages AFTER work started (Ready for X states within workflow)
+        //    - BEFORE WORKFLOW: Backlog/queue BEFORE work starts (New, Backlog, Ready for Dev, etc.)
+        //    - AFTER WORKFLOW: Done/Closed states
+        // 4. Update the arrays above with your column names (case-sensitive!)
+        // 5. Update column icons if desired
+        
+        // IMPORTANT: The Fix-CycleTimesFromColumnTime.ps1 script uses the same column definitions
+        // Make sure to update that script's column arrays to match this configuration
+        // ===== END BOARD CONFIGURATION =====
+        
+        // Helper functions to generate dynamic labels from boardConfig
+        const getActiveColumnsLabel = () => boardConfig.activeColumns.join(', ');
+        const getWaitingColumnsLabel = () => boardConfig.waitingColumns.join(', ');
+        const getBeforeWorkflowLabel = () => boardConfig.beforeWorkflowColumns.join(' + ');
+        const getCycleStartColumn = () => boardConfig.activeColumns[0];
+        const getBacklogWaitingLabel = () => 'Backlog + Waiting';
+
         // Wait for DOM and Chart.js to be fully loaded before initializing charts
         window.addEventListener('load', function() {
         console.log('Initializing dashboard...');
@@ -1007,8 +1075,38 @@
 
         // Render insights (static insights from JSON - efficiency insights are generated dynamically below)
         document.getElementById('throughputInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.throughput}</p>`;
-        document.getElementById('cycleTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.cycleTime}</p>`;
-        document.getElementById('leadTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.leadTime}</p>`;
+        
+        // Generate dynamic cycle time insight
+        const cycleTimeAvg = dashboardData.hasBugPbiSplit 
+            ? ((parseFloat(dashboardData.metrics.cycleTime.bugs) + parseFloat(dashboardData.metrics.cycleTime.pbis)) / 2).toFixed(1)
+            : dashboardData.metrics.cycleTime.avg;
+        const cycleTimeMedian = dashboardData.metrics.cycleTime.median;
+        const cycleTime85th = dashboardData.metrics.cycleTime.p85;
+        const bugsCycleTime = dashboardData.metrics.cycleTime.bugs;
+        const pbisCycleTime = dashboardData.metrics.cycleTime.pbis;
+        const cycleTimeInsight = `Cycle time (from ${getCycleStartColumn()} to completion) averages ${cycleTimeAvg} days (median: ${cycleTimeMedian} days, 85th percentile: ${cycleTime85th} days). ${dashboardData.hasBugPbiSplit ? `Bugs: ${bugsCycleTime} days, PBIs: ${pbisCycleTime} days. ` : ''}This measures time actively in workflow columns, excluding backlog waiting time (${getBeforeWorkflowLabel()}).`;
+        document.getElementById('cycleTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${cycleTimeInsight}</p>`;
+        
+        // Generate dynamic lead time insight
+        const leadTimeAvg = dashboardData.metrics.leadTime.avg;
+        const leadTimeMedian = dashboardData.metrics.leadTime.median;
+        const leadTime85th = dashboardData.metrics.leadTime.p85;
+        const backlogTime = (leadTimeAvg - cycleTimeAvg).toFixed(1);
+        const leadTimeInsight = `Lead time averages ${leadTimeAvg} days (median: ${leadTimeMedian} days, 85th percentile: ${leadTime85th} days) from creation to completion. This includes both backlog time (${getBeforeWorkflowLabel()}: ~${backlogTime} days) and cycle time (${getCycleStartColumn()} onwards: ${cycleTimeAvg} days). ${leadTimeAvg > cycleTimeAvg * 1.5 ? 'Items wait significantly in backlog before development starts.' : 'Items move relatively quickly from backlog to development.'}`;  
+        document.getElementById('leadTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${leadTimeInsight}</p>`;
+        
+        // Populate dynamic chart descriptions from boardConfig
+        document.getElementById('cycleTimeDescription').innerText = `Time from "${getCycleStartColumn()}" (first active column) to completion, measured in calendar days. Cycle time excludes backlog waiting time.`;
+        document.getElementById('columnCategorizationDescription').innerHTML = `Understanding how workflow columns are classified is essential for interpreting efficiency metrics. <strong>Cycle time starts from the first ACTIVE column (${getCycleStartColumn()}).</strong>`;
+        document.getElementById('wseDescription').innerText = `Measures how quickly work starts after being created. Cycle time starts when items reach "${getCycleStartColumn()}" (first active column). High values (>50%) mean items leave the backlog quickly. Low values indicate long delays in the "${getBeforeWorkflowLabel()}" columns.`;
+        document.getElementById('ctfeDescription').innerText = `Measures flow during cycle time (from ${getCycleStartColumn()} onwards). Active columns: ${getActiveColumnsLabel()}. Waiting columns: ${getWaitingColumnsLabel()}. High values (>80%) mean minimal waiting in Ready states.`;
+        document.getElementById('ltfeDescription').innerText = `Measures overall efficiency from creation to completion. High values (>40%) mean most time is spent actively working. Low values indicate items spend most time waiting - either in backlog before starting or queued between workflow stages.`;
+        
+        // Populate column categorization legend lists
+        document.getElementById('activeColumnsList').innerHTML = boardConfig.activeColumns.map(col => `• ${col}`).join('<br>');
+        document.getElementById('waitingColumnsList').innerHTML = boardConfig.waitingColumns.map(col => `• ${col}`).join('<br>');
+        document.getElementById('beforeWorkflowColumnsList').innerHTML = boardConfig.beforeWorkflowColumns.map(col => `• ${col}`).join('<br>');
+        
         // Note: Efficiency insights (WSE, CTFE, LTFE) are generated dynamically from real data
         document.getElementById('cfdInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.cfd}</p>`;
         if (dashboardData.insights.timeInColumn) {
@@ -1273,7 +1371,8 @@
                                         <strong>ID:</strong> <a href="${adoUrl}" target="_blank">#${item.id}</a><br>
                                         <strong>Title:</strong> ${item.title}<br>
                                         <strong>Completed:</strong> ${item.completedDate}<br><br>
-                                        <strong style="color: #4299e1;">⏱️ Cycle Time:</strong> ${cycleTime} days
+                                        <strong style="color: #4299e1;">⏱️ Cycle Time:</strong> ${cycleTime} days<br>
+                                        <em style="font-size: 11px; color: #9ca3af;">From ${getCycleStartColumn()} → Done</em>
                                     </div>
                                     <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
                                 `;
@@ -1517,19 +1616,7 @@
         allItems.sort((a, b) => new Date(a.completedDate) - new Date(b.completedDate));
 
         // Define column categorization (case-insensitive keys handled by getColumnTime helper)
-        const columnCategories = {
-            'New': '⊗',  // NOT IN WORKFLOW
-            'Backlog': '⊗',  // NOT IN WORKFLOW
-            'Ready for Dev': '⏸',  // WAITING
-            'In Development': '✓',  // ACTIVE
-            'In Review': '✓',  // ACTIVE
-            'External Review': '✓',  // ACTIVE
-            'Ready for QA': '⏸',  // WAITING
-            'QA': '✓',  // ACTIVE
-            'Ready for Release': '⏸',  // WAITING
-            'Ready for release': '⏸',  // WAITING (ADO case variant)
-            'Closed': '⊗'  // NOT IN WORKFLOW
-        };
+        const columnCategories = boardConfig.columnIcons;
 
         // Calculate statistics for Work Start Efficiency
         const wseEfficiencies = allItems.map(item => parseFloat(item.efficiency));
@@ -1549,15 +1636,15 @@
         const backlogPct = (100 - parseFloat(wseAvg)).toFixed(0);
         let wseInterpretation = '';
         if (parseFloat(wseAvg) >= 80) {
-            wseInterpretation = 'Excellent - items move quickly from backlog to workflow.';
+            wseInterpretation = `Excellent - items leave the backlog (${getBeforeWorkflowLabel()}) quickly.`;
         } else if (parseFloat(wseAvg) >= 60) {
-            wseInterpretation = 'Good - most time is spent in workflow rather than waiting in backlog.';
+            wseInterpretation = `Good - most time is spent from ${getCycleStartColumn()} onwards rather than waiting in backlog.`;
         } else if (parseFloat(wseAvg) >= 40) {
-            wseInterpretation = 'Fair - significant backlog delay before work begins.';
+            wseInterpretation = `Fair - significant time spent in backlog before reaching ${getCycleStartColumn()}.`;
         } else {
-            wseInterpretation = 'Poor - most time spent waiting in backlog before workflow starts.';
+            wseInterpretation = 'Poor - most time spent waiting in backlog before cycle time starts.';
         }
-        const wseInsight = `Average work start efficiency ${wseAvg}% - items spend ${wseAvg}% of total time in workflow after leaving backlog. The remaining ${backlogPct}% is backlog delay before work starts. ${wseInterpretation} Best: #${wseBest.id} at ${wseBest.efficiency}%. Worst: #${wseWorst.id} at ${wseWorst.efficiency}%.`;
+        const wseInsight = `Average work start efficiency ${wseAvg}% - items spend ${wseAvg}% of total time from ${getCycleStartColumn()} onwards (cycle time). The remaining ${backlogPct}% is backlog time in the ${getBeforeWorkflowLabel()} columns. ${wseInterpretation} Best: #${wseBest.id} at ${wseBest.efficiency}%. Worst: #${wseWorst.id} at ${wseWorst.efficiency}%.`;
         document.getElementById('workStartEfficiencyInsight').innerHTML = `<p><strong>Insight:</strong> ${wseInsight}</p>`;
 
         // Filter to top/bottom N items (always best to worst)
@@ -1584,16 +1671,16 @@
                 labels: wseLabels,
                 datasets: [
                     {
-                        label: 'Cycle Time (In Workflow)',
+                        label: 'Cycle Time (From ' + boardConfig.activeColumns[0] + ')',
                         data: wseCycleTimeData,
-                        backgroundColor: '#3b82f6',
+                        backgroundColor: boardConfig.colors.cycleTime,
                         borderColor: '#2563eb',
                         borderWidth: 1
                     },
                     {
-                        label: 'Backlog Delay (Before Workflow)',
+                        label: 'Backlog Time (' + getBeforeWorkflowLabel() + ')',
                         data: wseBacklogDelayData,
-                        backgroundColor: '#94a3b8',
+                        backgroundColor: boardConfig.colors.waitingTime,
                         borderColor: '#64748b',
                         borderWidth: 1
                     }
@@ -1635,8 +1722,8 @@
                                 let html = `<div style="font-weight: bold; margin-bottom: 8px;"><a href="${adoUrl}" target="_blank" style="color: #60a5fa; text-decoration: none;">#${item.id}</a>: ${item.title}</div>`;
                                 html += `<div style="margin-bottom: 8px; font-size: 12px; color: #9ca3af;">Completed: ${item.completedDate} | Type: ${item.type}</div>`;
                                 html += `<div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px; margin-top: 8px;">`;
-                                html += `<div>Cycle Time (In Workflow): <strong>${item.cycleTime} days</strong></div>`;
-                                html += `<div>Backlog Delay (Before Workflow): <strong>${item.backlogDelay} days</strong></div>`;
+                                html += `<div>Cycle Time (From ${getCycleStartColumn()}): <strong>${item.cycleTime} days</strong></div>`;
+                                html += `<div>Backlog Time (${getBeforeWorkflowLabel()}): <strong>${item.backlogDelay} days</strong></div>`;
                                 html += `<div style="margin-top: 8px;">Lead Time: <strong>${item.leadTime} days</strong></div>`;
                                 html += `<div>Work Start Efficiency: <strong>${item.efficiency}%</strong></div>`;
                                 html += `</div>`;
@@ -1693,9 +1780,10 @@
 
         // Cycle Time Flow Efficiency Chart (Active / Cycle Time) - Stacked Bar
         // Calculate active time from actual column data when available
-        const activeColumns = ['In Development', 'In Review', 'External Review', 'QA'];
-        const waitingColumns = ['Ready for Dev', 'Ready for QA', 'Ready for Release', 'Ready for release'];
-        const notInWorkflowColumns = ['New', 'Backlog'];
+        // NOTE: Cycle time starts from first ACTIVE column (' + boardConfig.activeColumns[0] + ')
+        const activeColumns = boardConfig.activeColumns;
+        const waitingColumns = boardConfig.waitingColumns;  // Within workflow
+        const notInWorkflowColumns = [...boardConfig.beforeWorkflowColumns, ...boardConfig.afterWorkflowColumns];
         
         // Helper to find column value (case-insensitive)
         const getColumnTime = (columnTime, columnName) => {
@@ -1748,15 +1836,15 @@
             const waitingPct = (100 - parseFloat(ctfeAvg)).toFixed(0);
             let ctfeInterpretation = '';
             if (parseFloat(ctfeAvg) >= 70) {
-                ctfeInterpretation = 'Excellent flow - very little waiting in workflow.';
+                ctfeInterpretation = 'Excellent - minimal time in waiting states.';
             } else if (parseFloat(ctfeAvg) >= 50) {
-                ctfeInterpretation = 'Good flow - reasonable balance of active work vs waiting.';
+                ctfeInterpretation = 'Good - items flow smoothly with reasonable waiting.';
             } else if (parseFloat(ctfeAvg) >= 30) {
-                ctfeInterpretation = 'Fair - significant waiting time during workflow.';
+                ctfeInterpretation = 'Fair - significant waiting in Ready for Dev/QA/Release.';
             } else {
-                ctfeInterpretation = 'Poor - most workflow time is waiting, not active work.';
+                ctfeInterpretation = 'Poor - excessive queuing in waiting states.';
             }
-            const ctfeInsight = `Average cycle time flow efficiency ${ctfeAvg}% - items spend ${ctfeAvg}% of workflow time actively being worked on, with ${waitingPct}% spent waiting (Ready states). ${ctfeInterpretation} Best: #${ctfeBest.id} at ${ctfeBest.ctfeEfficiency}%. Worst: #${ctfeWorst.id} at ${ctfeWorst.ctfeEfficiency}%.`;
+            const ctfeInsight = `Average cycle time flow efficiency ${ctfeAvg}% - items spend ${ctfeAvg}% of cycle time in active columns (${getActiveColumnsLabel()}), with ${waitingPct}% in waiting states (${getWaitingColumnsLabel()}). ${ctfeInterpretation} Best: #${ctfeBest.id} at ${ctfeBest.ctfeEfficiency}%. Worst: #${ctfeWorst.id} at ${ctfeWorst.ctfeEfficiency}%.`;
             document.getElementById('cycleTimeFlowEfficiencyInsight').innerHTML = `<p><strong>Insight:</strong> ${ctfeInsight}</p>`;
         }
 
@@ -1780,17 +1868,17 @@
                 labels: ctfeLabels,
                 datasets: [
                     {
-                        label: 'Active Time (Working)',
+                        label: 'Active Time (' + getActiveColumnsLabel() + ')',
                         data: ctfeActiveData,
-                        backgroundColor: '#10b981',
+                        backgroundColor: boardConfig.colors.activeTime,
                         borderColor: '#059669',
                         borderWidth: 1
                     },
                     {
-                        label: 'Waiting Time (Between Stages)',
+                        label: 'Waiting Time (' + getWaitingColumnsLabel() + ')',
                         data: ctfeWaitingData,
-                        backgroundColor: '#f59e0b',
-                        borderColor: '#d97706',
+                        backgroundColor: boardConfig.colors.waitingTime,
+                        borderColor: '#64748b',
                         borderWidth: 1
                     }
                 ]
@@ -1831,8 +1919,8 @@
                                 let html = `<div style="font-weight: bold; margin-bottom: 8px;"><a href="${adoUrl}" target="_blank" style="color: #60a5fa; text-decoration: none;">#${item.id}</a>: ${item.title}</div>`;
                                 html += `<div style="margin-bottom: 8px; font-size: 12px; color: #9ca3af;">Completed: ${item.completedDate} | Type: ${item.type}</div>`;
                                 html += `<div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px; margin-top: 8px;">`;
-                                html += `<div>Active Time (Working): <strong>${item.activeTime} days</strong></div>`;
-                                html += `<div>Waiting Time (Between Stages): <strong>${item.waitingTime} days</strong></div>`;
+                                html += `<div>Active Time (${getActiveColumnsLabel()}): <strong>${item.activeTime} days</strong></div>`;
+                                html += `<div>Waiting Time (${getWaitingColumnsLabel()}): <strong>${item.waitingTime} days</strong></div>`;
                                 html += `<div style="margin-top: 8px;">Cycle Time: <strong>${item.cycleTime} days</strong></div>`;
                                 html += `<div>Cycle Time Flow Efficiency: <strong>${item.ctfeEfficiency}%</strong></div>`;
                                 html += `</div>`;
@@ -1952,7 +2040,7 @@
             } else if (parseFloat(ltfeAvg) >= 15) {
                 ltfeInterpretation = 'Fair - significant non-value time in total lifecycle.';
             } else {
-                ltfeInterpretation = 'Poor - most lifecycle time is non-value-added (backlog + waiting).';
+                ltfeInterpretation = 'Poor - most lifecycle time is non-value-added waiting.';
             }
             const ltfeInsight = `Average lead time flow efficiency ${ltfeAvg}% - items spend ${ltfeAvg}% of total lifetime (creation to completion) actively being worked on. The remaining ${wastePct}% is backlog delay and workflow waiting time. ${ltfeInterpretation} Best: #${ltfeBest.id} at ${ltfeBest.ltfeEfficiency}%. Worst: #${ltfeWorst.id} at ${ltfeWorst.ltfeEfficiency}%.`;
             document.getElementById('leadTimeFlowEfficiencyInsight').innerHTML = `<p><strong>Insight:</strong> ${ltfeInsight}</p>`;
@@ -1980,15 +2068,15 @@
                     {
                         label: 'Active Time (Working)',
                         data: ltfeActiveData,
-                        backgroundColor: '#10b981',
-                        borderColor: '#059669',
+                        backgroundColor: boardConfig.colors.leadTimeActiveTime,
+                        borderColor: '#7c3aed',
                         borderWidth: 1
                     },
                     {
-                        label: 'Non-Active Time (Backlog + Waiting)',
+                        label: 'Non-Active Time (' + getBacklogWaitingLabel() + ')',
                         data: ltfeNonActiveData,
-                        backgroundColor: '#ef4444',
-                        borderColor: '#dc2626',
+                        backgroundColor: boardConfig.colors.waitingTime,
+                        borderColor: '#64748b',
                         borderWidth: 1
                     }
                 ]
@@ -2030,7 +2118,7 @@
                                 html += `<div style="margin-bottom: 8px; font-size: 12px; color: #9ca3af;">Completed: ${item.completedDate} | Type: ${item.type}</div>`;
                                 html += `<div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px; margin-top: 8px;">`;
                                 html += `<div>Active Time: <strong>${item.activeTime} days</strong></div>`;
-                                html += `<div>Non-Active Time (Backlog + Waiting): <strong>${item.nonActiveTime} days</strong></div>`;
+                                html += `<div>Non-Active Time (${getBacklogWaitingLabel()}): <strong>${item.nonActiveTime} days</strong></div>`;
                                 html += `<div style="margin-top: 8px;">Lead Time: <strong>${item.leadTime} days</strong></div>`;
                                 html += `<div>Lead Time Flow Efficiency: <strong>${item.ltfeEfficiency}%</strong></div>`;
                                 html += `</div>`;

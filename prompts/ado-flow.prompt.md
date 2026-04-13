@@ -288,13 +288,131 @@ Statistics:**
 
 **Process:**
 1. Read `dashboard/dashboard-template.html` from the workspace
-2. Prepare a data object matching this structure (see Data Structure below)
-3. **AUTOMATICALLY extract real columnTime data** (runs in background - see below)
-4. Convert the data object to JSON and save as `dashboard-data-example.json`
-5. Run `dashboard\Regenerate-Dashboard.ps1` to inject data into template with proper UTF-8 encoding
-6. Output file: `dashboard\dashboard.html` (emojis and charts properly rendered)
+2. **Configure the boardConfig object** to match the team's Azure DevOps board columns (see Board Configuration below)
+3. Prepare a data object matching the Data Structure (see below)
+4. **AUTOMATICALLY extract real columnTime data** (runs in background - see below)
+5. Convert the data object to JSON and save as `dashboard-data-example.json`
+6. Run `dashboard\Regenerate-Dashboard.ps1` to inject data into template with proper UTF-8 encoding
+7. Output file: `dashboard\dashboard.html` (emojis and charts properly rendered)
 
-**🔄 Automated columnTime Extraction (Step 3):**
+---
+
+## 🔧 Board Configuration (CRITICAL)
+
+The dashboard template uses a **boardConfig object** that MUST be customized for each team's Azure DevOps board. This configuration makes the dashboard fully dynamic and portable to any team.
+
+### boardConfig Structure
+
+Located at the top of the dashboard template (lines 840-880), customize these arrays with the team's actual column names:
+
+```javascript
+const boardConfig = {
+    // ACTIVE columns: Work is actively being done (Dev, Review, QA, etc.)
+    // Cycle time starts from the FIRST column in this array
+    activeColumns: ['In Development', 'In Review', 'External Review', 'QA'],
+    
+    // WAITING columns: Work is queued between active stages (Ready for X states)
+    // These are WITHIN the workflow (after cycle time starts)
+    waitingColumns: ['Ready for QA', 'Ready for Release', 'Ready for release'],
+    
+    // BEFORE WORKFLOW columns: Backlog states before cycle time starts
+    // These columns are EXCLUDED from cycle time (only counted in lead time)
+    beforeWorkflowColumns: ['New', 'Backlog', 'Ready for Dev'],
+    
+    // AFTER WORKFLOW columns: Work is completed
+    afterWorkflowColumns: ['Closed', 'Done', 'Removed'],
+    
+    // Column icons for tooltips (✓ = active, ⏸ = waiting, ⊗ = before/after)
+    columnIcons: {
+        'New': '⊗',
+        'Backlog': '⊗',
+        'Ready for Dev': '⊗',
+        'In Development': '✓',
+        'In Review': '✓',
+        'External Review': '✓',
+        'Ready for QA': '⏸',
+        'QA': '✓',
+        'Ready for Release': '⏸',
+        'Ready for release': '⏸',  // Include case variants if ADO has both
+        'Closed': '⊗',
+        'Done': '⊗'
+    },
+    
+    // Chart colors (can be customized per team preference)
+    colors: {
+        activeTime: '#10b981',         // Green for active work
+        cycleTime: '#3b82f6',          // Blue for cycle time
+        leadTimeActiveTime: '#8b5cf6', // Purple for lead time flow active
+        waitingTime: '#94a3b8',        // Gray for waiting/backlog
+        throughput: '#3b82f6'          // Blue for throughput
+    }
+};
+```
+
+### Column Categorization Rules
+
+**CRITICAL:** Cycle time starts from the FIRST ACTIVE column (e.g., "In Development")
+
+Categorize each board column as:
+
+1. **ACTIVE** (✓): Work is being actively done
+   - Examples: In Development, In Review, Code Review, QA, Testing, External Review
+   - These columns count toward ACTIVE time in flow efficiency metrics
+   - Time in these columns = value-added work time
+
+2. **WAITING** (⏸): Work is queued WITHIN the workflow (after cycle time has started)
+   - Examples: Ready for QA, Ready for Release, Blocked (if within workflow)
+   - These columns count toward WAITING time in cycle time flow efficiency
+   - Time in these columns = waste/delay within the workflow
+
+3. **BEFORE WORKFLOW** (⊗): Backlog states BEFORE work starts
+   - Examples: New, Backlog, Ready for Dev, Prioritized, To Do
+   - These columns are EXCLUDED from cycle time (only counted in lead time)
+   - Time in these columns = backlog delay before work begins
+   - **Cycle time starts when items LEAVE these columns**
+
+4. **AFTER WORKFLOW** (⊗): Completion states
+   - Examples: Closed, Done, Removed, Completed
+   - Not used in efficiency calculations (work is finished)
+
+### Configuration Steps
+
+When generating a dashboard for a team:
+
+1. **Retrieve board columns** from ADO board configuration API
+2. **Ask the user** to classify ambiguous columns (e.g., "External Review" - is it active or waiting?)
+3. **Update boardConfig arrays** with the team's exact column names (case-sensitive!)
+4. **Verify first activeColumn** is where cycle time should start
+5. **Include case variants** in waitingColumns if ADO returns both (e.g., "Ready for release" and "Ready for Release")
+
+### Why This Matters
+
+The boardConfig makes ALL dashboard elements dynamic:
+- Chart descriptions reference actual column names
+- Efficiency calculations use team's workflow structure
+- Tooltips show team's specific columns
+- Insights mention actual bottleneck columns
+- Column categorization legend updates automatically
+
+**Example:** If team's first active column is "In Progress" instead of "In Development", simply update:
+```javascript
+activeColumns: ['In Progress', 'Code Review', 'Testing', 'QA']
+```
+
+All descriptions will automatically say "from In Progress onwards" instead of hardcoded "from In Development".
+
+### Case Sensitivity Warning
+
+**IMPORTANT:** Column names in boardConfig MUST exactly match the column names returned by Azure DevOps API (case-sensitive).
+
+Example: If ADO returns "Ready for release" (lowercase 'r') in some items and "Ready for Release" (capital 'R') in others, include BOTH in waitingColumns:
+```javascript
+waitingColumns: ['Ready for QA', 'Ready for Release', 'Ready for release']
+```
+
+---
+
+**🔄 Automated columnTime Extraction (Step 4):**
 
 Before finalizing the data object, **automatically run background scripts** to populate real `columnTime` data:
 

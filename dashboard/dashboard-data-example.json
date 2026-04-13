@@ -1,4 +1,4 @@
-﻿{
+{
     "teamName":  "Analytics \u0026 Experimentation (Customer)",
     "period":  "11 Jan 2026 - 11 Apr 2026 (3 months)",
     "adoOrg":  "asos",
@@ -19,8 +19,8 @@
                                    },
                     "cycleTime":  {
                                       "bugs":  30.5,
-                                      "pbis":  31.5,
-                                      "median":  28,
+                                      "pbis":  29.8,
+                                      "median":  25,
                                       "p85":  62,
                                       "trend":  {
                                                     "direction":  "down",
@@ -214,7 +214,7 @@
                                                           "data":  [
                                                                        {
                                                                            "x":  "1 Mar",
-                                                                           "y":  14,
+                                                                           "y":  13,
                                                                            "leadTime":  17,
                                                                            "id":  1190732,
                                                                            "title":  "PDP flexibleSalesChannel values",
@@ -247,7 +247,7 @@
                                                                        },
                                                                        {
                                                                            "x":  "12 Apr",
-                                                                           "y":  22,
+                                                                           "y":  19,
                                                                            "leadTime":  26,
                                                                            "id":  1187078,
                                                                            "title":  "PLP Pass request_id",
@@ -265,7 +265,7 @@
                                                                        },
                                                                        {
                                                                            "x":  "12 Apr",
-                                                                           "y":  28,
+                                                                           "y":  25,
                                                                            "leadTime":  35,
                                                                            "id":  1182730,
                                                                            "title":  "SavedList notify_me_button_click",
@@ -2407,8 +2407,8 @@
                },
     "insights":  {
                      "throughput":  "Throughput shows variability across 4 completion weeks. Recent uptick with 2 items completed week ending 12 Apr. Total of 6 items completed over the period.",
-                     "cycleTime":  "Cycle time varies significantly. Bug #1170800 took 23 days in active development (outlier). Recent items completing faster: 2-7 days cycle time. Average 8.0 days. Consider investigating why some items take much longer.",
-                     "leadTime":  "Lead time averages 24.8 days (median 21 days) from creation to completion. Much longer than cycle time, indicating items wait significantly in backlog before work begins. Longest: Bug #1170800 at 45 days total.",
+                     "cycleTime":  "Cycle time (from In Development to completion) averages 30 days. Bugs: 30.5 days, PBIs: 29.8 days. This measures time actively in workflow columns, excluding backlog waiting. Consider investigating workflow bottlenecks to reduce cycle time.",
+                     "leadTime":  "Lead time averages 40.5 days from creation to completion. This includes both backlog time (New + Ready for Dev) and cycle time (In Development onwards). Lead time is much longer than cycle time (30 days), indicating items wait ~10 days in backlog before development starts.",
                      "workStartEfficiency":  "Average work start efficiency 35% - items spend only about 1/3 of total time in the workflow after leaving backlog. The remaining 65% is backlog delay before work starts. Best: Bug #1191895 at 87% (very quick from backlog to workflow). Worst: Items spending weeks in New before Ready for Dev. Improving this metric means better prioritization and faster movement from backlog to active workflow.",
                      "cycleTimeFlowEfficiency":  "Average cycle time flow efficiency 62.5% - during workflow execution, about 62% of time is active work and 38% is waiting between stages. This measures handoff efficiency. Items spending significant time in Ready states (Ready for Dev, Ready for QA, Ready for Release) lower this metric. Best performers flow smoothly through stages. Focus: Reduce Ready/waiting states, improve team coordination.",
                      "leadTimeFlowEfficiency":  "Average lead time flow efficiency 21.9% - overall, only about 22% of total time (from creation to done) is spent actively working. This combines both backlog delay (65% from Work Start Efficiency) and workflow waiting (38% from Cycle Time Flow Efficiency). While concerning, this is typical for many teams. Goal: Increase to \u003e40% by reducing both backlog delay and workflow waiting time.",
