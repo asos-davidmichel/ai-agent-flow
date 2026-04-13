@@ -1,3 +1,233 @@
+# Flow Metrics Dashboard
+
+Interactive HTML dashboard for Azure DevOps agile flow metrics with **automated real data extraction**.
+
+## 🚀 Quick Start
+
+**The dashboard is fully automated** - just run the `ado-flow` prompt!
+
+```
+@ado-flow https://dev.azure.com/asos/Customer/_boards/board/t/Analytics%20%26%20Experimentation%20(Customer)/Backlog%20items
+```
+
+The prompt will automatically:
+- ✅ Extract all metrics from your ADO board
+- ✅ Call background scripts to get real `columnTime` data
+- ✅ Generate interactive HTML dashboard
+- ✅ Display efficiency metrics with real data (no estimates)
+
+---
+
+## 📁 Files
+
+- **dashboard-template.html** - Reusable template with `/* DATA_PLACEHOLDER */` injection point
+- **dashboard-data-example.json** - Example data structure (gets updated with real data)
+- **dashboard.html** - Generated dashboard (template + data)
+- **Get-WorkItemColumnTime.ps1** - Extracts real column time from ADO Work Items API
+- **Update-DashboardData.ps1** - Merges columnTime data into dashboard data file
+- **HOW-TO-GET-REAL-DATA.md** - Technical documentation on automated extraction
+
+---
+
+## ⚙️ Setup (One-Time)
+
+### Configure ADO Authentication
+
+The automated scripts need an ADO Personal Access Token (PAT) to fetch work item history:
+
+**1. Create PAT:**
+- Go to: https://dev.azure.com/asos/_usersSettings/tokens
+- Click "New Token"
+- Name: "Flow Metrics Dashboard"
+- Scope: **Work Items (Read)**
+- Copy the generated token
+
+**2. Set environment variable:**
+
+```powershell
+# Set permanently (recommended)
+[System.Environment]::SetEnvironmentVariable('AZURE_DEVOPS_EXT_PAT', 'your-pat-here', 'User')
+
+# Verify
+$env:AZURE_DEVOPS_EXT_PAT
+```
+
+**That's it!** Next time you run `ado-flow`, it will automatically extract real columnTime data.
+
+---
+
+## 📊 What Gets Automated
+
+### Efficiency Metrics (Now 100% Real Data)
+
+The dashboard calculates three efficiency metrics using **real state change history** from ADO:
+
+1. **Work Start Efficiency** - (Cycle Time / Lead Time) × 100%
+   - Shows % of total time spent in workflow vs backlog
+
+2. **Cycle Time Flow Efficiency** - (Active Time / Cycle Time) × 100%
+   - Shows % of workflow time actively working vs waiting between stages
+
+3. **Lead Time Flow Efficiency** - (Active Time / Lead Time) × 100%
+   - Shows % of total time actively working
+
+**All calculated from real columnTime data - NO ESTIMATES.**
+
+---
+
+## 🔧 How Automation Works
+
+When you run the `ado-flow` prompt:
+
+**Step 1:** Prompt collects metrics from your ADO board
+```
+- Throughput, Cycle Time, Lead Time
+- WIP, Blocked Items, Bug Rate
+- All completed work item IDs
+```
+
+**Step 2:** Background script extracts columnTime (automatic)
+```powershell
+Get-WorkItemColumnTime.ps1
+  ├─ Fetch work item revisions from ADO API
+  ├─ Calculate time spent in each state
+  └─ Return columnTime objects
+```
+
+**Step 3:** Background script merges data (automatic)
+```powershell
+Update-DashboardData.ps1
+  ├─ Read dashboard data file
+  ├─ Match by work item ID
+  ├─ Add columnTime to each completed item
+  └─ Save updated file
+```
+
+**Step 4:** Dashboard generates with real data
+```
+Template + Data with columnTime = HTML Dashboard with accurate efficiency metrics
+```
+
+---
+
+## 🎯 Efficiency Metrics Status
+
+**Before PAT setup:**
+- Efficiency metrics show **"N/A - No columnTime data"**
+- All other metrics work normally
+
+**After PAT setup:**
+- Efficiency metrics show **real percentages** calculated from actual state transitions
+- Example: "82.6% - Items spend 82.6% of workflow time actively working"
+
+---
+
+## 📖 Manual Usage (Optional)
+
+If you want to run the scripts manually:
+
+```powershell
+# Extract columnTime for specific work items
+$data = .\Get-WorkItemColumnTime.ps1 `
+    -Organization "asos" `
+    -Project "Customer" `
+    -WorkItemIds @(1170800, 1191895, 1190732)
+
+# Update dashboard data file
+.\Update-DashboardData.ps1 `
+    -DataFilePath "dashboard-data-example.json" `
+    -ColumnTimeData $data
+```
+
+But you don't need to - the prompt does this automatically!
+
+---
+
+## ✅ Verification
+
+After running the prompt, check:
+
+**1. Efficiency metrics populated:**
+- Open dashboard.html
+- Go to "Efficiency" tab
+- Should show percentages (not "N/A")
+
+**2. Per-column tooltips:**
+- Hover over any bar in efficiency charts
+- Should see: "New: 22 days, Ready for Dev: 2 days, In Development: 8 days..." etc.
+
+**3. Data file updated:**
+- Open dashboard-data-example.json (or flow_metrics_data.json)
+- Find completed items in cycleTimeTrend.datasets[].data
+- Each should have `columnTime` object with days per column
+
+---
+
+## 🐛 Troubleshooting
+
+**Efficiency metrics show "N/A":**
+- ✅ Check PAT is set: `$env:AZURE_DEVOPS_EXT_PAT`
+- ✅ Verify PAT has "Work Items (Read)" scope
+- ✅ Check PAT hasn't expired
+
+**Scripts fail silently:**
+- Run manually with `-Verbose` flag to see errors:
+  ```powershell
+  .\Get-WorkItemColumnTime.ps1 -Organization "asos" -Project "Customer" -WorkItemIds @(123) -Verbose
+  ```
+
+**columnTime doesn't sum to lead time:**
+- Some items may skip states or have data gaps
+- Scripts calculate from actual revisions - gaps mean no time logged in that state
+
+---
+
+## 📚 Documentation
+
+- **[HOW-TO-GET-REAL-DATA.md](HOW-TO-GET-REAL-DATA.md)** - Technical details on automated extraction
+- **[prompts/ado-flow.prompt.md](../prompts/ado-flow.prompt.md)** - Full prompt documentation including automation workflow
+
+---
+
+## 🎉 Benefits
+
+- ✅ **No manual data entry** - Everything automated
+- ✅ **No estimates** - Only real ADO data
+- ✅ **Transparent** - See exactly where time was spent
+- ✅ **Actionable** - Identify real bottlenecks and waiting patterns
+- ✅ **Reproducible** - Re-run anytime for updated metrics
+
+---
+
+## 🎨 Dashboard Features
+
+### Interactive Work Item Links
+
+All charts with work items are clickable - click any ID to open the item in ADO
+
+### Persistent Tooltips
+
+Tooltips stay visible when you hover over them, letting you click the ID links
+
+### 6 Tab Structure
+
+1. **Time Metrics** - Throughput, Cycle Time, Lead Time
+2. **Efficiency** - Work Start, Cycle Time Flow, Lead Time Flow (with real columnTime data)
+3. **Flow & System** - CFD, Net Flow, Stale Work, State Distribution
+4. **WIP Tracking** - Daily WIP, Age Breakdown, Time in Column
+5. **Aging Analysis** - Work Item Age by State
+6. **Blocked Items** - Blocked work analysis
+
+### Column Categorization
+
+The Efficiency tab shows how workflow columns are classified:
+- ✓ **ACTIVE** - Work is actively happening (In Development, In Review, QA, etc.)
+- ⏸ **WAITING** - Queued, waiting to be picked up (Ready for Dev, Ready for QA, etc.)
+- ⊗ **NOT IN WORKFLOW** - Backlog (New) or Complete (Closed)
+
+### Trend Indicators
+
+All metric cards show trend arrows (↑ ↓ →) comparing recent performance to moving average
 # Flow Metrics Dashboard Template
 
 This directory contains a reusable template system for generating interactive flow metrics dashboards from Azure DevOps data.

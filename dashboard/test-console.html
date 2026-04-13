@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head><title>Console Check</title></head>
+<body>
+<script>
+window.onload = function() {
+    try {
+        const iframe = document.createElement('iframe');
+        iframe.src = 'dashboard.html';
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+        
+        setTimeout(() => {
+            console.log('Loaded');
+        }, 2000);
+    } catch(e) {
+        alert('Error: ' + e.message);
+    }
+}
+</script>
+</body>
+</html>

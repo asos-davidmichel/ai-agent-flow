@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flow Metrics Dashboard - {{team_name}}</title>
+    <title>Flow Metrics Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
     <style>
@@ -422,6 +422,7 @@
         <div class="tabs">
             <div class="tab-nav">
                 <button class="tab-button active" onclick="switchTab(event, 'time-metrics')">⏱️ Time Metrics</button>
+                <button class="tab-button" onclick="switchTab(event, 'efficiency')">⚡ Efficiency</button>
                 <button class="tab-button" onclick="switchTab(event, 'flow-system')">🔄 Flow & System</button>
                 <button class="tab-button" onclick="switchTab(event, 'wip-tracking')">📊 WIP Tracking</button>
                 <button class="tab-button" onclick="switchTab(event, 'aging-analysis')">📈 Aging Analysis</button>
@@ -467,18 +468,6 @@
                 <div class="insight-box" id="leadTimeInsight"></div>
             </div>
 
-            <!-- Flow Efficiency -->
-            <div class="chart-card">
-                <h2>⚡ Flow Efficiency (Cycle / Lead Time)</h2>
-                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    Shows the percentage of time spent in active work compared to total lead time.
-                </p>
-                <div class="chart-container">
-                    <canvas id="flowEfficiencyChart"></canvas>
-                </div>
-                <div class="insight-box" id="flowEfficiencyInsight"></div>
-            </div>
-
             <!-- Bug Rate Trend -->
             <div class="chart-card">
                 <h2>🐛 Bug Rate Trend</h2>
@@ -493,7 +482,146 @@
         </div>
             </div>
 
-            <!-- Tab 2: Flow & System (CFD, Net Flow, Stale Work, State Distribution) -->
+            <!-- Tab 2: Efficiency (Work Start, Cycle Time Flow, Lead Time Flow) -->
+            <div id="efficiency" class="tab-content">
+                <!-- Column Categorization Legend -->
+                <div style="background: #f7fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 25px; margin-bottom: 30px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);">
+                    <h2 style="margin: 0 0 15px 0; font-size: 20px; font-weight: 700; color: #2d3748;">📋 Column Categorization for Flow Efficiency</h2>
+                    <p style="margin: 0 0 20px 0; font-size: 14px; color: #4a5568;">Understanding how workflow columns are classified is essential for interpreting efficiency metrics below.</p>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+                        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
+                            <div style="font-weight: 700; font-size: 15px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; color: #2d3748;">
+                                <span style="background: #10b981; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; color: white;">✓</span>
+                                ACTIVE (Work Happening)
+                            </div>
+                            <div style="font-size: 13px; line-height: 1.6; color: #4a5568;">
+                                • In Development<br>
+                                • In Review<br>
+                                • External Review<br>
+                                • QA
+                            </div>
+                        </div>
+                        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
+                            <div style="font-weight: 700; font-size: 15px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; color: #2d3748;">
+                                <span style="background: #f59e0b; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; color: white;">⏸</span>
+                                WAITING (Queued)
+                            </div>
+                            <div style="font-size: 13px; line-height: 1.6; color: #4a5568;">
+                                • Ready for Dev<br>
+                                • Ready for QA<br>
+                                • Ready for Release
+                            </div>
+                        </div>
+                        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
+                            <div style="font-weight: 700; font-size: 15px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; color: #2d3748;">
+                                <span style="background: #718096; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; color: white;">⊗</span>
+                                NOT IN WORKFLOW
+                            </div>
+                            <div style="font-size: 13px; line-height: 1.6; color: #4a5568;">
+                                • New (Backlog)<br>
+                                • Closed (Done)
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="charts-grid">
+            <!-- Work Start Efficiency -->
+            <div class="chart-card">
+                <h2>⚡ Work Start Efficiency (Cycle / Lead Time)</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    Measures how quickly work starts after being created. High values (>50%) mean items move into the workflow quickly. Low values indicate long backlog delays before work begins.
+                </p>
+                
+                <!-- Summary Card -->
+                <div style="background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 15px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                    <div style="text-align: center;">
+                        <div style="color: #718096; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-bottom: 5px;">Average</div>
+                        <div id="wseAvgValue" style="color: #2d3748; font-size: 24px; font-weight: 700;">-</div>
+                    </div>
+                    <div style="text-align: center; border-left: 1px solid #e2e8f0;">
+                        <div style="color: #10b981; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-bottom: 5px;">Best</div>
+                        <div id="wseBestValue" style="color: #2d3748; font-size: 24px; font-weight: 700;">-</div>
+                        <div id="wseBestItem" style="color: #718096; font-size: 11px; margin-top: 2px;">-</div>
+                    </div>
+                    <div style="text-align: center; border-left: 1px solid #e2e8f0;">
+                        <div style="color: #ef4444; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-bottom: 5px;">Worst</div>
+                        <div id="wseWorstValue" style="color: #2d3748; font-size: 24px; font-weight: 700;">-</div>
+                        <div id="wseWorstItem" style="color: #718096; font-size: 11px; margin-top: 2px;">-</div>
+                    </div>
+                </div>
+                
+                <div class="chart-container" style="height: 600px;">
+                    <canvas id="workStartEfficiencyChart"></canvas>
+                </div>
+                <div class="insight-box" id="workStartEfficiencyInsight"></div>
+            </div>
+
+            <!-- Lead Time Flow Efficiency -->
+            <div class="chart-card">
+                <h2>⚡ Lead Time Flow Efficiency (Active / Lead Time)</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    Measures overall efficiency from creation to completion. High values (>40%) mean most time is spent actively working. Low values indicate items spend most time waiting - either in backlog before starting or queued between workflow stages.
+                </p>
+                
+                <!-- Summary Card -->
+                <div style="background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 15px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                    <div style="text-align: center;">
+                        <div style="color: #718096; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-bottom: 5px;">Average</div>
+                        <div id="ltfeAvgValue" style="color: #2d3748; font-size: 24px; font-weight: 700;">-</div>
+                    </div>
+                    <div style="text-align: center; border-left: 1px solid #e2e8f0;">
+                        <div style="color: #10b981; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-bottom: 5px;">Best</div>
+                        <div id="ltfeBestValue" style="color: #2d3748; font-size: 24px; font-weight: 700;">-</div>
+                        <div id="ltfeBestItem" style="color: #718096; font-size: 11px; margin-top: 2px;">-</div>
+                    </div>
+                    <div style="text-align: center; border-left: 1px solid #e2e8f0;">
+                        <div style="color: #ef4444; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-bottom: 5px;">Worst</div>
+                        <div id="ltfeWorstValue" style="color: #2d3748; font-size: 24px; font-weight: 700;">-</div>
+                        <div id="ltfeWorstItem" style="color: #718096; font-size: 11px; margin-top: 2px;">-</div>
+                    </div>
+                </div>
+                
+                <div class="chart-container" style="height: 600px;">
+                    <canvas id="leadTimeFlowEfficiencyChart"></canvas>
+                </div>
+                <div class="insight-box" id="leadTimeFlowEfficiencyInsight"></div>
+            </div>
+
+            <!-- Cycle Time Flow Efficiency -->
+            <div class="chart-card">
+                <h2>⚡ Cycle Time Flow Efficiency (Active / Cycle Time)</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    Measures how smoothly work flows through the workflow. High values (>80%) mean minimal waiting between stages. Low values indicate items spend most time queued in "Ready for..." states rather than being actively worked.
+                </p>
+                
+                <!-- Summary Card -->
+                <div style="background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 15px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                    <div style="text-align: center;">
+                        <div style="color: #718096; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-bottom: 5px;">Average</div>
+                        <div id="ctfeAvgValue" style="color: #2d3748; font-size: 24px; font-weight: 700;">-</div>
+                    </div>
+                    <div style="text-align: center; border-left: 1px solid #e2e8f0;">
+                        <div style="color: #10b981; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-bottom: 5px;">Best</div>
+                        <div id="ctfeBestValue" style="color: #2d3748; font-size: 24px; font-weight: 700;">-</div>
+                        <div id="ctfeBestItem" style="color: #718096; font-size: 11px; margin-top: 2px;">-</div>
+                    </div>
+                    <div style="text-align: center; border-left: 1px solid #e2e8f0;">
+                        <div style="color: #ef4444; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-bottom: 5px;">Worst</div>
+                        <div id="ctfeWorstValue" style="color: #2d3748; font-size: 24px; font-weight: 700;">-</div>
+                        <div id="ctfeWorstItem" style="color: #718096; font-size: 11px; margin-top: 2px;">-</div>
+                    </div>
+                </div>
+                
+                <div class="chart-container" style="height: 600px;">
+                    <canvas id="cycleTimeFlowEfficiencyChart"></canvas>
+                </div>
+                <div class="insight-box" id="cycleTimeFlowEfficiencyInsight"></div>
+            </div>
+        </div>
+            </div>
+
+            <!-- Tab 3: Flow & System (CFD, Net Flow, Stale Work, State Distribution) -->
             <div id="flow-system" class="tab-content">
                 <div class="charts-grid">
 
@@ -671,6 +799,9 @@
 
     <script>
         // Tab switching function
+        // Store all chart instances globally
+        window.dashboardCharts = {};
+        
         function switchTab(event, tabId) {
             // Hide all tab contents
             const tabContents = document.querySelectorAll('.tab-content');
@@ -683,12 +814,33 @@
             // Show selected tab
             document.getElementById(tabId).classList.add('active');
             event.target.classList.add('active');
+            
+            // Force chart resize/update after tab becomes visible
+            // Chart.js v4 uses Chart.getChart() to retrieve chart instances
+            setTimeout(() => {
+                const canvases = document.querySelectorAll('canvas');
+                canvases.forEach(canvas => {
+                    const chart = Chart.getChart(canvas);
+                    if (chart) {
+                        chart.resize();
+                        chart.update('none'); // 'none' = no animation for faster update
+                    }
+                });
+            }, 100);
         }
 
         // ===== DATA INJECTION POINT =====
         // The data object will be injected here by the Python script
         const dashboardData = /* DATA_PLACEHOLDER */;
         // ===== END DATA INJECTION =====
+
+        // Wait for DOM and Chart.js to be fully loaded before initializing charts
+        window.addEventListener('load', function() {
+        console.log('Initializing dashboard...');
+        try {
+
+        // Set page title dynamically
+        document.title = `Flow Metrics Dashboard - ${dashboardData.teamName}`;
 
         // Render header
         document.getElementById('headerInfo').innerHTML = `
@@ -798,18 +950,6 @@
                 </div>
             </div>
             
-            <div class="metric-card">
-                <h3>Flow Efficiency</h3>
-                <div class="metric-value">
-                    <span>${dashboardData.metrics.flowEfficiency.avg}%</span>
-                    ${getTrendIndicator(dashboardData.metrics.flowEfficiency.trend)}
-                </div>
-                <div class="metric-label">average efficiency</div>
-                <div class="metric-trend ${dashboardData.metrics.flowEfficiency.class}">
-                    ${dashboardData.metrics.flowEfficiency.text}
-                </div>
-            </div>
-            
             <div class="metric-card" id="systemStabilityCard">
                 <h3>System Stability</h3>
                 <div class="metric-value">
@@ -854,11 +994,11 @@
         `;
         document.getElementById('metricCards').innerHTML = metricCardsHTML;
 
-        // Render insights
+        // Render insights (static insights from JSON - efficiency insights are generated dynamically below)
         document.getElementById('throughputInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.throughput}</p>`;
         document.getElementById('cycleTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.cycleTime}</p>`;
         document.getElementById('leadTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.leadTime}</p>`;
-        document.getElementById('flowEfficiencyInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.flowEfficiency}</p>`;
+        // Note: Efficiency insights (WSE, CTFE, LTFE) are generated dynamically from real data
         document.getElementById('cfdInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.cfd}</p>`;
         if (dashboardData.insights.timeInColumn) {
             document.getElementById('timeInColumnInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.timeInColumn}</p>`;
@@ -965,7 +1105,7 @@
             return data.map((_, i) => firstValue + slope * i);
         }
 
-        new Chart(document.getElementById('throughputChart'), {
+        window.dashboardCharts.throughputChart = new Chart(document.getElementById('throughputChart'), {
             type: 'line',
             data: {
                 labels: dashboardData.charts.throughput.labels,
@@ -1074,7 +1214,7 @@
         });
 
         // Cycle Time Chart with reference lines
-        new Chart(document.getElementById('cycleTimeChart'), {
+        window.dashboardCharts.cycleTimeChart = new Chart(document.getElementById('cycleTimeChart'), {
             type: 'scatter',
             data: {
                 datasets: dashboardData.charts.cycleTime.datasets
@@ -1345,162 +1485,537 @@
             }
         });
 
-        // Flow Efficiency Chart
-        const efficiencyData = [];
+        // Work Start Efficiency Chart (Cycle / Lead Time) - Stacked Bar
+        // Collect all items in chronological order
+        const allItems = [];
         dashboardData.charts.cycleTime.datasets.forEach(dataset => {
-            const effDataset = {
-                label: dataset.label,
-                data: dataset.data.map(item => ({
-                    x: item.x,
-                    y: ((item.y / item.leadTime) * 100).toFixed(1),
-                    cycleTime: item.y,
-                    leadTime: item.leadTime,
+            dataset.data.forEach(item => {
+                allItems.push({
                     id: item.id,
                     title: item.title,
-                    completedDate: item.completedDate
-                })),
-                backgroundColor: dataset.backgroundColor,
-                borderColor: dataset.borderColor,
-                pointRadius: 8,
-                pointHoverRadius: 10
-            };
-            efficiencyData.push(effDataset);
+                    completedDate: item.completedDate,
+                    cycleTime: item.y,
+                    leadTime: item.leadTime,
+                    backlogDelay: item.leadTime - item.y,
+                    efficiency: ((item.y / item.leadTime) * 100).toFixed(1),
+                    type: dataset.label,
+                    columnTime: item.columnTime || {}
+                });
+            });
         });
+        allItems.sort((a, b) => new Date(a.completedDate) - new Date(b.completedDate));
 
-        // Calculate flow efficiency statistics
-        const allEfficiencies = efficiencyData.flatMap(d => d.data.map(item => parseFloat(item.y)));
-        allEfficiencies.sort((a, b) => a - b);
-        const effAvg = (allEfficiencies.reduce((a, b) => a + b, 0) / allEfficiencies.length).toFixed(1);
-        const effMedian = allEfficiencies[Math.floor(allEfficiencies.length / 2)].toFixed(1);
-        const eff85th = allEfficiencies[Math.floor(allEfficiencies.length * 0.85)].toFixed(1);
+        // Define column categorization (case-insensitive keys handled by getColumnTime helper)
+        const columnCategories = {
+            'New': '⊗',  // NOT IN WORKFLOW
+            'Backlog': '⊗',  // NOT IN WORKFLOW
+            'Ready for Dev': '⏸',  // WAITING
+            'In Development': '✓',  // ACTIVE
+            'In Review': '✓',  // ACTIVE
+            'External Review': '✓',  // ACTIVE
+            'Ready for QA': '⏸',  // WAITING
+            'QA': '✓',  // ACTIVE
+            'Ready for Release': '⏸',  // WAITING
+            'Ready for release': '⏸',  // WAITING (ADO case variant)
+            'Closed': '⊗'  // NOT IN WORKFLOW
+        };
 
-        new Chart(document.getElementById('flowEfficiencyChart'), {
-            type: 'scatter',
+        // Calculate statistics for Work Start Efficiency
+        const wseEfficiencies = allItems.map(item => parseFloat(item.efficiency));
+        const wseAvg = (wseEfficiencies.reduce((a, b) => a + b, 0) / wseEfficiencies.length).toFixed(1);
+        const wseSorted = [...allItems].sort((a, b) => parseFloat(b.efficiency) - parseFloat(a.efficiency));
+        const wseBest = wseSorted[0];
+        const wseWorst = wseSorted[wseSorted.length - 1];
+
+        // Populate summary card
+        document.getElementById('wseAvgValue').textContent = wseAvg + '%';
+        document.getElementById('wseBestValue').textContent = wseBest.efficiency + '%';
+        document.getElementById('wseBestItem').textContent = `#${wseBest.id}`;
+        document.getElementById('wseWorstValue').textContent = wseWorst.efficiency + '%';
+        document.getElementById('wseWorstItem').textContent = `#${wseWorst.id}`;
+        
+        // Generate dynamic insight for Work Start Efficiency
+        const backlogPct = (100 - parseFloat(wseAvg)).toFixed(0);
+        let wseInterpretation = '';
+        if (parseFloat(wseAvg) >= 80) {
+            wseInterpretation = 'Excellent - items move quickly from backlog to workflow.';
+        } else if (parseFloat(wseAvg) >= 60) {
+            wseInterpretation = 'Good - most time is spent in workflow rather than waiting in backlog.';
+        } else if (parseFloat(wseAvg) >= 40) {
+            wseInterpretation = 'Fair - significant backlog delay before work begins.';
+        } else {
+            wseInterpretation = 'Poor - most time spent waiting in backlog before workflow starts.';
+        }
+        const wseInsight = `Average work start efficiency ${wseAvg}% - items spend ${wseAvg}% of total time in workflow after leaving backlog. The remaining ${backlogPct}% is backlog delay before work starts. ${wseInterpretation} Best: #${wseBest.id} at ${wseBest.efficiency}%. Worst: #${wseWorst.id} at ${wseWorst.efficiency}%.`;
+        document.getElementById('workStartEfficiencyInsight').innerHTML = `<p><strong>Insight:</strong> ${wseInsight}</p>`;
+
+        // Filter to top/bottom N items (always best to worst)
+        let wseFilteredItems;
+        if (allItems.length <= 15) {
+            // Show all items if 15 or fewer (best to worst)
+            wseFilteredItems = wseSorted;
+        } else if (allItems.length <= 30) {
+            // Show best 15 items (best to worst)
+            wseFilteredItems = wseSorted.slice(0, 15);
+        } else {
+            // Show worst 10 + best 10
+            wseFilteredItems = [...wseSorted.slice(-10), ...wseSorted.slice(0, 10)];
+        }
+
+        // Build stacked bar data for Work Start Efficiency
+        const wseLabels = wseFilteredItems.map(item => `#${item.id}`);
+        const wseCycleTimeData = wseFilteredItems.map(item => item.cycleTime);
+        const wseBacklogDelayData = wseFilteredItems.map(item => item.backlogDelay);
+
+        new Chart(document.getElementById('workStartEfficiencyChart'), {
+            type: 'bar',
             data: {
-                datasets: efficiencyData
+                labels: wseLabels,
+                datasets: [
+                    {
+                        label: 'Cycle Time (In Workflow)',
+                        data: wseCycleTimeData,
+                        backgroundColor: '#3b82f6',
+                        borderColor: '#2563eb',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Backlog Delay (Before Workflow)',
+                        data: wseBacklogDelayData,
+                        backgroundColor: '#94a3b8',
+                        borderColor: '#64748b',
+                        borderWidth: 1
+                    }
+                ]
             },
             options: {
+                indexAxis: 'y',
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { 
+                    legend: {
                         display: true,
                         position: 'top'
                     },
-                    annotation: {
-                        annotations: {
-                            effAvgLine: {
-                                type: 'line',
-                                yMin: effAvg,
-                                yMax: effAvg,
-                                borderColor: '#10b981',
-                                borderWidth: 2,
-                                borderDash: [5, 5],
-                                label: {
-                                    display: true,
-                                    content: `Avg: ${effAvg}%`,
-                                    position: 'end',
-                                    backgroundColor: 'rgba(16, 185, 129, 0.8)'
-                                }
-                            },
-                            effMedianLine: {
-                                type: 'line',
-                                yMin: effMedian,
-                                yMax: effMedian,
-                                borderColor: '#3b82f6',
-                                borderWidth: 2,
-                                borderDash: [5, 5],
-                                label: {
-                                    display: true,
-                                    content: `Median: ${effMedian}%`,
-                                    position: 'end',
-                                    backgroundColor: 'rgba(59, 130, 246, 0.8)'
-                                }
-                            },
-                            eff85thLine: {
-                                type: 'line',
-                                yMin: eff85th,
-                                yMax: eff85th,
-                                borderColor: '#f59e0b',
-                                borderWidth: 2,
-                                borderDash: [5, 5],
-                                label: {
-                                    display: true,
-                                    content: `85th: ${eff85th}%`,
-                                    position: 'end',
-                                    backgroundColor: 'rgba(245, 158, 11, 0.8)'
-                                }
-                            }
-                        }
-                    },
                     tooltip: {
-                        enabled: false,
-                        external: function(context) {
-                            // Tooltip Element
-                            const tooltipEl = document.getElementById('customTooltip');
-                            
-                            // Hide if no tooltip
-                            const tooltipModel = context.tooltip;
-                            if (tooltipModel.opacity === 0) {
-                                if (!isTooltipHovered) {
-                                    hideTooltipWithDelay();
-                                }
-                                return;
-                            }
-
-                            // Clear any pending hide timeout
-                            if (tooltipHideTimeout) {
-                                clearTimeout(tooltipHideTimeout);
-                                tooltipHideTimeout = null;
-                            }
-
-                            // Get data point
-                            if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
-                                const dataPoint = tooltipModel.dataPoints[0];
-                                const item = dataPoint.raw;
-                                const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
-                                const efficiency = item.y;
-                                const cycleTime = item.cycleTime;
-                                const leadTime = item.leadTime;
+                        callbacks: {
+                            title: function(context) {
+                                const index = context[0].dataIndex;
+                                const item = wseFilteredItems[index];
+                                return `#${item.id}: ${item.title}`;
+                            },
+                            afterTitle: function(context) {
+                                const index = context[0].dataIndex;
+                                const item = wseFilteredItems[index];
+                                return `Completed: ${item.completedDate} | Type: ${item.type}`;
+                            },
+                            label: function(context) {
+                                const label = context.dataset.label || '';
+                                const value = context.parsed.x;
+                                return `${label}: ${value} days`;
+                            },
+                            footer: function(context) {
+                                const index = context[0].dataIndex;
+                                const item = wseFilteredItems[index];
+                                const breakdown = [`─────────────`];
+                                breakdown.push(`Lead Time: ${item.leadTime} days`);
+                                breakdown.push(`Work Start Efficiency: ${item.efficiency}%`);
+                                breakdown.push(``);
+                                breakdown.push(`Time per Column:`);
                                 
-                                // Build HTML
-                                tooltipEl.innerHTML = `
-                                    <div class="tooltip-title">Work Item Details</div>
-                                    <div class="tooltip-content">
-                                        <strong>ID:</strong> <a href="${adoUrl}" target="_blank">#${item.id}</a><br>
-                                        <strong>Title:</strong> ${item.title}<br>
-                                        <strong>Completed:</strong> ${item.completedDate}<br><br>
-                                        <strong style="color: #10b981;">⚡ Flow Efficiency:</strong> ${efficiency}%<br>
-                                        <span style="color: #a0aec0; font-size: 11px;">${cycleTime} days active / ${leadTime} days total</span>
-                                    </div>
-                                    <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
-                                `;
+                                if (item.columnTime && Object.keys(item.columnTime).length > 0) {
+                                    Object.entries(item.columnTime).forEach(([column, days]) => {
+                                        if (days > 0) {
+                                            const icon = columnCategories[column] || '•';
+                                            breakdown.push(`  ${icon} ${column}: ${days} days`);
+                                        }
+                                    });
+                                } else {
+                                    breakdown.push(`  (Column breakdown not available)`);
+                                }
+                                
+                                return breakdown;
                             }
-
-                            // Display tooltip
-                            const position = context.chart.canvas.getBoundingClientRect();
-                            tooltipEl.classList.add('visible');
-                            tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
-                            tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
                         }
                     }
                 },
                 scales: {
-                    y: {
+                    x: {
+                        stacked: true,
                         beginAtZero: true,
-                        max: 100,
-                        title: { display: true, text: 'Flow Efficiency (%)' },
-                        grid: { color: '#e2e8f0' },
+                        title: { display: true, text: 'Days' },
+                        grid: { color: '#e2e8f0' }
+                    },
+                    y: {
+                        stacked: true,
+                        title: { display: true, text: `Work Items (showing ${wseFilteredItems.length} of ${allItems.length})` },
+                        grid: { display: false },
                         ticks: {
-                            callback: function(value) {
-                                return value + '%';
+                            autoSkip: false,
+                            font: { size: 11 }
+                        }
+                    }
+                },
+                onClick: function(event, elements) {
+                    if (elements.length > 0) {
+                        const index = elements[0].index;
+                        const item = wseFilteredItems[index];
+                        const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
+                        window.open(adoUrl, '_blank');
+                    }
+                }
+            }
+        });
+
+        // Cycle Time Flow Efficiency Chart (Active / Cycle Time) - Stacked Bar
+        // Calculate active time from actual column data when available
+        const activeColumns = ['In Development', 'In Review', 'External Review', 'QA'];
+        const waitingColumns = ['Ready for Dev', 'Ready for QA', 'Ready for Release', 'Ready for release'];
+        const notInWorkflowColumns = ['New', 'Backlog'];
+        
+        // Helper to find column value (case-insensitive)
+        const getColumnTime = (columnTime, columnName) => {
+            const key = Object.keys(columnTime).find(k => k.toLowerCase() === columnName.toLowerCase());
+            return columnTime[key] || 0;
+        };
+        
+        // ONLY include items with real columnTime data - NO ESTIMATES
+        const ctfeItems = allItems
+            .filter(item => item.columnTime && Object.keys(item.columnTime).length > 0)
+            .map(item => {
+                // Calculate from actual column data (case-insensitive matching)
+                const activeTime = activeColumns.reduce((sum, col) => sum + getColumnTime(item.columnTime, col), 0);
+                const waitingTime = waitingColumns.reduce((sum, col) => sum + getColumnTime(item.columnTime, col), 0);
+                
+                const ctfeEff = item.cycleTime > 0 ? ((activeTime / item.cycleTime) * 100).toFixed(1) : '0.0';
+                return {
+                    ...item,
+                    activeTime: activeTime.toFixed(1),
+                    waitingTime: waitingTime.toFixed(1),
+                    ctfeEfficiency: ctfeEff
+                };
+            });
+
+        // Calculate statistics for Cycle Time Flow Efficiency
+        const ctfeEfficiencies = ctfeItems.map(item => parseFloat(item.ctfeEfficiency));
+        const ctfeSorted = [...ctfeItems].sort((a, b) => parseFloat(b.ctfeEfficiency) - parseFloat(a.ctfeEfficiency));
+        
+        if (ctfeItems.length === 0) {
+            // No real data available
+            document.getElementById('ctfeAvgValue').textContent = 'N/A';
+            document.getElementById('ctfeBestValue').textContent = 'N/A';
+            document.getElementById('ctfeBestItem').textContent = 'No columnTime data';
+            document.getElementById('ctfeWorstValue').textContent = 'N/A';
+            document.getElementById('ctfeWorstItem').textContent = `0 of ${allItems.length} items have data`;
+            document.getElementById('cycleTimeFlowEfficiencyInsight').innerHTML = `<p><strong>Insight:</strong> No columnTime data available. Run extraction scripts to get real flow efficiency data.</p>`;
+        } else {
+            const ctfeAvg = (ctfeEfficiencies.reduce((a, b) => a + b, 0) / ctfeEfficiencies.length).toFixed(1);
+            const ctfeBest = ctfeSorted[0];
+            const ctfeWorst = ctfeSorted[ctfeSorted.length - 1];
+
+            // Populate summary card
+            document.getElementById('ctfeAvgValue').textContent = ctfeAvg + '%';
+            document.getElementById('ctfeBestValue').textContent = ctfeBest.ctfeEfficiency + '%';
+            document.getElementById('ctfeBestItem').textContent = `#${ctfeBest.id}`;
+            document.getElementById('ctfeWorstValue').textContent = ctfeWorst.ctfeEfficiency + '%';
+            document.getElementById('ctfeWorstItem').textContent = `#${ctfeWorst.id}`;
+            
+            // Generate dynamic insight for Cycle Time Flow Efficiency
+            const waitingPct = (100 - parseFloat(ctfeAvg)).toFixed(0);
+            let ctfeInterpretation = '';
+            if (parseFloat(ctfeAvg) >= 70) {
+                ctfeInterpretation = 'Excellent flow - very little waiting in workflow.';
+            } else if (parseFloat(ctfeAvg) >= 50) {
+                ctfeInterpretation = 'Good flow - reasonable balance of active work vs waiting.';
+            } else if (parseFloat(ctfeAvg) >= 30) {
+                ctfeInterpretation = 'Fair - significant waiting time during workflow.';
+            } else {
+                ctfeInterpretation = 'Poor - most workflow time is waiting, not active work.';
+            }
+            const ctfeInsight = `Average cycle time flow efficiency ${ctfeAvg}% - items spend ${ctfeAvg}% of workflow time actively being worked on, with ${waitingPct}% spent waiting (Ready states). ${ctfeInterpretation} Best: #${ctfeBest.id} at ${ctfeBest.ctfeEfficiency}%. Worst: #${ctfeWorst.id} at ${ctfeWorst.ctfeEfficiency}%.`;
+            document.getElementById('cycleTimeFlowEfficiencyInsight').innerHTML = `<p><strong>Insight:</strong> ${ctfeInsight}</p>`;
+        }
+
+        // Filter to top/bottom N items (always best to worst)
+        let ctfeFilteredItems;
+        if (ctfeItems.length <= 15) {
+            ctfeFilteredItems = ctfeSorted;
+        } else if (ctfeItems.length <= 30) {
+            ctfeFilteredItems = ctfeSorted.slice(0, 15);
+        } else {
+            ctfeFilteredItems = ctfeSorted.slice(0, 20);
+        }
+
+        const ctfeLabels = ctfeFilteredItems.map(item => `#${item.id}`);
+        const ctfeActiveData = ctfeFilteredItems.map(item => parseFloat(item.activeTime));
+        const ctfeWaitingData = ctfeFilteredItems.map(item => parseFloat(item.waitingTime));
+
+        new Chart(document.getElementById('cycleTimeFlowEfficiencyChart'), {
+            type: 'bar',
+            data: {
+                labels: ctfeLabels,
+                datasets: [
+                    {
+                        label: 'Active Time (Working)',
+                        data: ctfeActiveData,
+                        backgroundColor: '#10b981',
+                        borderColor: '#059669',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Waiting Time (Between Stages)',
+                        data: ctfeWaitingData,
+                        backgroundColor: '#f59e0b',
+                        borderColor: '#d97706',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: function(context) {
+                                const index = context[0].dataIndex;
+                                const item = ctfeFilteredItems[index];
+                                return `#${item.id}: ${item.title}`;
+                            },
+                            afterTitle: function(context) {
+                                const index = context[0].dataIndex;
+                                const item = ctfeFilteredItems[index];
+                                return `Completed: ${item.completedDate} | Type: ${item.type}`;
+                            },
+                            label: function(context) {
+                                const label = context.dataset.label || '';
+                                const value = context.parsed.x;
+                                return `${label}: ${value} days`;
+                            },
+                            footer: function(context) {
+                                const index = context[0].dataIndex;
+                                const item = ctfeFilteredItems[index];
+                                const breakdown = [`─────────────`];
+                                breakdown.push(`Cycle Time: ${item.cycleTime} days`);
+                                breakdown.push(`Cycle Time Flow Efficiency: ${item.ctfeEfficiency}%`);
+                                breakdown.push(``);
+                                breakdown.push(`Time per Column:`);
+                                
+                                if (item.columnTime && Object.keys(item.columnTime).length > 0) {
+                                    Object.entries(item.columnTime).forEach(([column, days]) => {
+                                        if (days > 0 && column !== 'New') {  // Exclude New since it's not part of cycle time
+                                            const icon = columnCategories[column] || '•';
+                                            breakdown.push(`  ${icon} ${column}: ${days} days`);
+                                        }
+                                    });
+                                } else {
+                                    breakdown.push(`  (Column breakdown not available)`);
+                                }
+                                
+                                return breakdown;
                             }
                         }
-                    },
+                    }
+                },
+                scales: {
                     x: {
-                        type: 'category',
-                        title: { display: true, text: 'Completion Date' },
-                        grid: { display: false }
+                        stacked: true,
+                        beginAtZero: true,
+                        title: { display: true, text: 'Days' },
+                        grid: { color: '#e2e8f0' }
+                    },
+                    y: {
+                        stacked: true,
+                        title: { display: true, text: `Work Items (showing ${ctfeFilteredItems.length} of ${ctfeItems.length})` },
+                        grid: { display: false },
+                        ticks: {
+                            autoSkip: false,
+                            font: { size: 11 }
+                        }
+                    }
+                },
+                onClick: function(event, elements) {
+                    if (elements.length > 0) {
+                        const index = elements[0].index;
+                        const item = ctfeFilteredItems[index];
+                        const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
+                        window.open(adoUrl, '_blank');
+                    }
+                }
+            }
+        });
+
+        // Lead Time Flow Efficiency Chart (Active / Lead Time) - Stacked Bar
+        // ONLY include items with real columnTime data - NO ESTIMATES
+        const ltfeItems = allItems
+            .filter(item => item.columnTime && Object.keys(item.columnTime).length > 0)
+            .map(item => {
+                // Calculate from actual column data (case-insensitive matching)
+                const activeTime = activeColumns.reduce((sum, col) => sum + getColumnTime(item.columnTime, col), 0);
+                const nonActiveTime = (item.leadTime - activeTime).toFixed(1);
+                const ltfeEff = item.leadTime > 0 ? ((activeTime / item.leadTime) * 100).toFixed(1) : '0.0';
+                return {
+                    ...item,
+                    activeTime: activeTime.toFixed(1),
+                nonActiveTime: nonActiveTime,
+                ltfeEfficiency: ltfeEff
+            };
+        });
+
+        // Calculate statistics for Lead Time Flow Efficiency
+        const ltfeEfficiencies = ltfeItems.map(item => parseFloat(item.ltfeEfficiency));
+        const ltfeSorted = [...ltfeItems].sort((a, b) => parseFloat(b.ltfeEfficiency) - parseFloat(a.ltfeEfficiency));
+        
+        if (ltfeItems.length === 0) {
+            // No real data available
+            document.getElementById('ltfeAvgValue').textContent = 'N/A';
+            document.getElementById('ltfeBestValue').textContent = 'N/A';
+            document.getElementById('ltfeBestItem').textContent = 'No columnTime data';
+            document.getElementById('ltfeWorstValue').textContent = 'N/A';
+            document.getElementById('ltfeWorstItem').textContent = `0 of ${allItems.length} items have data`;
+            document.getElementById('leadTimeFlowEfficiencyInsight').innerHTML = `<p><strong>Insight:</strong> No columnTime data available. Run extraction scripts to get real flow efficiency data.</p>`;
+        } else {
+            const ltfeAvg = (ltfeEfficiencies.reduce((a, b) => a + b, 0) / ltfeEfficiencies.length).toFixed(1);
+            const ltfeBest = ltfeSorted[0];
+            const ltfeWorst = ltfeSorted[ltfeSorted.length - 1];
+
+            // Populate summary card
+            document.getElementById('ltfeAvgValue').textContent = ltfeAvg + '%';
+            document.getElementById('ltfeBestValue').textContent = ltfeBest.ltfeEfficiency + '%';
+            document.getElementById('ltfeBestItem').textContent = `#${ltfeBest.id}`;
+            document.getElementById('ltfeWorstValue').textContent = ltfeWorst.ltfeEfficiency + '%';
+            document.getElementById('ltfeWorstItem').textContent = `#${ltfeWorst.id}`;
+            
+            // Generate dynamic insight for Lead Time Flow Efficiency
+            const wastePct = (100 - parseFloat(ltfeAvg)).toFixed(0);
+            let ltfeInterpretation = '';
+            if (parseFloat(ltfeAvg) >= 40) {
+                ltfeInterpretation = 'Excellent - minimal waste from creation to completion.';
+            } else if (parseFloat(ltfeAvg) >= 25) {
+                ltfeInterpretation = 'Good - reasonable end-to-end efficiency.';
+            } else if (parseFloat(ltfeAvg) >= 15) {
+                ltfeInterpretation = 'Fair - significant non-value time in total lifecycle.';
+            } else {
+                ltfeInterpretation = 'Poor - most lifecycle time is non-value-added (backlog + waiting).';
+            }
+            const ltfeInsight = `Average lead time flow efficiency ${ltfeAvg}% - items spend ${ltfeAvg}% of total lifetime (creation to completion) actively being worked on. The remaining ${wastePct}% is backlog delay and workflow waiting time. ${ltfeInterpretation} Best: #${ltfeBest.id} at ${ltfeBest.ltfeEfficiency}%. Worst: #${ltfeWorst.id} at ${ltfeWorst.ltfeEfficiency}%.`;
+            document.getElementById('leadTimeFlowEfficiencyInsight').innerHTML = `<p><strong>Insight:</strong> ${ltfeInsight}</p>`;
+        }
+
+        // Filter to top/bottom N items (always best to worst)
+        let ltfeFilteredItems;
+        if (ltfeItems.length <= 15) {
+            ltfeFilteredItems = ltfeSorted;
+        } else if (ltfeItems.length <= 30) {
+            ltfeFilteredItems = ltfeSorted.slice(0, 15);
+        } else {
+            ltfeFilteredItems = ltfeSorted.slice(0, 20);
+        }
+
+        const ltfeLabels = ltfeFilteredItems.map(item => `#${item.id}`);
+        const ltfeActiveData = ltfeFilteredItems.map(item => parseFloat(item.activeTime));
+        const ltfeNonActiveData = ltfeFilteredItems.map(item => parseFloat(item.nonActiveTime));
+
+        new Chart(document.getElementById('leadTimeFlowEfficiencyChart'), {
+            type: 'bar',
+            data: {
+                labels: ltfeLabels,
+                datasets: [
+                    {
+                        label: 'Active Time (Working)',
+                        data: ltfeActiveData,
+                        backgroundColor: '#10b981',
+                        borderColor: '#059669',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Non-Active Time (Backlog + Waiting)',
+                        data: ltfeNonActiveData,
+                        backgroundColor: '#ef4444',
+                        borderColor: '#dc2626',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: function(context) {
+                                const index = context[0].dataIndex;
+                                const item = ltfeFilteredItems[index];
+                                return `#${item.id}: ${item.title}`;
+                            },
+                            afterTitle: function(context) {
+                                const index = context[0].dataIndex;
+                                const item = ltfeFilteredItems[index];
+                                return `Completed: ${item.completedDate} | Type: ${item.type}`;
+                            },
+                            label: function(context) {
+                                const label = context.dataset.label || '';
+                                const value = context.parsed.x;
+                                return `${label}: ${value} days`;
+                            },
+                            footer: function(context) {
+                                const index = context[0].dataIndex;
+                                const item = ltfeFilteredItems[index];
+                                const breakdown = [`─────────────`];
+                                breakdown.push(`Lead Time: ${item.leadTime} days`);
+                                breakdown.push(`Lead Time Flow Efficiency: ${item.ltfeEfficiency}%`);
+                                breakdown.push(``);
+                                breakdown.push(`Time per Column:`);
+                                
+                                if (item.columnTime && Object.keys(item.columnTime).length > 0) {
+                                    Object.entries(item.columnTime).forEach(([column, days]) => {
+                                        if (days > 0) {
+                                            const icon = columnCategories[column] || '•';
+                                            breakdown.push(`  ${icon} ${column}: ${days} days`);
+                                        }
+                                    });
+                                } else {
+                                    breakdown.push(`  (Column breakdown not available)`);
+                                }
+                                
+                                return breakdown;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        stacked: true,
+                        beginAtZero: true,
+                        title: { display: true, text: 'Days' },
+                        grid: { color: '#e2e8f0' }
+                    },
+                    y: {
+                        stacked: true,
+                        title: { display: true, text: `Work Items (showing ${ltfeFilteredItems.length} of ${ltfeItems.length})` },
+                        grid: { display: false },
+                        ticks: {
+                            autoSkip: false,
+                            font: { size: 11 }
+                        }
+                    }
+                },
+                onClick: function(event, elements) {
+                    if (elements.length > 0) {
+                        const index = elements[0].index;
+                        const item = ltfeFilteredItems[index];
+                        const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
+                        window.open(adoUrl, '_blank');
                     }
                 }
             }
@@ -1559,9 +2074,13 @@
                 });
             });
             
-            // Add "Done" state as cumulative departures
+            // Add final done state as cumulative departures
+            // Extract final column name from last transition (e.g., "Ready for Release → Closed")
+            const lastTransition = dashboardData.charts.transitionRates.transitions[dashboardData.charts.transitionRates.transitions.length - 1];
+            const finalColumnName = lastTransition.split(' → ')[1];
+            
             cfdDatasets.push({
-                label: 'Done',
+                label: finalColumnName,
                 data: dashboardData.charts.cfd.departures,
                 borderColor: '#059669',
                 backgroundColor: 'rgba(5, 150, 105, 0.2)',
@@ -2680,6 +3199,13 @@
                 }
             }
         });
+        
+        console.log('Dashboard initialized successfully!');
+        } catch (error) {
+            console.error('Error initializing dashboard:', error);
+            alert('Error loading dashboard: ' + error.message);
+        }
+        }); // End of window.load event listener
     </script>
 </body>
 </html>
