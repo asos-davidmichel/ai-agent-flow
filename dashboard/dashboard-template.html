@@ -955,13 +955,14 @@
                 <h3>⚡ Lead Flow Efficiency</h3>
                 <div class="metric-value">
                     <span id="overallLtfeValue">-</span>
+                    <span id="overallLtfeTrend"></span>
                 </div>
                 <div class="metric-label">end-to-end efficiency</div>
                 <div class="metric-trend trend-neutral">Active work / Total lifetime</div>
             </div>
             
             <div class="metric-card" id="systemStabilityCard">
-                <h3>System Stability</h3>
+                <h3>Backlog Growth</h3>
                 <div class="metric-value">
                     <span id="systemStabilityRatio">${dashboardData.metrics.systemStability.ratio}</span>
                     <span id="systemStabilityTrend"></span>
@@ -1933,6 +1934,14 @@
             // Update overall lead flow efficiency metric card at top
             document.getElementById('overallLtfeValue').textContent = ltfeAvg + '%';
             
+            // Update trend indicator for lead flow efficiency
+            const ltfeTrendEl = document.getElementById('overallLtfeTrend');
+            if (ltfeTrendEl && dashboardData.metrics.leadTimeFlowEfficiency.trend) {
+                const trend = dashboardData.metrics.leadTimeFlowEfficiency.trend;
+                const trendHtml = getTrendIndicator(trend, ltfeAvg + '%', trend.previousValue);
+                ltfeTrendEl.innerHTML = trendHtml;
+            }
+            
             // Generate dynamic insight for Lead Time Flow Efficiency
             const wastePct = (100 - parseFloat(ltfeAvg)).toFixed(0);
             let ltfeInterpretation = '';
@@ -2274,8 +2283,13 @@
                 
                 if (ratioEl) ratioEl.textContent = gapFormatted;
                 
-                // Update trend indicator
-                if (trendEl) {
+                // Update trend indicator with previousValue
+                if (trendEl && dashboardData.metrics.systemStability.trend) {
+                    const trend = dashboardData.metrics.systemStability.trend;
+                    const trendHtml = getTrendIndicator(trend, gapFormatted, trend.previousValue);
+                    trendEl.innerHTML = trendHtml;
+                } else if (trendEl) {
+                    // Fallback if no trend data
                     if (parseFloat(arrivalRate) > parseFloat(departureRate) * 1.1) {
                         trendEl.innerHTML = '<span class="trend-indicator trend-up-bad">↑</span>';
                     } else if (parseFloat(departureRate) > parseFloat(arrivalRate) * 1.1) {
@@ -2287,13 +2301,13 @@
                 
                 if (textEl) {
                     if (parseFloat(arrivalRate) > parseFloat(departureRate) * 1.1) {
-                        textEl.textContent = '⚠️ UNSTABLE - GROWING';
+                        textEl.textContent = '⚠️ GROWING';
                         textEl.className = 'metric-trend trend-warning';
                     } else if (parseFloat(departureRate) > parseFloat(arrivalRate) * 1.1) {
-                        textEl.textContent = '✅ STABLE - SHRINKING';
+                        textEl.textContent = '✅ SHRINKING';
                         textEl.className = 'metric-trend trend-good';
                     } else {
-                        textEl.textContent = '➡️ NEUTRAL';
+                        textEl.textContent = '➡️ STABLE';
                         textEl.className = 'metric-trend trend-neutral';
                     }
                 }
