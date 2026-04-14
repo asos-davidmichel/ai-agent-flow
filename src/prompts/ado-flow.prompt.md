@@ -86,16 +86,16 @@ After running setup, restart VS Code and try again.
 
 ### Step 5: Run the dashboard generation script
 
-Navigate to the dashboard folder and run the Generate-FlowDashboard.ps1 script with the extracted parameters:
+Navigate to the src\scripts folder and run the Generate-FlowDashboard.ps1 script with the extracted parameters:
 
 ```powershell
-cd dashboard
+cd src\scripts
 .\Generate-FlowDashboard.ps1 -Organization "{organization}" -Project "{project}" -Team "{team}" -Months {months}
 ```
 
 **Example:**
 ```powershell
-cd dashboard
+cd src\scripts
 .\Generate-FlowDashboard.ps1 -Organization "asos" -Project "Customer" -Team "Analytics and Experimentation" -Months 3
 ```
 
@@ -107,15 +107,15 @@ cd dashboard
 5. Inject data into the HTML template
 6. Generate the final interactive dashboard: `dashboard.html`
 
-Monitor the script output for any errors. The script will create a dated output folder: `analysis-YYYY-MM-DD/`
+Monitor the script output for any errors. The script will create a dated output folder: `output/analysis-YYYY-MM-DD/`
 
 ### Step 6: Open the generated dashboard
 
 Once the script completes successfully, open the generated dashboard HTML file in the default browser:
 
 ```powershell
-# The dashboard will be in the analysis-YYYY-MM-DD folder
-$dashboardPath = ".\analysis-$(Get-Date -Format 'yyyy-MM-dd')\dashboard.html"
+# The dashboard will be in the output/analysis-YYYY-MM-DD folder
+$dashboardPath = ".\output\analysis-$(Get-Date -Format 'yyyy-MM-dd')\dashboard.html"
 Start-Process $dashboardPath
 ```
 
@@ -137,7 +137,7 @@ After the dashboard is generated and opened, provide a brief summary:
 
 **Team:** {Team Name}
 **Period:** {DD MMM YYYY - DD MMM YYYY}
-**Output:** analysis-{date}/dashboard.html
+**Output:** output/analysis-{date}/dashboard.html
 
 The dashboard has been opened in your browser with interactive charts and flow metrics. 
 ```

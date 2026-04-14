@@ -53,7 +53,8 @@ $ErrorActionPreference = "Stop"
 
 # Create dated output folder
 $dateStamp = Get-Date -Format 'yyyy-MM-dd'
-$outputFolder = Join-Path (Split-Path $PSScriptRoot -Parent) "analysis-$dateStamp"
+$projectRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+$outputFolder = Join-Path $projectRoot "output\analysis-$dateStamp"
 
 if (-not (Test-Path $outputFolder)) {
     New-Item -ItemType Directory -Path $outputFolder -Force | Out-Null
@@ -71,8 +72,7 @@ $flowDataPath = Join-Path $outputFolder "flow-data-$dateStamp.json"
 
 if (-not $SkipFetch) {
     Write-Host "[1/4] Fetching data from Azure DevOps..." -ForegroundColor Yellow
-    $scriptsPath = Join-Path (Split-Path $PSScriptRoot -Parent) "scripts"
-    & (Join-Path $scriptsPath "Fetch-TeamFlowData.ps1") `
+    & (Join-Path $PSScriptRoot "Fetch-TeamFlowData.ps1") `
         -Organization $Organization `
         -Project $Project `
         -Team $Team `
@@ -103,9 +103,8 @@ if ($completedIds.Count -eq 0) {
     Write-Warning "No completed items found in the data"
 }
 
-# Call the Get-WorkItemColumnTime.ps1 script from scripts/
-$scriptsPath = Join-Path (Split-Path $PSScriptRoot -Parent) "scripts"
-$columnTimeJson = & (Join-Path $scriptsPath "Get-WorkItemColumnTime.ps1") `
+# Call the Get-WorkItemColumnTime.ps1 script
+$columnTimeJson = & (Join-Path $PSScriptRoot "Get-WorkItemColumnTime.ps1") `
     -Organization $Organization `
     -Project $Project `
     -WorkItemIds $completedIds
@@ -118,8 +117,8 @@ Write-Host "  [OK] Calculated columnTime for $($columnTimeData.Count) items" -Fo
 # Step 3: Build dashboard data structure
 Write-Host "`n[3/4] Building dashboard data structure..." -ForegroundColor Yellow
 
-# Import the comprehensive dashboard builder from scripts/
-& (Join-Path $scriptsPath "Build-DashboardData.ps1") `
+# Import the comprehensive dashboard builder
+& (Join-Path $PSScriptRoot "Build-DashboardData.ps1") `
     -FlowDataPath $flowDataPath `
     -ColumnTimeData $columnTimeData `
     -OutputPath (Join-Path $outputFolder "dashboard-data.json")
@@ -127,8 +126,9 @@ Write-Host "`n[3/4] Building dashboard data structure..." -ForegroundColor Yello
 # Step 4: Generate HTML
 Write-Host "`n[4/4] Generating dashboard HTML..." -ForegroundColor Yellow
 
-# Read template from dashboard/ folder
-$templateSource = Join-Path $PSScriptRoot "dashboard-template.html"
+# Read template from src/templates/ folder
+$templatesPath = Join-Path (Split-Path $PSScriptRoot -Parent) "templates"
+$templateSource = Join-Path $templatesPath "dashboard-template.html"
 $dataPath = Join-Path $outputFolder "dashboard-data.json"
 $dashboardPath = Join-Path $outputFolder "dashboard.html"
 

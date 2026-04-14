@@ -15,9 +15,10 @@
 param()
 
 try {
-    $templatePath = Join-Path $PSScriptRoot 'dashboard-template.html'
-    $dataPath = Join-Path $PSScriptRoot 'dashboard-data.json'
-    $outputPath = Join-Path $PSScriptRoot 'dashboard.html'
+    $projectRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+    $templatePath = Join-Path $projectRoot 'src\templates\dashboard-template.html'
+    $dataPath = Join-Path $projectRoot 'output\dashboard-data.json'
+    $outputPath = Join-Path $projectRoot 'output\dashboard.html'
 
     if (-not (Test-Path $templatePath)) {
         throw "Template file not found: $templatePath"

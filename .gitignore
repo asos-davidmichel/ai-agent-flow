@@ -1,11 +1,11 @@
-# Flow Metrics Generated Files
+# Generated output files (all in output/ folder)
+output/
+
+# Legacy output patterns (if any stragglers exist)
 flow_metrics_analysis.py
 flow_metrics_data.json
 FLOW_METRICS_REPORT.md
 flow_metrics_dashboard.html
-dashboard/dashboard.html
-
-# Analysis folders (dated output)
 analysis-*/
 
 # Python
