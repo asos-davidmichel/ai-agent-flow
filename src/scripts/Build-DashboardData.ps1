@@ -85,7 +85,7 @@ function Calculate-Trend($values, $higherIsBetter = $true) {
 }
 
 # Helper: Calculate weekly WIP snapshots from state transitions
-function Get-WeeklyWIPSnapshot($completedItems, $startDate, $endDate) {
+function Get-WeeklyWIPSnapshot($completedItems, $activeItems, $startDate, $endDate) {
     # Define active states (items being worked on)
     $activeStates = @('Active', 'In Progress')
     
@@ -104,8 +104,10 @@ function Get-WeeklyWIPSnapshot($completedItems, $startDate, $endDate) {
         $currentWeekStart = $weekEnd
     }
     
-    # For each completed item, reconstruct when it was in active states
-    foreach ($item in $completedItems) {
+    # Process all items (completed + active) to reconstruct historical WIP
+    $allItems = @($completedItems) + @($activeItems)
+    
+    foreach ($item in $allItems) {
         $itemId = $item.id
         $itemType = $item.fields.'System.WorkItemType'
         
@@ -144,13 +146,38 @@ function Get-WeeklyWIPSnapshot($completedItems, $startDate, $endDate) {
             }
         }
         
-        # Add final period if item closed in active state
+        # Add final period - use closed date if completed, or endDate if still active
         $closedDate = $item.fields.'Microsoft.VSTS.Common.ClosedDate'
-        if ($currentState -and $activeStates -contains $currentState -and $closedDate) {
+        if ($currentState -and $activeStates -contains $currentState) {
+            $periodEnd = if ($closedDate) { [DateTime]$closedDate } else { $endDate }
             $statePeriods += @{
                 start = $currentStateStart
-                end = [DateTime]$closedDate
+                end = $periodEnd
                 state = $currentState
+            }
+        }
+        
+        # SPECIAL CASE: For active items without update history, use current state
+        # This handles items that were fetched without their state transition history
+        if ($statePeriods.Count -eq 0 -and -not $closedDate) {
+            $currentItemState = $item.fields.'System.State'
+            if ($activeStates -contains $currentItemState) {
+                # Assume item has been in this state for at least some recent time
+                # Use creation date or start of period as a reasonable start point
+                $createdDate = $item.fields.'System.CreatedDate'
+                $periodStart = if ($createdDate) { 
+                    $created = [DateTime]$createdDate
+                    # Use the later of creation date or analysis start date
+                    if ($created -gt $startDate) { $created } else { $startDate }
+                } else { 
+                    $startDate 
+                }
+                
+                $statePeriods += @{
+                    start = $periodStart
+                    end = $endDate
+                    state = $currentItemState
+                }
             }
         }
         
@@ -301,10 +328,10 @@ $throughputMean = ($throughputValues | Measure-Object -Average).Average
 $throughputStdDev = [Math]::Sqrt(($throughputValues | ForEach-Object { [Math]::Pow($_ - $throughputMean, 2) } | Measure-Object -Sum).Sum / $throughputValues.Count)
 $throughputCV = if ($throughputMean -gt 0) { $throughputStdDev / $throughputMean } else { 0 }
 
-# Calculate weekly WIP snapshots for historical bug rate
+# Calculate weekly WIP snapshots for historical bug rate (FIXED: now includes active items)
 $startDate = [DateTime]$rawData.metadata.startDate
 $endDate = [DateTime]$rawData.metadata.endDate
-$wipSnapshots = Get-WeeklyWIPSnapshot -completedItems $rawData.completedItems -startDate $startDate -endDate $endDate
+$wipSnapshots = Get-WeeklyWIPSnapshot -completedItems $rawData.completedItems -activeItems $rawData.activeItems -startDate $startDate -endDate $endDate
 
 # Build bug rate chart (weekly WIP bug percentage) with full tooltip data
 $bugRateLabels = @()
@@ -352,12 +379,48 @@ foreach ($week in $wipSnapshots) {
     $bugRateWIPFeatures += ,@($wipFeatureItems)
 }
 
-# Add current active bug rate (latest data point)
+# Calculate current active items breakdown by state/column
 $activeBugs = @($rawData.activeItems | Where-Object { $_.fields.'System.WorkItemType' -eq 'Bug' })
 $activeFeatures = @($rawData.activeItems | Where-Object { $_.fields.'System.WorkItemType' -eq 'Product Backlog Item' })
 $currentActiveBugRate = if ($rawData.activeItems.Count -gt 0) { 
     [Math]::Round(($activeBugs.Count / $rawData.activeItems.Count) * 100, 1) 
 } else { 0 }
+
+# Current status breakdown by state
+$stateBreakdown = @{}
+foreach ($item in $rawData.activeItems) {
+    $state = $item.fields.'System.State'
+    $itemType = $item.fields.'System.WorkItemType'
+    
+    if (-not $stateBreakdown.ContainsKey($state)) {
+        $stateBreakdown[$state] = @{
+            bugs = 0
+            features = 0
+            total = 0
+        }
+    }
+    
+    $stateBreakdown[$state].total++
+    if ($itemType -eq 'Bug') {
+        $stateBreakdown[$state].bugs++
+    } else {
+        $stateBreakdown[$state].features++
+    }
+}
+
+# Format state breakdown for output
+$currentStatusBreakdown = @()
+foreach ($state in $stateBreakdown.Keys | Sort-Object) {
+    $data = $stateBreakdown[$state]
+    $bugPercentage = if ($data.total -gt 0) { [Math]::Round(($data.bugs / $data.total) * 100, 1) } else { 0 }
+    $currentStatusBreakdown += @{
+        state = $state
+        bugs = $data.bugs
+        features = $data.features
+        total = $data.total
+        bugPercentage = $bugPercentage
+    }
+}
 
 # Calculate bug rate statistics for insight (using WIP percentages)
 $avgWIPBugRate = if ($bugRateWIP.Count -gt 0) { 
@@ -375,6 +438,81 @@ $maxBugRateWeek = if ($bugRateWIP.Count -gt 0) {
     $bugRateLabels[$maxIndex]
 } else { "N/A" }
 $maxBugRate = ($bugRateWIP | Measure-Object -Maximum).Maximum
+
+# Calculate COMPLETION bug rate (bugs completed vs total completed per week)
+$completionRateLabels = @()
+$completionRateBugs = @()
+$completionRateBugCount = @()
+$completionRateFeatureCount = @()
+$completionRateBugDetails = @()
+$completionRateFeatureDetails = @()
+
+# Group completed items by week
+$completedByWeek = @{}
+foreach ($item in $rawData.completedItems) {
+    $closedDate = [DateTime]$item.fields.'Microsoft.VSTS.Common.ClosedDate'
+    # Find which week this item was completed in
+    $weekLabel = $null
+    foreach ($week in $wipSnapshots) {
+        if ($closedDate -ge $week.start -and $closedDate -lt $week.end) {
+            $weekLabel = $week.label
+            break
+        }
+    }
+    
+    if ($weekLabel) {
+        if (-not $completedByWeek.ContainsKey($weekLabel)) {
+            $completedByWeek[$weekLabel] = @{
+                bugs = @()
+                features = @()
+            }
+        }
+        
+        $itemType = $item.fields.'System.WorkItemType'
+        if ($itemType -eq 'Bug') {
+            $completedByWeek[$weekLabel].bugs += @{
+                id = $item.id
+                title = $item.fields.'System.Title'
+            }
+        } else {
+            $completedByWeek[$weekLabel].features += @{
+                id = $item.id
+                title = $item.fields.'System.Title'
+            }
+        }
+    }
+}
+
+# Build completion rate arrays (aligned with WIP weeks)
+foreach ($week in $wipSnapshots) {
+    $weekLabel = $week.label
+    $completionRateLabels += $weekLabel
+    
+    if ($completedByWeek.ContainsKey($weekLabel)) {
+        $bugsCompleted = $completedByWeek[$weekLabel].bugs.Count
+        $featuresCompleted = $completedByWeek[$weekLabel].features.Count
+        $totalCompleted = $bugsCompleted + $featuresCompleted
+        $bugPercentage = if ($totalCompleted -gt 0) { [Math]::Round(($bugsCompleted / $totalCompleted) * 100, 1) } else { 0 }
+        
+        $completionRateBugs += $bugPercentage
+        $completionRateBugCount += $bugsCompleted
+        $completionRateFeatureCount += $featuresCompleted
+        $completionRateBugDetails += ,@($completedByWeek[$weekLabel].bugs)
+        $completionRateFeatureDetails += ,@($completedByWeek[$weekLabel].features)
+    } else {
+        # No completions this week
+        $completionRateBugs += 0
+        $completionRateBugCount += 0
+        $completionRateFeatureCount += 0
+        $completionRateBugDetails += ,@()
+        $completionRateFeatureDetails += ,@()
+    }
+}
+
+# Calculate completion rate statistics
+$avgCompletionBugRate = if ($completionRateBugs.Count -gt 0) {
+    [Math]::Round(($completionRateBugs | Measure-Object -Average).Average, 1)
+} else { 0 }
 
 # Build cycle time chart datasets (PBIs first for chronological x-axis)
 $cycleTimeDatasets = @()
@@ -567,13 +705,24 @@ $dashboardData = @{
         }
         bugRate = @{
             labels = $bugRateLabels
+            # WIP Bug Rate (% of items in progress that are bugs)
             wipRate = $bugRateWIP
             wipBugCount = $bugRateWIPBugCount
             wipFeatureCount = $bugRateWIPFeatureCount
             wipBugs = $bugRateWIPBugs
             wipFeatures = $bugRateWIPFeatures
+            avgWIPBugRate = $avgWIPBugRate
+            # Completion Bug Rate (% of items completed that are bugs)
+            completionRate = $completionRateBugs
+            completionBugCount = $completionRateBugCount
+            completionFeatureCount = $completionRateFeatureCount
+            completionBugs = $completionRateBugDetails
+            completionFeatures = $completionRateFeatureDetails
+            avgCompletionBugRate = $avgCompletionBugRate
+            # Current active breakdown
             currentActiveBugRate = $currentActiveBugRate
             currentActiveBugs = @($activeBugs | ForEach-Object { @{id=$_.id; title=$_.fields.'System.Title'} })
+            currentStatusBreakdown = $currentStatusBreakdown
         }
         workItemAge = @{
             labels = @()
