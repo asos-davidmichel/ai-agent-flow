@@ -799,11 +799,11 @@ $dashboardData = @{
         wipAgeBreakdown = "Age distribution"
         wip = "$($rawData.activeItems.Count) items in WIP"
         bugRate = if ($maxBugRate -gt 50) {
-            "Bug rate in active work averaged $avgWIPBugRate% over the period, peaking at $maxBugRate% ($maxBugRateWeek). Currently $($activeBugs.Count) bugs in WIP ($currentActiveBugRate%). High bug rates in active work may indicate quality issues - consider root cause analysis."
+            "WIP bug rate averaged $avgWIPBugRate% (peak: $maxBugRate% at $maxBugRateWeek). Completion bug rate averaged $avgCompletionBugRate%. Currently $($activeBugs.Count) bugs in WIP ($currentActiveBugRate%). High WIP bug rates may indicate quality issues - consider root cause analysis."
         } elseif ($maxBugRate -gt 30) {
-            "Bug rate in active work averaged $avgWIPBugRate% (peak: $maxBugRate% during $maxBugRateWeek). Currently $($activeBugs.Count) bugs in WIP ($currentActiveBugRate%). Monitor trends for quality concerns."
+            "WIP bug rate averaged $avgWIPBugRate% (peak: $maxBugRate% at $maxBugRateWeek). Completion rate: $avgCompletionBugRate%. Currently $($activeBugs.Count) bugs in WIP ($currentActiveBugRate%). Monitor trends for quality concerns."
         } else {
-            "Bugs averaged $avgWIPBugRate% of work in progress throughout the period. Currently $($activeBugs.Count) bugs in WIP ($currentActiveBugRate%). Relatively healthy balance between bugs and feature work."
+            "WIP bug rate averaged $avgWIPBugRate%, with $avgCompletionBugRate% of completed items being bugs. Currently $($activeBugs.Count) bugs in WIP ($currentActiveBugRate%). Healthy balance between bugs and feature work."
         }
         staleWork = "Stale work tracking"
         netFlow = "Flow analysis"
