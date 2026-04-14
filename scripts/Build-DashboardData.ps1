@@ -43,11 +43,216 @@ function Get-Median($values) {
     }
 }
 
-# Merge columnTime data into completed items
+# Helper: Calculate-Trend using linear regression
+function Calculate-Trend($values, $higherIsBetter = $true) {
+    if (-not $values -or $values.Count -lt 3) { 
+        return @{ direction = "stable"; isGood = $true }
+    }
+    
+    # Linear regression: y = mx + b
+    $n = $values.Count
+    $x = 0..($n - 1)
+    $sumX = ($x | Measure-Object -Sum).Sum
+    $sumY = ($values | Measure-Object -Sum).Sum
+    $sumXY = 0
+    $sumX2 = 0
+    
+    for ($i = 0; $i -lt $n; $i++) {
+        $sumXY += $x[$i] * $values[$i]
+        $sumX2 += $x[$i] * $x[$i]
+    }
+    
+    # Slope (m)
+    $slope = ($n * $sumXY - $sumX * $sumY) / ($n * $sumX2 - $sumX * $sumX)
+    
+    # Determine direction and significance
+    $mean = $sumY / $n
+    $threshold = $mean * 0.05  # 5% change threshold for significance
+    
+    if ([Math]::Abs($slope) -lt $threshold) {
+        return @{ direction = "stable"; isGood = $true }
+    } elseif ($slope > 0) {
+        return @{ 
+            direction = "up"
+            isGood = $higherIsBetter
+        }
+    } else {
+        return @{ 
+            direction = "down"
+            isGood = -not $higherIsBetter
+        }
+    }
+}
+
+# Helper: Calculate weekly WIP snapshots from state transitions
+function Get-WeeklyWIPSnapshot($completedItems, $startDate, $endDate) {
+    # Define active states (items being worked on)
+    $activeStates = @('Active', 'In Progress')
+    
+    # Create weekly buckets
+    $weeks = @()
+    $currentWeekStart = $startDate
+    while ($currentWeekStart -lt $endDate) {
+        $weekEnd = $currentWeekStart.AddDays(7)
+        $weeks += @{
+            start = $currentWeekStart
+            end = $weekEnd
+            label = $currentWeekStart.ToString('dd MMM')
+            bugIds = @()
+            featureIds = @()
+        }
+        $currentWeekStart = $weekEnd
+    }
+    
+    # For each completed item, reconstruct when it was in active states
+    foreach ($item in $completedItems) {
+        $itemId = $item.id
+        $itemType = $item.fields.'System.WorkItemType'
+        
+        # Build timeline of state periods from updates
+        $statePeriods = @()
+        $currentState = $null
+        $currentStateStart = $null
+        
+        # Sort updates by date
+        $sortedUpdates = $item.updates | Sort-Object { 
+            $date = [DateTime]$_.revisedDate
+            if ($date.Year -ge 9999) { [DateTime]::MaxValue } else { $date }
+        }
+        
+        foreach ($update in $sortedUpdates) {
+            # Skip placeholder dates
+            $updateDate = [DateTime]$update.revisedDate
+            if ($updateDate.Year -ge 9999) { continue }
+            
+            # Check for state change
+            if ($update.fields.'System.State') {
+                $newState = $update.fields.'System.State'.newValue
+                
+                # Record previous state period
+                if ($currentState -and $activeStates -contains $currentState) {
+                    $statePeriods += @{
+                        start = $currentStateStart
+                        end = $updateDate
+                        state = $currentState
+                    }
+                }
+                
+                # Start new period
+                $currentState = $newState
+                $currentStateStart = $updateDate
+            }
+        }
+        
+        # Add final period if item closed in active state
+        $closedDate = $item.fields.'Microsoft.VSTS.Common.ClosedDate'
+        if ($currentState -and $activeStates -contains $currentState -and $closedDate) {
+            $statePeriods += @{
+                start = $currentStateStart
+                end = [DateTime]$closedDate
+                state = $currentState
+            }
+        }
+        
+        # Check which weeks this item was in active state
+        foreach ($week in $weeks) {
+            $wasActiveThisWeek = $false
+            
+            foreach ($period in $statePeriods) {
+                # Check if state period overlaps with this week
+                $periodStart = $period.start
+                $periodEnd = $period.end
+                
+                if ($periodStart -lt $week.end -and $periodEnd -gt $week.start) {
+                    $wasActiveThisWeek = $true
+                    break
+                }
+            }
+            
+            if ($wasActiveThisWeek) {
+                if ($itemType -eq 'Bug') {
+                    $week.bugIds += $itemId
+                } else {
+                    $week.featureIds += $itemId
+                }
+            }
+        }
+    }
+    
+    return $weeks
+}
+
+# Helper: Calculate cycle time from state transitions (time in active states)
+function Get-CycleTimeFromUpdates($item) {
+    $activeStates = @('Active', 'In Progress')
+    $totalActiveDays = 0
+    
+    if (-not $item.updates -or $item.updates.Count -eq 0) {
+        return 0
+    }
+    
+    # Track state periods
+    $currentState = $null
+    $currentStateStart = $null
+    
+    # Sort updates by date
+    $sortedUpdates = $item.updates | Sort-Object { 
+        $date = [DateTime]$_.revisedDate
+        if ($date.Year -ge 9999) { [DateTime]::MaxValue } else { $date }
+    }
+    
+    foreach ($update in $sortedUpdates) {
+        # Skip placeholder dates
+        $updateDate = [DateTime]$update.revisedDate
+        if ($updateDate.Year -ge 9999) { continue }
+        
+        # Check for state change
+        if ($update.fields.'System.State') {
+            $newState = $update.fields.'System.State'.newValue
+            
+            # If leaving an active state, add the time spent
+            if ($currentState -and $activeStates -contains $currentState) {
+                $daysInState = ($updateDate - $currentStateStart).TotalDays
+                $totalActiveDays += $daysInState
+            }
+            
+            # Start new period
+            $currentState = $newState
+            $currentStateStart = $updateDate
+        }
+    }
+    
+    # Add final period if item closed in active state
+    $closedDate = $item.fields.'Microsoft.VSTS.Common.ClosedDate'
+    if ($currentState -and $activeStates -contains $currentState -and $closedDate) {
+        $daysInState = ([DateTime]$closedDate - $currentStateStart).TotalDays
+        $totalActiveDays += $daysInState
+    }
+    
+    return [Math]::Round($totalActiveDays, 1)
+}
+
+# Build completed items with metrics calculated from state transitions
 $completedWithMetrics = @()
 foreach ($item in $rawData.completedItems) {
+    # Try to use provided columnTime data if available
     $columnTime = ($ColumnTimeData | Where-Object { $_.WorkItemId -eq $item.id }).ColumnTime
     if (-not $columnTime) { $columnTime = @{} }
+    
+    # Calculate cycle time from state transitions if columnTime is empty
+    $cycleTime = 0
+    if ($columnTime.Count -gt 0) {
+        # Use columnTime if available
+        $activeColumns = @('In Development', 'In Review', 'External Review', 'QA')
+        foreach ($col in $activeColumns) {
+            if ($columnTime.$col) {
+                $cycleTime += $columnTime.$col
+            }
+        }
+    } else {
+        # Calculate from state transitions
+        $cycleTime = Get-CycleTimeFromUpdates -item $item
+    }
     
     $completedWithMetrics += [PSCustomObject]@{
         id = $item.id
@@ -57,27 +262,9 @@ foreach ($item in $rawData.completedItems) {
         createdDate = $item.fields.'System.CreatedDate'
         completedDate = $item.fields.'Microsoft.VSTS.Common.ClosedDate'
         columnTime = $columnTime
+        cycleTime = $cycleTime
+        leadTime = (Get-DaysBetween $item.fields.'System.CreatedDate' $item.fields.'Microsoft.VSTS.Common.ClosedDate')
     }
-}
-
-# Calculate metrics
-$boardColumns = $rawData.boardConfig.columns
-$activeColumns = @('In Development', 'In Review', 'External Review', 'QA')
-$waitingColumns = @('Ready for QA', 'Ready for release')
-$beforeWorkflowColumns = @('New', 'Ready for Dev')
-
-foreach ($item in $completedWithMetrics) {
-    #Calculate cycle time (active column time)
-    $cycleDays = 0
-    foreach ($col in $activeColumns) {
-        if ($item.columnTime.$col) {
-            $cycleDays += $item.columnTime.$col
-        }
-    }
-    $item | Add-Member -NotePropertyName "cycleTime" -NotePropertyValue $cycleDays
-    
-    # Calculate lead time
-    $item | Add-Member -NotePropertyName "leadTime" -NotePropertyValue (Get-DaysBetween $item.createdDate $item.completedDate)
 }
 
 # Split bugs vs PBIs
@@ -94,11 +281,10 @@ $completedByWeek = $completedWithMetrics | Group-Object {
     $date = [DateTime]$_.completedDate
     # Get week start date (Sunday)
     $weekStart = $date.AddDays(-([int]$date.DayOfWeek))
-    "Week of $($weekStart.ToString('dd MMM'))"
+    $weekStart.ToString('dd MMM')
 } | Sort-Object { 
-    # Sort by extracting the date from "Week of dd MMM"
-    $datePart = $_.Name -replace 'Week of ', ''
-    [DateTime]::ParseExact($datePart, 'dd MMM', $null)
+    # Sort by parsing the date
+    [DateTime]::ParseExact($_.Name, 'dd MMM', $null)
 }
 
 $throughputChart = @{
@@ -108,6 +294,87 @@ $throughputChart = @{
         ,@($_.Group | ForEach-Object { @{id=$_.id; title=$_.title} })
     })
 }
+
+# Calculate coefficient of variation for batch detection
+$throughputValues = @($completedByWeek | ForEach-Object { $_.Count })
+$throughputMean = ($throughputValues | Measure-Object -Average).Average
+$throughputStdDev = [Math]::Sqrt(($throughputValues | ForEach-Object { [Math]::Pow($_ - $throughputMean, 2) } | Measure-Object -Sum).Sum / $throughputValues.Count)
+$throughputCV = if ($throughputMean -gt 0) { $throughputStdDev / $throughputMean } else { 0 }
+
+# Calculate weekly WIP snapshots for historical bug rate
+$startDate = [DateTime]$rawData.metadata.startDate
+$endDate = [DateTime]$rawData.metadata.endDate
+$wipSnapshots = Get-WeeklyWIPSnapshot -completedItems $rawData.completedItems -startDate $startDate -endDate $endDate
+
+# Build bug rate chart (weekly WIP bug percentage) with full tooltip data
+$bugRateLabels = @()
+$bugRateWIP = @()
+$bugRateWIPBugCount = @()
+$bugRateWIPFeatureCount = @()
+$bugRateWIPBugs = @()
+$bugRateWIPFeatures = @()
+
+foreach ($week in $wipSnapshots) {
+    $wipBugsCount = $week.bugIds.Count
+    $wipFeaturesCount = $week.featureIds.Count
+    $wipTotal = $wipBugsCount + $wipFeaturesCount
+    $bugPercentage = if ($wipTotal -gt 0) { [Math]::Round(($wipBugsCount / $wipTotal) * 100, 1) } else { 0 }
+    
+    # Get bug and feature details for tooltip
+    $wipBugItems = @()
+    $wipFeatureItems = @()
+    
+    foreach ($bugId in $week.bugIds) {
+        $bugItem = $rawData.completedItems | Where-Object { $_.id -eq $bugId } | Select-Object -First 1
+        if ($bugItem) {
+            $wipBugItems += @{
+                id = $bugItem.id
+                title = $bugItem.fields.'System.Title'
+            }
+        }
+    }
+    
+    foreach ($featureId in $week.featureIds) {
+        $featureItem = $rawData.completedItems | Where-Object { $_.id -eq $featureId } | Select-Object -First 1
+        if ($featureItem) {
+            $wipFeatureItems += @{
+                id = $featureItem.id
+                title = $featureItem.fields.'System.Title'
+            }
+        }
+    }
+    
+    $bugRateLabels += $week.label
+    $bugRateWIP += $bugPercentage
+    $bugRateWIPBugCount += $wipBugsCount
+    $bugRateWIPFeatureCount += $wipFeaturesCount
+    $bugRateWIPBugs += ,@($wipBugItems)
+    $bugRateWIPFeatures += ,@($wipFeatureItems)
+}
+
+# Add current active bug rate (latest data point)
+$activeBugs = @($rawData.activeItems | Where-Object { $_.fields.'System.WorkItemType' -eq 'Bug' })
+$activeFeatures = @($rawData.activeItems | Where-Object { $_.fields.'System.WorkItemType' -eq 'Product Backlog Item' })
+$currentActiveBugRate = if ($rawData.activeItems.Count -gt 0) { 
+    [Math]::Round(($activeBugs.Count / $rawData.activeItems.Count) * 100, 1) 
+} else { 0 }
+
+# Calculate bug rate statistics for insight (using WIP percentages)
+$avgWIPBugRate = if ($bugRateWIP.Count -gt 0) { 
+    [Math]::Round(($bugRateWIP | Measure-Object -Average).Average, 1) 
+} else { 0 }
+$maxBugRateWeek = if ($bugRateWIP.Count -gt 0) {
+    $maxIndex = 0
+    $maxValue = $bugRateWIP[0]
+    for ($i = 1; $i -lt $bugRateWIP.Count; $i++) {
+        if ($bugRateWIP[$i] -gt $maxValue) {
+            $maxValue = $bugRateWIP[$i]
+            $maxIndex = $i
+        }
+    }
+    $bugRateLabels[$maxIndex]
+} else { "N/A" }
+$maxBugRate = ($bugRateWIP | Measure-Object -Maximum).Maximum
 
 # Build cycle time chart datasets (PBIs first for chronological x-axis)
 $cycleTimeDatasets = @()
@@ -181,14 +448,18 @@ $dashboardData = @{
             median = $throughputTotal
             min = 0
             max = ($throughputChart.values | Measure-Object -Maximum).Maximum
-            trend = @{ direction = "stable"; isGood = $true }
+            trend = Calculate-Trend -values $throughputValues -higherIsBetter $true
         }
         cycleTime = @{
             bugs = if ($bugCycleTimes.Count -gt 0) { [Math]::Round(($bugCycleTimes | Measure-Object -Average).Average, 1) } else { 0 }
             pbis = if ($pbiCycleTimes.Count -gt 0) { [Math]::Round(($pbiCycleTimes | Measure-Object -Average).Average, 1) } else { 0 }
             median = $cycleTimeMedian
             p85 = if ($cycleTimes) { ($cycleTimes | Sort-Object)[([Math]::Ceiling($cycleTimes.Count * 0.85) - 1)] } else { 0 }
-            trend = @{ direction = "stable"; isGood = $true }
+            trend = Calculate-Trend -values @($completedByWeek | ForEach-Object { 
+                $weekItems = $_.Group
+                $weekCycleTimes = $weekItems | ForEach-Object { $_.cycleTime } | Where-Object { $_ -gt 0 }
+                if ($weekCycleTimes.Count -gt 0) { ($weekCycleTimes | Measure-Object -Average).Average } else { 0 }
+            }) -higherIsBetter $false
         }
         leadTime = @{
             bugs = if ($bugLeadTimes.Count -gt 0) { [Math]::Round(($bugLeadTimes | Measure-Object -Average).Average, 1) } else { 0 }
@@ -196,7 +467,11 @@ $dashboardData = @{
             avg = [Math]::Round(($leadTimes | Measure-Object -Average).Average, 1)
             median = $leadTimeMedian
             p85 = if ($leadTimes) { ($leadTimes | Sort-Object)[([Math]::Ceiling($leadTimes.Count * 0.85) - 1)] } else { 0 }
-            trend = @{ direction = "stable"; isGood = $true }
+            trend = Calculate-Trend -values @($completedByWeek | ForEach-Object { 
+                $weekItems = $_.Group
+                $weekLeadTimes = $weekItems | ForEach-Object { $_.leadTime } | Where-Object { $_ -gt 0 }
+                if ($weekLeadTimes.Count -gt 0) { ($weekLeadTimes | Measure-Object -Average).Average } else { 0 }
+            }) -higherIsBetter $false
         }
         workStartEfficiency = @{
             percentage = "50.0"
@@ -291,16 +566,14 @@ $dashboardData = @{
             colors = @()
         }
         bugRate = @{
-            labels = @()
-            activeRate = @()
-            completedRate = @()
-            activeBugCount = @()
-            activeTotalCount = @()
-            activeBugs = @()
-            completedBugCount = @()
-            completedFeatureCount = @()
-            completedBugs = @()
-            completedFeatures = @()
+            labels = $bugRateLabels
+            wipRate = $bugRateWIP
+            wipBugCount = $bugRateWIPBugCount
+            wipFeatureCount = $bugRateWIPFeatureCount
+            wipBugs = $bugRateWIPBugs
+            wipFeatures = $bugRateWIPFeatures
+            currentActiveBugRate = $currentActiveBugRate
+            currentActiveBugs = @($activeBugs | ForEach-Object { @{id=$_.id; title=$_.fields.'System.Title'} })
         }
         workItemAge = @{
             labels = @()
@@ -360,7 +633,15 @@ $dashboardData = @{
     
     insights = @{
         cfd = "$($completedWithMetrics.Count) items completed, $($rawData.activeItems.Count) in progress"
-        throughput = "Throughput: $throughputTotal items/week"
+        throughput = if ($throughputCV -gt 0.5) {
+            $maxWeek = ($throughputValues | Measure-Object -Maximum).Maximum
+            $minWeek = ($throughputValues | Measure-Object -Minimum).Minimum
+            "Throughput averages $throughputTotal items/week but shows high variability (range: $minWeek-$maxWeek). The inconsistent delivery pattern suggests batch working - consider breaking work into smaller, more frequent releases for smoother flow."
+        } elseif ($throughputCV -gt 0.3) {
+            "Throughput averages $throughputTotal items/week with moderate variability. Some weeks show spikes - monitor for batch release patterns."
+        } else {
+            "Throughput averages $throughputTotal items/week with consistent, predictable delivery."
+        }
         cycleTime = "Median cycle time: $cycleTimeMedian days"
         leadTime = "Median lead time: $leadTimeMedian days"
         workItemAge = "$($rawData.activeItems.Count) items in progress"
@@ -368,7 +649,13 @@ $dashboardData = @{
         timeInColumn = "Column metrics"
         wipAgeBreakdown = "Age distribution"
         wip = "$($rawData.activeItems.Count) items in WIP"
-        bugRate = "$($bugs.Count) bugs, $($pbis.Count) PBIs"
+        bugRate = if ($maxBugRate -gt 50) {
+            "Bug rate in active work averaged $avgWIPBugRate% over the period, peaking at $maxBugRate% ($maxBugRateWeek). Currently $($activeBugs.Count) bugs in WIP ($currentActiveBugRate%). High bug rates in active work may indicate quality issues - consider root cause analysis."
+        } elseif ($maxBugRate -gt 30) {
+            "Bug rate in active work averaged $avgWIPBugRate% (peak: $maxBugRate% during $maxBugRateWeek). Currently $($activeBugs.Count) bugs in WIP ($currentActiveBugRate%). Monitor trends for quality concerns."
+        } else {
+            "Bugs averaged $avgWIPBugRate% of work in progress throughout the period. Currently $($activeBugs.Count) bugs in WIP ($currentActiveBugRate%). Relatively healthy balance between bugs and feature work."
+        }
         staleWork = "Stale work tracking"
         netFlow = "Flow analysis"
         state = "State distribution"

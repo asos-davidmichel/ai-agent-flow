@@ -2348,8 +2348,10 @@
             
             // Add final done state as cumulative departures
             // Extract final column name from last transition (e.g., "Ready for Release → Closed")
-            const lastTransition = dashboardData.charts.transitionRates.transitions[dashboardData.charts.transitionRates.transitions.length - 1];
-            const finalColumnName = lastTransition.split(' → ')[1];
+            const lastTransition = dashboardData.charts.transitionRates.transitions.length > 0 
+                ? dashboardData.charts.transitionRates.transitions[dashboardData.charts.transitionRates.transitions.length - 1]
+                : null;
+            const finalColumnName = lastTransition ? lastTransition.split(' → ')[1] : 'Completed';
             
             cfdDatasets.push({
                 label: finalColumnName,
@@ -3106,22 +3108,12 @@
             data: {
                 labels: dashboardData.charts.bugRate.labels,
                 datasets: [{
-                    label: 'Active Bug Rate (%)',
-                    data: dashboardData.charts.bugRate.activeRate,
-                    borderColor: '#f59e0b',
-                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: 5,
-                    pointHoverRadius: 7
-                }, {
-                    label: 'Completed Bug Rate (%)',
-                    data: dashboardData.charts.bugRate.completedRate,
+                    label: 'WIP Bug Rate (%)',
+                    data: dashboardData.charts.bugRate.wipRate,
                     borderColor: '#fc8181',
                     backgroundColor: 'rgba(252, 129, 129, 0.1)',
                     borderWidth: 3,
-                    fill: false,
+                    fill: true,
                     tension: 0.4,
                     pointRadius: 5,
                     pointHoverRadius: 7,
@@ -3166,59 +3158,35 @@
                                 const index = tooltipModel.dataPoints[0].dataIndex;
                                 const weekLabel = dashboardData.charts.bugRate.labels[index];
                                 
-                                // Active data
-                                const activeBugCount = dashboardData.charts.bugRate.activeBugCount[index];
-                                const activeTotalCount = dashboardData.charts.bugRate.activeTotalCount[index];
-                                const activeRate = dashboardData.charts.bugRate.activeRate[index];
-                                const activeBugs = dashboardData.charts.bugRate.activeBugs[index];
+                                // WIP data for this week
+                                const wipBugCount = dashboardData.charts.bugRate.wipBugCount[index];
+                                const wipFeatureCount = dashboardData.charts.bugRate.wipFeatureCount[index];
+                                const wipRate = dashboardData.charts.bugRate.wipRate[index];
+                                const wipBugsItems = dashboardData.charts.bugRate.wipBugs[index];
+                                const wipFeaturesItems = dashboardData.charts.bugRate.wipFeatures[index];
                                 
-                                // Completed data
-                                const completedBugCount = dashboardData.charts.bugRate.completedBugCount[index];
-                                const completedFeatureCount = dashboardData.charts.bugRate.completedFeatureCount[index];
-                                const completedRate = dashboardData.charts.bugRate.completedRate[index];
-                                const completedBugsItems = dashboardData.charts.bugRate.completedBugs[index];
-                                const completedFeaturesItems = dashboardData.charts.bugRate.completedFeatures[index];
-                                
-                                // Build HTML for active bugs
-                                let activeBugsHTML = '';
-                                if (activeBugs && activeBugs.length > 0) {
-                                    activeBugs.forEach(item => {
+                                // Build HTML for WIP bugs
+                                let wipBugsHTML = '';
+                                if (wipBugsItems && wipBugsItems.length > 0) {
+                                    wipBugsItems.forEach(item => {
                                         const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
-                                        activeBugsHTML += `<div style="margin-bottom: 4px; padding-left: 8px; border-left: 2px solid #f59e0b;">
+                                        wipBugsHTML += `<div style="margin-bottom: 4px; padding-left: 8px; border-left: 2px solid #fc8181;">
                                             <a href="${adoUrl}" target="_blank" style="text-decoration: none; font-weight: 600;">#${item.id}</a>
                                             <span style="color: #ddd; font-size: 12px;"> ${item.title}</span>
                                         </div>`;
                                     });
                                 } else {
-                                    activeBugsHTML = '<div style="color: #aaa; font-style: italic; padding-left: 8px;">None</div>';
-                                }
-                                
-                                // Build HTML for completed bugs
-                                let completedBugsHTML = '';
-                                if (completedBugsItems && completedBugsItems.length > 0) {
-                                    completedBugsItems.forEach(item => {
-                                        const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
-                                        completedBugsHTML += `<div style="margin-bottom: 4px; padding-left: 8px; border-left: 2px solid #fc8181;">
-                                            <a href="${adoUrl}" target="_blank" style="text-decoration: none; font-weight: 600;">#${item.id}</a>
-                                            <span style="color: #ddd; font-size: 12px;"> ${item.title}</span>
-                                        </div>`;
-                                    });
-                                } else {
-                                    completedBugsHTML = '<div style="color: #aaa; font-style: italic; padding-left: 8px;">None</div>';
+                                    wipBugsHTML = '<div style="color: #aaa; font-style: italic; padding-left: 8px;">None</div>';
                                 }
                                 
                                 // Build HTML
                                 tooltipEl.innerHTML = `
-                                    <div class="tooltip-title">Week Ending ${weekLabel}</div>
+                                    <div class="tooltip-title">Week of ${weekLabel}</div>
                                     <div class="tooltip-content">
-                                        <strong style="color: #f59e0b;">📊 Active Backlog:</strong><br>
-                                        Active Bug Rate: <strong>${activeRate !== null ? activeRate.toFixed(1) : 'N/A'}%</strong><br>
-                                        Active Bugs: ${activeBugCount} / Total: ${activeTotalCount}<br><br>
-                                        ${activeBugs && activeBugs.length > 0 ? `<strong style="color: #f59e0b;">🐛 Active Bugs:</strong><br>${activeBugsHTML}<br>` : ''}
-                                        <strong style="color: #fc8181;">✅ Completed Work:</strong><br>
-                                        Completed Bug Rate: <strong>${completedRate !== null ? completedRate.toFixed(1) : 'N/A'}%</strong><br>
-                                        Bugs: ${completedBugCount} / Features: ${completedFeatureCount}<br><br>
-                                        ${completedBugsItems && completedBugsItems.length > 0 ? `<strong style="color: #fc8181;">🐛 Completed Bugs:</strong><br>${completedBugsHTML}` : ''}
+                                        <strong style="color: #fc8181;">📊 Work In Progress This Week:</strong><br>
+                                        Bug Rate: <strong>${wipRate !== null ? wipRate.toFixed(1) : 'N/A'}%</strong><br>
+                                        Bugs in WIP: ${wipBugCount} / Features: ${wipFeatureCount}<br><br>
+                                        ${wipBugsItems && wipBugsItems.length > 0 ? `<strong style="color: #fc8181;">🐛 Bugs in WIP:</strong><br>${wipBugsHTML}` : ''}
                                     </div>
                                     <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
                                 `;
