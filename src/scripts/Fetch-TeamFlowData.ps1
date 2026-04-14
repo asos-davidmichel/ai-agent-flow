@@ -88,7 +88,7 @@ Write-Host "`nStep 2: Querying completed work items..." -ForegroundColor Yellow
 $startDateStr = $startDate.ToString('yyyy-MM-dd')
 $endDateStr = $endDate.ToString('yyyy-MM-dd')
 
-$wiqlQuery = "SELECT [System.Id], [System.WorkItemType], [System.Title], [System.State], [System.CreatedDate], [Microsoft.VSTS.Common.ClosedDate], [Microsoft.VSTS.Common.ActivatedDate], [System.BoardColumn], [System.Tags] FROM WorkItems WHERE [System.TeamProject] = '$Project' AND [System.AreaPath] UNDER '$teamAreaPath' AND [System.State] IN ('Closed', 'Done', 'Resolved') AND [Microsoft.VSTS.Common.ClosedDate] >= '$startDateStr' AND [Microsoft.VSTS.Common.ClosedDate] <= '$endDateStr' ORDER BY [Microsoft.VSTS.Common.ClosedDate] DESC"
+$wiqlQuery = "SELECT [System.Id], [System.WorkItemType], [System.Title], [System.State], [System.CreatedDate], [Microsoft.VSTS.Common.ClosedDate], [Microsoft.VSTS.Common.ActivatedDate], [System.BoardColumn], [System.Tags] FROM WorkItems WHERE [System.TeamProject] = '$Project' AND [System.AreaPath] UNDER '$teamAreaPath' AND [System.State] IN ('Closed', 'Done') AND [Microsoft.VSTS.Common.ClosedDate] >= '$startDateStr' AND [Microsoft.VSTS.Common.ClosedDate] <= '$endDateStr' ORDER BY [Microsoft.VSTS.Common.ClosedDate] DESC"
 
 $wiqlUrl = "$baseUrl/_apis/wit/wiql?api-version=7.0"
 $wiqlBody = @{ query = $wiqlQuery } | ConvertTo-Json
@@ -105,7 +105,7 @@ try {
 # Step 3: Query for current active work items
 Write-Host "`nStep 3: Querying active work items..." -ForegroundColor Yellow
 
-$activeWiqlQuery = "SELECT [System.Id], [System.WorkItemType], [System.Title], [System.State], [System.CreatedDate], [Microsoft.VSTS.Common.ActivatedDate], [System.BoardColumn], [System.Tags] FROM WorkItems WHERE [System.TeamProject] = '$Project' AND [System.AreaPath] UNDER '$teamAreaPath' AND [System.State] NOT IN ('Closed', 'Done', 'Resolved', 'Removed') ORDER BY [System.CreatedDate] ASC"
+$activeWiqlQuery = "SELECT [System.Id], [System.WorkItemType], [System.Title], [System.State], [System.CreatedDate], [Microsoft.VSTS.Common.ActivatedDate], [System.BoardColumn], [System.Tags] FROM WorkItems WHERE [System.TeamProject] = '$Project' AND [System.AreaPath] UNDER '$teamAreaPath' AND [System.State] NOT IN ('Closed', 'Done', 'Removed') ORDER BY [System.CreatedDate] ASC"
 
 $activeWiqlBody = @{ query = $activeWiqlQuery } | ConvertTo-Json
 

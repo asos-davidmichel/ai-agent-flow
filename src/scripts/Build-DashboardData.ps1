@@ -397,6 +397,49 @@ $currentActiveBugRate = if ($rawData.activeItems.Count -gt 0) {
     [Math]::Round(($activeBugs.Count / $rawData.activeItems.Count) * 100, 1) 
 } else { 0 }
 
+# Current bug breakdown by board column (for pie chart)
+$bugColumnBreakdown = @{}
+foreach ($bug in $activeBugs) {
+    $column = $bug.fields.'System.BoardColumn'
+    if ([string]::IsNullOrWhiteSpace($column)) {
+        $column = $bug.fields.'System.State'
+    }
+    if ([string]::IsNullOrWhiteSpace($column)) {
+        $column = "Unknown"
+    }
+    
+    if (-not $bugColumnBreakdown.ContainsKey($column)) {
+        $bugColumnBreakdown[$column] = 0
+    }
+    $bugColumnBreakdown[$column]++
+}
+
+# Get board columns order for sorting
+$boardColumns = $rawData.boardConfig.columns
+if (-not $boardColumns) {
+    $boardColumns = @()
+}
+
+# Format bug breakdown for output, ordered by board column sequence
+$currentBugsByColumn = @()
+foreach ($col in $boardColumns) {
+    if ($bugColumnBreakdown.ContainsKey($col) -and $bugColumnBreakdown[$col] -gt 0) {
+        $currentBugsByColumn += @{
+            column = $col
+            count = $bugColumnBreakdown[$col]
+        }
+    }
+}
+# Add any columns not in board config
+foreach ($col in ($bugColumnBreakdown.Keys | Sort-Object)) {
+    if ($boardColumns -notcontains $col -and $bugColumnBreakdown[$col] -gt 0) {
+        $currentBugsByColumn += @{
+            column = $col
+            count = $bugColumnBreakdown[$col]
+        }
+    }
+}
+
 # Calculate bug rate statistics for insight (using WIP percentages)
 $avgWIPBugRate = if ($bugRateWIP.Count -gt 0) { 
     [Math]::Round(($bugRateWIP | Measure-Object -Average).Average, 1) 
@@ -698,6 +741,7 @@ $dashboardData = @{
             currentActiveBugRate = $currentActiveBugRate
             currentActiveBugs = @($activeBugs | ForEach-Object { @{id=$_.id; title=$_.fields.'System.Title'} })
         }
+        currentBugsByColumn = $currentBugsByColumn
         workItemAge = @{
             labels = @()
             states = @()

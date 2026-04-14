@@ -472,8 +472,8 @@
                 <div class="insight-box" id="leadTimeInsight"></div>
             </div>
 
-            <!-- Bug Rate Trend (Full Width) -->
-            <div class="chart-card chart-card-full">
+            <!-- Bug Rate Trend -->
+            <div class="chart-card">
                 <h2>🐛 Bug Rate Trend</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
                     Tracks the percentage of bugs in two ways: <strong style="color: #EF4444;">WIP Bug Rate</strong> shows % of bugs being worked on, while <strong style="color: #22C55E;">Completion Bug Rate</strong> shows % of bugs completed each week.
@@ -483,6 +483,17 @@
                 </div>
                 
                 <div class="insight-box" id="bugRateInsight"></div>
+            </div>
+
+            <!-- Current Bugs by Column -->
+            <div class="chart-card">
+                <h2>📍 Current Bugs by Column</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    Shows the current distribution of active bugs across board columns. Click legend items to toggle visibility.
+                </p>
+                <div class="chart-container">
+                    <canvas id="currentBugsChart"></canvas>
+                </div>
             </div>
         </div>
             </div>
@@ -3326,6 +3337,82 @@
                 }
             }
         });
+
+        // Current Bugs by Column - Pie Chart
+        if (dashboardData.charts.currentBugsByColumn && dashboardData.charts.currentBugsByColumn.length > 0) {
+            const bugsByColumn = dashboardData.charts.currentBugsByColumn;
+            const colors = [
+                '#EF4444', '#F97316', '#F59E0B', '#EAB308', '#84CC16', 
+                '#22C55E', '#10B981', '#14B8A6', '#06B6D4', '#0EA5E9', 
+                '#3B82F6', '#6366F1', '#8B5CF6', '#A855F7', '#D946EF'
+            ];
+            
+            new Chart(document.getElementById('currentBugsChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: bugsByColumn.map(item => `${item.column} (${item.count})`),
+                    datasets: [{
+                        label: 'Bugs',
+                        data: bugsByColumn.map(item => item.count),
+                        backgroundColor: colors.slice(0, bugsByColumn.length),
+                        borderColor: '#ffffff',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            onClick: function(e, legendItem, legend) {
+                                const index = legendItem.index;
+                                const chart = legend.chart;
+                                const meta = chart.getDatasetMeta(0);
+                                
+                                // Toggle visibility
+                                meta.data[index].hidden = !meta.data[index].hidden;
+                                chart.update();
+                            },
+                            labels: {
+                                padding: 15,
+                                font: { size: 12 },
+                                generateLabels: function(chart) {
+                                    const data = chart.data;
+                                    if (data.labels.length && data.datasets.length) {
+                                        return data.labels.map((label, i) => {
+                                            const meta = chart.getDatasetMeta(0);
+                                            const item = bugsByColumn[i];
+                                            return {
+                                                text: `${item.column}: ${item.count} bugs`,
+                                                fillStyle: data.datasets[0].backgroundColor[i],
+                                                hidden: meta.data[i].hidden,
+                                                index: i
+                                            };
+                                        });
+                                    }
+                                    return [];
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const item = bugsByColumn[context.dataIndex];
+                                    const total = bugsByColumn.reduce((sum, b) => sum + b.count, 0);
+                                    const percentage = ((item.count / total) * 100).toFixed(1);
+                                    return [
+                                        `Column: ${item.column}`,
+                                        `Bugs: ${item.count}`,
+                                        `Percentage: ${percentage}%`
+                                    ];
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
 
         // Net Flow Chart (Sustainability)
         const netFlowData = dashboardData.charts.netFlow.values.map(val => val);
