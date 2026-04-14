@@ -21,11 +21,10 @@ The prompt will automatically:
 ## 📁 Files
 
 - **dashboard-template.html** - Reusable template with `/* DATA_PLACEHOLDER */` injection point
-- **dashboard-data-example.json** - Example data structure (gets updated with real data)
+- **dashboard-data.json** - Generated dashboard data with real metrics
 - **dashboard.html** - Generated dashboard (template + data)
 - **Get-WorkItemColumnTime.ps1** - Extracts real column time from ADO Work Items API
-- **Update-DashboardData.ps1** - Merges columnTime data into dashboard data file
-- **HOW-TO-GET-REAL-DATA.md** - Technical documentation on automated extraction
+- **Build-DashboardData.ps1** - Processes raw data and builds complete dashboard structure
 
 ---
 
@@ -94,18 +93,19 @@ Get-WorkItemColumnTime.ps1
   └─ Return columnTime objects
 ```
 
-**Step 3:** Background script merges data (automatic)
+**Step 3:** Build complete dashboard data structure (automatic)
 ```powershell
-Update-DashboardData.ps1
-  ├─ Read dashboard data file
-  ├─ Match by work item ID
-  ├─ Add columnTime to each completed item
-  └─ Save updated file
+Build-DashboardData.ps1
+  ├─ Process raw ADO data
+  ├─ Calculate all flow metrics
+  ├─ Integrate columnTime data
+  ├─ Build chart data structures
+  └─ Save dashboard-data.json
 ```
 
 **Step 4:** Dashboard generates with real data
 ```
-Template + Data with columnTime = HTML Dashboard with accurate efficiency metrics
+Template + dashboard-data.json = HTML Dashboard with accurate metrics
 ```
 
 ---
@@ -127,19 +127,16 @@ Template + Data with columnTime = HTML Dashboard with accurate efficiency metric
 If you want to run the scripts manually:
 
 ```powershell
-# Extract columnTime for specific work items
-$data = .\Get-WorkItemColumnTime.ps1 `
+# Run the full dashboard generation
+cd src\scripts
+.\Generate-FlowDashboard.ps1 `
     -Organization "asos" `
     -Project "Customer" `
-    -WorkItemIds @(1170800, 1191895, 1190732)
-
-# Update dashboard data file
-.\Update-DashboardData.ps1 `
-    -DataFilePath "dashboard-data-example.json" `
-    -ColumnTimeData $data
+    -Team "Analytics and Experimentation" `
+    -Months 3
 ```
 
-But you don't need to - the prompt does this automatically!
+But the easiest way is to just use the `@ado-flow` prompt!
 
 ---
 
