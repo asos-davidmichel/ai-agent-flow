@@ -84,19 +84,58 @@ This will:
 After running setup, restart VS Code and try again.
 ```
 
-### Step 5: Run the dashboard generation script
+### Step 5: Determine workflow start column (Cycle Time calculation)
 
-Navigate to the src\scripts folder and run the Generate-FlowDashboard.ps1 script with the extracted parameters:
+Before running the dashboard generation, you need to determine which board column marks the start of "active work" (where cycle time begins).
+
+**Run a quick query to get the board columns:**
 
 ```powershell
 cd src\scripts
-.\Generate-FlowDashboard.ps1 -Organization "{organization}" -Project "{project}" -Team "{team}" -Months {months}
+$env:ADO_PAT = [System.Environment]::GetEnvironmentVariable('ADO_PAT', 'User')
+& ".\\Fetch-TeamFlowData.ps1" -Organization "{organization}" -Project "{project}" -Team "{team}" -Months 1 -Verbose | Select-String "Board columns:"
+```
+
+This will show the board columns like:
+```
+Board columns: New > Ready for Dev > In Development > In Review > External Review > Ready for QA > QA > Ready for release > Closed
+```
+
+**Ask the user:**
+
+"I can see your board has these columns:
+New > Ready for Dev > In Development > In Review > External Review > Ready for QA > QA > Ready for release > Closed
+
+**Which column marks the START of active work **(where cycle time begins)?
+This is typically when work moves from backlog/planning into development.
+
+Based on common patterns, I suggest: **In Development**
+
+Options:
+- Type the column name to use a different one
+- Press Enter to use the suggestion: **In Development**
+- Type 'auto' to let me infer it automatically"
+
+**Handle the response:**
+- If user confirms or presses Enter: Use the suggested column
+- If user types a column name: Validate it exists in the board columns and use it
+- If user types 'auto': Let the script infer (look for columns with "Dev", "Development", "Progress" in the name)
+
+Store this as `$workflowStartColumn`
+
+### Step 6: Run the dashboard generation script
+
+Navigate to the src\scripts folder and run the Generate-FlowDashboard.ps1 script with the extracted parameters **including the workflow start column**:
+
+```powershell
+cd src\scripts
+.\Generate-FlowDashboard.ps1 -Organization "{organization}" -Project "{project}" -Team "{team}" -Months {months} -WorkflowStartColumn "{workflowStartColumn}"
 ```
 
 **Example:**
 ```powershell
 cd src\scripts
-.\Generate-FlowDashboard.ps1 -Organization "asos" -Project "Customer" -Team "Analytics and Experimentation" -Months 3
+.\Generate-FlowDashboard.ps1 -Organization "asos" -Project "Customer" -Team "Analytics and Experimentation" -Months 3 -WorkflowStartColumn "In Development"
 ```
 
 **This master script will:**
@@ -109,7 +148,7 @@ cd src\scripts
 
 Monitor the script output for any errors. The script will create a dated output folder: `output/analysis-YYYY-MM-DD/`
 
-### Step 6: Open the generated dashboard
+### Step 7: Open the generated dashboard
 
 Once the script completes successfully, open the generated dashboard HTML file in the default browser:
 
@@ -123,12 +162,12 @@ The dashboard will display interactive charts showing:
 - **Throughput** - Items completed per week
 - **Cycle Time** - Distribution and percentiles
 - **Flow Efficiency** - Work Start, Cycle Time Flow, and Lead Time Flow metrics
-- **Bug Rate** - Quality metrics
+- **Bug Rate** - WIP bug rate,completion bug rate, and current status breakdown
 - **WIP & Aging** - Current work in progress and item age
 - **Column Time** - Time spent in each workflow stage
 - **System Stability** - Arrival vs Departure rates
 
-### Step 7: Provide summary
+### Step 8: Provide summary
 
 After the dashboard is generated and opened, provide a brief summary:
 
@@ -137,6 +176,7 @@ After the dashboard is generated and opened, provide a brief summary:
 
 **Team:** {Team Name}
 **Period:** {DD MMM YYYY - DD MMM YYYY}
+**Workflow Starts At:** {Workflow StartColumn}
 **Output:** output/analysis-{date}/dashboard.html
 
 The dashboard has been opened in your browser with interactive charts and flow metrics. 

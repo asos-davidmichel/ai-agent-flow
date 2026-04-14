@@ -17,7 +17,10 @@ param(
     $ColumnTimeData,
     
     [Parameter(Mandatory = $true)]
-    [string]$OutputPath
+    [string]$OutputPath,
+    
+    [Parameter(Mandatory = $false)]
+    [string]$WorkflowStartColumn
 )
 
 Write-Host "Building dashboard data structure..." -ForegroundColor Yellow
@@ -347,12 +350,16 @@ foreach ($week in $wipSnapshots) {
     $wipTotal = $wipBugsCount + $wipFeaturesCount
     $bugPercentage = if ($wipTotal -gt 0) { [Math]::Round(($wipBugsCount / $wipTotal) * 100, 1) } else { 0 }
     
-    # Get bug and feature details for tooltip
+    # Get bug and feature details for tooltip (search in both completed and active items)
     $wipBugItems = @()
     $wipFeatureItems = @()
     
     foreach ($bugId in $week.bugIds) {
+        # First try completed items, then active items
         $bugItem = $rawData.completedItems | Where-Object { $_.id -eq $bugId } | Select-Object -First 1
+        if (-not $bugItem) {
+            $bugItem = $rawData.activeItems | Where-Object { $_.id -eq $bugId } | Select-Object -First 1
+        }
         if ($bugItem) {
             $wipBugItems += @{
                 id = $bugItem.id
@@ -362,7 +369,11 @@ foreach ($week in $wipSnapshots) {
     }
     
     foreach ($featureId in $week.featureIds) {
+        # First try completed items, then active items
         $featureItem = $rawData.completedItems | Where-Object { $_.id -eq $featureId } | Select-Object -First 1
+        if (-not $featureItem) {
+            $featureItem = $rawData.activeItems | Where-Object { $_.id -eq $featureId } | Select-Object -First 1
+        }
         if ($featureItem) {
             $wipFeatureItems += @{
                 id = $featureItem.id
@@ -379,48 +390,12 @@ foreach ($week in $wipSnapshots) {
     $bugRateWIPFeatures += ,@($wipFeatureItems)
 }
 
-# Calculate current active items breakdown by state/column
+# Calculate current active items for bug rate display
 $activeBugs = @($rawData.activeItems | Where-Object { $_.fields.'System.WorkItemType' -eq 'Bug' })
 $activeFeatures = @($rawData.activeItems | Where-Object { $_.fields.'System.WorkItemType' -eq 'Product Backlog Item' })
 $currentActiveBugRate = if ($rawData.activeItems.Count -gt 0) { 
     [Math]::Round(($activeBugs.Count / $rawData.activeItems.Count) * 100, 1) 
 } else { 0 }
-
-# Current status breakdown by state
-$stateBreakdown = @{}
-foreach ($item in $rawData.activeItems) {
-    $state = $item.fields.'System.State'
-    $itemType = $item.fields.'System.WorkItemType'
-    
-    if (-not $stateBreakdown.ContainsKey($state)) {
-        $stateBreakdown[$state] = @{
-            bugs = 0
-            features = 0
-            total = 0
-        }
-    }
-    
-    $stateBreakdown[$state].total++
-    if ($itemType -eq 'Bug') {
-        $stateBreakdown[$state].bugs++
-    } else {
-        $stateBreakdown[$state].features++
-    }
-}
-
-# Format state breakdown for output
-$currentStatusBreakdown = @()
-foreach ($state in $stateBreakdown.Keys | Sort-Object) {
-    $data = $stateBreakdown[$state]
-    $bugPercentage = if ($data.total -gt 0) { [Math]::Round(($data.bugs / $data.total) * 100, 1) } else { 0 }
-    $currentStatusBreakdown += @{
-        state = $state
-        bugs = $data.bugs
-        features = $data.features
-        total = $data.total
-        bugPercentage = $bugPercentage
-    }
-}
 
 # Calculate bug rate statistics for insight (using WIP percentages)
 $avgWIPBugRate = if ($bugRateWIP.Count -gt 0) { 
@@ -722,7 +697,6 @@ $dashboardData = @{
             # Current active breakdown
             currentActiveBugRate = $currentActiveBugRate
             currentActiveBugs = @($activeBugs | ForEach-Object { @{id=$_.id; title=$_.fields.'System.Title'} })
-            currentStatusBreakdown = $currentStatusBreakdown
         }
         workItemAge = @{
             labels = @()

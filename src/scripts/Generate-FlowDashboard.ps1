@@ -27,8 +27,12 @@
 .PARAMETER SkipFetch
     Skip fetching new data from ADO and use existing flow-data file
 
+.PARAMETER WorkflowStartColumn
+    The board column where active work begins (for cycle time calculation).
+    If not specified, will attempt to use a default.
+
 .EXAMPLE
-    .\Generate-FlowDashboard.ps1 -Organization "asos" -Project "Customer" -Team "Analytics and Experimentation" -Months 3
+    .\Generate-FlowDashboard.ps1 -Organization "asos" -Project "Customer" -Team "Analytics and Experimentation" -Months 3 -WorkflowStartColumn "In Development"
 #>
 
 [CmdletBinding()]
@@ -46,7 +50,10 @@ param(
     [int]$Months = 3,
     
     [Parameter(Mandatory = $false)]
-    [switch]$SkipFetch
+    [switch]$SkipFetch,
+    
+    [Parameter(Mandatory = $false)]
+    [string]$WorkflowStartColumn
 )
 
 $ErrorActionPreference = "Stop"
@@ -127,10 +134,15 @@ Write-Host "  [OK] Calculated columnTime for $($columnTimeData.Count) items" -Fo
 Write-Host "`n[3/4] Building dashboard data structure..." -ForegroundColor Yellow
 
 # Import the comprehensive dashboard builder
-& (Join-Path $PSScriptRoot "Build-DashboardData.ps1") `
-    -FlowDataPath $flowDataPath `
-    -ColumnTimeData $columnTimeData `
-    -OutputPath (Join-Path $outputFolder "dashboard-data.json")
+$buildParams = @{
+    FlowDataPath = $flowDataPath
+    ColumnTimeData = $columnTimeData
+    OutputPath = (Join-Path $outputFolder "dashboard-data.json")
+}
+if ($WorkflowStartColumn) {
+    $buildParams['WorkflowStartColumn'] = $WorkflowStartColumn
+}
+& (Join-Path $PSScriptRoot "Build-DashboardData.ps1") @buildParams
 
 # Step 4: Generate HTML
 Write-Host "`n[4/4] Generating dashboard HTML..." -ForegroundColor Yellow

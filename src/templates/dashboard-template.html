@@ -472,18 +472,10 @@
             <div class="chart-card">
                 <h2>🐛 Bug Rate Trend</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    Tracks the percentage of bugs in two ways: <strong style="color: #fc8181;">WIP Bug Rate</strong> shows % of bugs being worked on, while <strong style="color: #f97316;">Completion Bug Rate</strong> shows % of bugs completed each week.
+                    Tracks the percentage of bugs in two ways: <strong style="color: #3B82F6;">WIP Bug Rate</strong> shows % of bugs being worked on, while <strong style="color: #f97316;">Completion Bug Rate</strong> shows % of bugs completed each week.
                 </p>
                 <div class="chart-container">
                     <canvas id="bugRateChart"></canvas>
-                </div>
-                
-                <!-- Current Status Breakdown -->
-                <div style="background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-top: 20px;">
-                    <h3 style="margin: 0 0 12px 0; font-size: 16px; font-weight: 700; color: #2d3748;">📋 Current Status Breakdown</h3>
-                    <div id="currentStatusBreakdown" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
-                        <!-- Populated dynamically -->
-                    </div>
                 </div>
                 
                 <div class="insight-box" id="bugRateInsight"></div>
@@ -1134,25 +1126,6 @@
         document.getElementById('wipInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.wip}</p>`;
         // Bug Rate Insight
         document.getElementById('bugRateInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.bugRate}</p>`;
-        
-        // Current Status Breakdown
-        const statusBreakdownEl = document.getElementById('currentStatusBreakdown');
-        if (dashboardData.charts.bugRate.currentStatusBreakdown && dashboardData.charts.bugRate.currentStatusBreakdown.length > 0) {
-            statusBreakdownEl.innerHTML = dashboardData.charts.bugRate.currentStatusBreakdown.map(item => `
-                <div style="background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px;">
-                    <div style="font-weight: 700; font-size: 14px; margin-bottom: 6px; color: #2d3748;">${item.state}</div>
-                    <div style="font-size: 13px; color: #4a5568;">
-                        <span style="color: #fc8181; font-weight: 600;">${item.bugs} bugs</span> / 
-                        <span style="color: #4299e1; font-weight: 600;">${item.features} features</span>
-                    </div>
-                    <div style="font-size: 12px; color: #718096; margin-top: 4px;">
-                        <strong>${item.bugPercentage}%</strong> bug rate
-                    </div>
-                </div>
-            `).join('');
-        } else {
-            statusBreakdownEl.innerHTML = '<div style="color: #718096; font-style: italic;">No active items to display</div>';
-        }
         document.getElementById('netFlowInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.netFlow}</p>`;
         document.getElementById('stateInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.state}</p>`;
         
@@ -3140,8 +3113,8 @@
                     {
                         label: 'WIP Bug Rate (%)',
                         data: dashboardData.charts.bugRate.wipRate,
-                        borderColor: '#fc8181',
-                        backgroundColor: 'rgba(252, 129, 129, 0.1)',
+                        borderColor: '#3B82F6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
                         borderWidth: 3,
                         fill: true,
                         tension: 0.4,
@@ -3168,7 +3141,7 @@
                 responsive: true,
                 maintainAspectRatio: false,
                 interaction: {
-                    mode: 'index',
+                    mode: 'point',
                     intersect: false
                 },
                 plugins: {
@@ -3199,18 +3172,22 @@
 
                             // Get data point
                             if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
-                                const index = tooltipModel.dataPoints[0].dataIndex;
+                                const dataPoint = tooltipModel.dataPoints[0];
+                                const index = dataPoint.dataIndex;
+                                const datasetIndex = dataPoint.datasetIndex;
                                 const weekLabel = dashboardData.charts.bugRate.labels[index];
                                 
                                 // WIP data for this week
                                 const wipBugCount = dashboardData.charts.bugRate.wipBugCount[index];
                                 const wipFeatureCount = dashboardData.charts.bugRate.wipFeatureCount[index];
+                                const wipTotal = wipBugCount + wipFeatureCount;
                                 const wipRate = dashboardData.charts.bugRate.wipRate[index];
                                 const wipBugsItems = dashboardData.charts.bugRate.wipBugs[index];
                                 
                                 // Completion data for this week
                                 const compBugCount = dashboardData.charts.bugRate.completionBugCount[index];
                                 const compFeatureCount = dashboardData.charts.bugRate.completionFeatureCount[index];
+                                const compTotal = compBugCount + compFeatureCount;
                                 const compRate = dashboardData.charts.bugRate.completionRate[index];
                                 const compBugsItems = dashboardData.charts.bugRate.completionBugs[index];
                                 
@@ -3219,7 +3196,7 @@
                                 if (wipBugsItems && wipBugsItems.length > 0) {
                                     wipBugsItems.forEach(item => {
                                         const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
-                                        wipBugsHTML += `<div style="margin-bottom: 4px; padding-left: 8px; border-left: 2px solid #fc8181;">
+                                        wipBugsHTML += `<div style="margin-bottom: 4px; padding-left: 8px; border-left: 2px solid #3B82F6;">
                                             <a href="${adoUrl}" target="_blank" style="text-decoration: none; font-weight: 600;">#${item.id}</a>
                                             <span style="color: #ddd; font-size: 12px;"> ${item.title}</span>
                                         </div>`;
@@ -3242,22 +3219,32 @@
                                     compBugsHTML = '<div style="color: #aaa; font-style: italic; padding-left: 8px;">None</div>';
                                 }
                                 
-                                // Build HTML
-                                tooltipEl.innerHTML = `
-                                    <div class="tooltip-title">Week of ${weekLabel}</div>
-                                    <div class="tooltip-content">
-                                        <strong style="color: #fc8181;">📊 Work In Progress:</strong><br>
-                                        WIP Bug Rate: <strong>${wipRate !== null ? wipRate.toFixed(1) : 'N/A'}%</strong><br>
-                                        Bugs: ${wipBugCount} / Features: ${wipFeatureCount}<br>
-                                        ${wipBugsItems && wipBugsItems.length > 0 ? `<br><strong style="color: #fc8181;">🐛 Bugs in WIP:</strong><br>${wipBugsHTML}` : ''}
-                                        <br><br>
-                                        <strong style="color: #f97316;">✅ Completed This Week:</strong><br>
-                                        Completion Bug Rate: <strong>${compRate !== null ? compRate.toFixed(1) : 'N/A'}%</strong><br>
-                                        Bugs: ${compBugCount} / Features: ${compFeatureCount}<br>
-                                        ${compBugsItems && compBugsItems.length > 0 ? `<br><strong style="color: #f97316;">🐛 Bugs Completed:</strong><br>${compBugsHTML}` : ''}
-                                    </div>
-                                    <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
-                                `;
+                                // Build HTML - show only the hovered dataset's data
+                                if (datasetIndex === 0) {
+                                    // WIP Bug Rate tooltip
+                                    tooltipEl.innerHTML = `
+                                        <div class="tooltip-title">Week of ${weekLabel}</div>
+                                        <div class="tooltip-content">
+                                            <strong style="color: #3B82F6;">📊 Work In Progress:</strong><br>
+                                            WIP Bug Rate: <strong>${wipRate !== null ? wipRate.toFixed(1) : 'N/A'}%</strong><br>
+                                            ${wipBugCount} bugs from ${wipTotal} items in total<br>
+                                            ${wipBugsItems && wipBugsItems.length > 0 ? `<br><strong style="color: #3B82F6;">🐛 Bugs in WIP:</strong><br>${wipBugsHTML}` : ''}
+                                        </div>
+                                        <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
+                                    `;
+                                } else {
+                                    // Completion Bug Rate tooltip
+                                    tooltipEl.innerHTML = `
+                                        <div class="tooltip-title">Week of ${weekLabel}</div>
+                                        <div class="tooltip-content">
+                                            <strong style="color: #f97316;">✅ Completed This Week:</strong><br>
+                                            Completion Bug Rate: <strong>${compRate !== null ? compRate.toFixed(1) : 'N/A'}%</strong><br>
+                                            ${compBugCount} bugs from ${compTotal} items in total<br>
+                                            ${compBugsItems && compBugsItems.length > 0 ? `<br><strong style="color: #f97316;">🐛 Bugs Completed:</strong><br>${compBugsHTML}` : ''}
+                                        </div>
+                                        <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
+                                    `;
+                                }
                             }
 
                             // Display tooltip
