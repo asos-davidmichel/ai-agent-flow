@@ -476,7 +476,7 @@
             <div class="chart-card chart-card-full">
                 <h2>🐛 Bug Rate Trend</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    Tracks the percentage of bugs in two ways: <strong style="color: #3B82F6;">WIP Bug Rate</strong> shows % of bugs being worked on, while <strong style="color: #f97316;">Completion Bug Rate</strong> shows % of bugs completed each week.
+                    Tracks the percentage of bugs in two ways: <strong style="color: #EF4444;">WIP Bug Rate</strong> shows % of bugs being worked on, while <strong style="color: #22C55E;">Completion Bug Rate</strong> shows % of bugs completed each week.
                 </p>
                 <div class="chart-container">
                     <canvas id="bugRateChart"></canvas>
@@ -3134,8 +3134,8 @@
                     {
                         label: 'WIP Bug Rate (%)',
                         data: dashboardData.charts.bugRate.wipRate,
-                        borderColor: '#3B82F6',
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderColor: '#EF4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
                         borderWidth: 3,
                         fill: true,
                         tension: 0.4,
@@ -3146,7 +3146,7 @@
                     {
                         label: 'WIP Trend',
                         data: calculateLinearRegression(dashboardData.charts.bugRate.wipRate),
-                        borderColor: '#93C5FD',
+                        borderColor: '#FCA5A5',
                         backgroundColor: 'transparent',
                         borderWidth: 2,
                         borderDash: [10, 5],
@@ -3158,8 +3158,8 @@
                     {
                         label: 'Completion Bug Rate (%)',
                         data: dashboardData.charts.bugRate.completionRate,
-                        borderColor: '#f97316',
-                        backgroundColor: 'rgba(249, 115, 22, 0.1)',
+                        borderColor: '#22C55E',
+                        backgroundColor: 'rgba(34, 197, 94, 0.1)',
                         borderWidth: 3,
                         fill: true,
                         tension: 0.4,
@@ -3171,7 +3171,7 @@
                     {
                         label: 'Completion Trend',
                         data: calculateLinearRegression(dashboardData.charts.bugRate.completionRate),
-                        borderColor: '#FCA5A5',
+                        borderColor: '#86EFAC',
                         backgroundColor: 'transparent',
                         borderWidth: 2,
                         borderDash: [10, 5],
@@ -3253,7 +3253,7 @@
                                 if (wipBugsItems && wipBugsItems.length > 0) {
                                     wipBugsItems.forEach(item => {
                                         const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
-                                        wipBugsHTML += `<div style="margin-bottom: 4px; padding-left: 8px; border-left: 2px solid #3B82F6;">
+                                        wipBugsHTML += `<div style="margin-bottom: 4px; padding-left: 8px; border-left: 2px solid #EF4444;">
                                             <a href="${adoUrl}" target="_blank" style="text-decoration: none; font-weight: 600;">#${item.id}</a>
                                             <span style="color: #ddd; font-size: 12px;"> ${item.title}</span>
                                         </div>`;
@@ -3267,7 +3267,7 @@
                                 if (compBugsItems && compBugsItems.length > 0) {
                                     compBugsItems.forEach(item => {
                                         const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
-                                        compBugsHTML += `<div style="margin-bottom: 4px; padding-left: 8px; border-left: 2px solid #f97316;">
+                                        compBugsHTML += `<div style="margin-bottom: 4px; padding-left: 8px; border-left: 2px solid #22C55E;">
                                             <a href="${adoUrl}" target="_blank" style="text-decoration: none; font-weight: 600;">#${item.id}</a>
                                             <span style="color: #ddd; font-size: 12px;"> ${item.title}</span>
                                         </div>`;
@@ -3282,10 +3282,10 @@
                                     tooltipEl.innerHTML = `
                                         <div class="tooltip-title">Week of ${weekLabel}</div>
                                         <div class="tooltip-content">
-                                            <strong style="color: #3B82F6;">📊 Work In Progress:</strong><br>
+                                            <strong style="color: #EF4444;">📊 Work In Progress:</strong><br>
                                             WIP Bug Rate: <strong>${wipRate !== null ? wipRate.toFixed(1) : 'N/A'}%</strong><br>
                                             ${wipBugCount} bugs from ${wipTotal} items in total<br>
-                                            ${wipBugsItems && wipBugsItems.length > 0 ? `<br><strong style="color: #3B82F6;">🐛 Bugs in WIP:</strong><br>${wipBugsHTML}` : ''}
+                                            ${wipBugsItems && wipBugsItems.length > 0 ? `<br><strong style="color: #EF4444;">🐛 Bugs in WIP:</strong><br>${wipBugsHTML}` : ''}
                                         </div>
                                         <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
                                     `;
@@ -3294,10 +3294,10 @@
                                     tooltipEl.innerHTML = `
                                         <div class="tooltip-title">Week of ${weekLabel}</div>
                                         <div class="tooltip-content">
-                                            <strong style="color: #f97316;">✅ Completed This Week:</strong><br>
+                                            <strong style="color: #22C55E;">✅ Completed This Week:</strong><br>
                                             Completion Bug Rate: <strong>${compRate !== null ? compRate.toFixed(1) : 'N/A'}%</strong><br>
                                             ${compBugCount} bugs from ${compTotal} items in total<br>
-                                            ${compBugsItems && compBugsItems.length > 0 ? `<br><strong style="color: #f97316;">🐛 Bugs Completed:</strong><br>${compBugsHTML}` : ''}
+                                            ${compBugsItems && compBugsItems.length > 0 ? `<br><strong style="color: #22C55E;">🐛 Bugs Completed:</strong><br>${compBugsHTML}` : ''}
                                         </div>
                                         <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
                                     `;
