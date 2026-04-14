@@ -1,0 +1,172 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Board Configuration Schema",
+  "description": "Configuration schema for Azure DevOps board flow metrics",
+  "type": "object",
+  "required": ["organization", "project", "team", "states", "metrics"],
+  "properties": {
+    "boardName": {
+      "type": "string",
+      "description": "Human-readable board/team name"
+    },
+    "organization": {
+      "type": "string",
+      "description": "Azure DevOps organization name"
+    },
+    "project": {
+      "type": "string",
+      "description": "Azure DevOps project name"
+    },
+    "team": {
+      "type": "string",
+      "description": "Team name (URL-decoded)"
+    },
+    "configuredDate": {
+      "type": "string",
+      "format": "date",
+      "description": "Date when configuration was created/updated"
+    },
+    "columns": {
+      "type": "object",
+      "description": "Board columns categorized by workflow stage",
+      "properties": {
+        "backlog": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Columns representing work not yet started"
+        },
+        "inProgress": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Columns representing active work"
+        },
+        "done": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Columns representing completed work"
+        }
+      }
+    },
+    "states": {
+      "type": "object",
+      "required": ["active", "completed"],
+      "properties": {
+        "active": {
+          "type": "object",
+          "required": ["excludeStates"],
+          "properties": {
+            "description": { "type": "string" },
+            "excludeStates": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "States to exclude from active items (WIQL NOT IN clause)"
+            }
+          }
+        },
+        "completed": {
+          "type": "object",
+          "required": ["includeStates"],
+          "properties": {
+            "description": { "type": "string" },
+            "includeStates": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "States to include in completed items (WIQL IN clause)"
+            }
+          }
+        },
+        "notes": {
+          "type": "object",
+          "description": "Additional notes about specific state handling",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "required": ["cycleTime", "leadTime", "throughput"],
+      "properties": {
+        "cycleTime": {
+          "type": "object",
+          "required": ["startColumn", "endState"],
+          "properties": {
+            "startColumn": { 
+              "type": "string",
+              "description": "Board column where cycle time measurement begins"
+            },
+            "startDescription": { "type": "string" },
+            "endState": { 
+              "type": "string",
+              "description": "Work item state where cycle time measurement ends"
+            },
+            "endDescription": { "type": "string" }
+          }
+        },
+        "leadTime": {
+          "type": "object",
+          "required": ["startType", "endState"],
+          "properties": {
+            "startType": { 
+              "type": "string",
+              "enum": ["creation", "boardEntry", "backlogExit"],
+              "description": "Type of lead time start measurement"
+            },
+            "startColumn": { 
+              "type": "string",
+              "description": "Board column for boardEntry or backlogExit types"
+            },
+            "startDescription": { "type": "string" },
+            "endState": { "type": "string" },
+            "endDescription": { "type": "string" },
+            "alternatives": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string" },
+                  "column": { "type": "string" },
+                  "description": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "throughput": {
+          "type": "object",
+          "required": ["completedStates", "dateField"],
+          "properties": {
+            "completedStates": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "States that count as completed for throughput"
+            },
+            "dateField": {
+              "type": "string",
+              "description": "ADO field to use for completion date filtering"
+            }
+          }
+        }
+      }
+    },
+    "workItemTypes": {
+      "type": "object",
+      "properties": {
+        "tracked": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Work item types to include in metrics"
+        },
+        "excluded": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Work item types to exclude from metrics"
+        }
+      }
+    },
+    "specialHandling": {
+      "type": "object",
+      "description": "Special handling rules for tags, custom fields, etc.",
+      "additionalProperties": true
+    }
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "$schema": "./board-config.schema.json",
+  "boardName": "Analytics and Experimentation",
+  "organization": "asos",
+  "project": "Customer",
+  "team": "Analytics and Experimentation",
+  "configuredDate": "2026-04-14",
+  "columns": {
+    "backlog": [
+      "New",
+      "Ready for Dev"
+    ],
+    "inProgress": [
+      "In Development",
+      "In Review",
+      "External Review",
+      "Ready for QA",
+      "QA",
+      "Ready for release"
+    ],
+    "done": [
+      "Closed"
+    ]
+  },
+  "states": {
+    "active": {
+      "description": "Work items to include in active metrics",
+      "excludeStates": [
+        "Closed",
+        "Done",
+        "Removed"
+      ]
+    },
+    "completed": {
+      "description": "Work items to include in completion metrics",
+      "includeStates": [
+        "Closed",
+        "Done"
+      ]
+    },
+    "notes": {
+      "Resolved": "Included in active items - represents bugs fixed but awaiting QA verification"
+    }
+  },
+  "metrics": {
+    "cycleTime": {
+      "startColumn": "In Development",
+      "startDescription": "When work enters active development",
+      "endState": "Closed",
+      "endDescription": "When work is fully completed"
+    },
+    "leadTime": {
+      "startType": "boardEntry",
+      "startColumn": "New",
+      "startDescription": "When work first appears on the board",
+      "endState": "Closed",
+      "endDescription": "When work is fully completed",
+      "alternatives": [
+        {
+          "type": "creation",
+          "description": "From System.CreatedDate to Closed"
+        },
+        {
+          "type": "backlogExit",
+          "column": "In Development",
+          "description": "From leaving backlog to Closed"
+        }
+      ]
+    },
+    "throughput": {
+      "completedStates": [
+        "Closed",
+        "Done"
+      ],
+      "dateField": "Microsoft.VSTS.Common.ClosedDate"
+    }
+  },
+  "workItemTypes": {
+    "tracked": [
+      "Product Backlog Item",
+      "Bug",
+      "User Story",
+      "Feature"
+    ],
+    "excluded": [
+      "Epic",
+      "Task"
+    ]
+  },
+  "specialHandling": {
+    "blockedTag": "Blocked",
+    "blockedDescription": "Items with 'Blocked' tag are flagged but still counted as active"
+  }
+}

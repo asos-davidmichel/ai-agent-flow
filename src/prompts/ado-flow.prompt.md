@@ -84,7 +84,48 @@ This will:
 After running setup, restart VS Code and try again.
 ```
 
+### Step 4.5: Check for board configuration (Optional)
+
+**Check if a board configuration file exists:**
+
+```powershell
+$configPath = ".\config\{org}-{project}-{team-slug}.json"
+Test-Path $configPath
+```
+
+**If configuration EXISTS:**
+- ✅ Inform user: "Found board configuration: {configPath}"
+- Use this configuration for state categorization and metric boundaries
+- Set `$configFile = $configPath` to pass to the script
+
+**If configuration DOES NOT exist:**
+- Ask user: "No board configuration found. Would you like to:
+  1. **Generate configuration first** (recommended for new boards) - I'll analyze your board structure and create a config file
+  2. **Use defaults** - Proceed with sensible defaults (Closed/Done = complete, others = active)
+  3. **Skip for now** - Generate dashboard with defaults, configure later"
+
+**If user chooses Option 1 (Generate configuration):**
+- Inform: "Let's configure your board first. I'll use the `/ado-board-config` prompt to analyze your workflow."
+- **Suggest:** "After this conversation, start a new chat and run `/ado-board-config` with your board URL, or I can help you now by switching context."
+- **Important:** Configuration requires thoughtful categorization of columns/states, so it's best done separately
+- **Pause:** Wait for user to configure board, then return to dashboard generation
+
+**If user chooses Option 2 or 3:**
+- Proceed without configuration file
+- Note: Defaults assume:
+  - Active items: NOT IN ('Closed', 'Done', 'Removed')
+  - Completed items: IN ('Closed', 'Done')
+  - Cycle time: From first column change to closed
+
 ### Step 5: Determine workflow start column (Cycle Time calculation)
+
+**If using a configuration file:**
+- Read the cycle time start column from config: `$config.metrics.cycleTime.startColumn`
+- Show user: "Using configured cycle time start: {startColumn}"
+- Set `$workflowStartColumn = $config.metrics.cycleTime.startColumn`
+- Skip the rest of this step
+
+**If NOT using configuration:**
 
 Before running the dashboard generation, you need to determine which board column marks the start of "active work" (where cycle time begins).
 
@@ -125,21 +166,54 @@ Store this as `$workflowStartColumn`
 
 ### Step 6: Run the dashboard generation script
 
-Navigate to the src\scripts folder and run the Generate-FlowDashboard.ps1 script with the extracted parameters **including the workflow start column**:
+Navigate to the src\scripts folder and run the Generate-FlowDashboard.ps1 script with the extracted parameters.
 
+**If using a configuration file:**
 ```powershell
 cd src\scripts
-.\Generate-FlowDashboard.ps1 -Organization "{organization}" -Project "{project}" -Team "{team}" -Months {months} -WorkflowStartColumn "{workflowStartColumn}"
+.\Generate-FlowDashboard.ps1 `
+  -Organization "{organization}" `
+  -Project "{project}" `
+  -Team "{team}" `
+  -Months {months} `
+  -ConfigFile "{configPath}"
 ```
 
-**Example:**
+**Example with configuration:**
 ```powershell
 cd src\scripts
-.\Generate-FlowDashboard.ps1 -Organization "asos" -Project "Customer" -Team "Analytics and Experimentation" -Months 3 -WorkflowStartColumn "In Development"
+.\Generate-FlowDashboard.ps1 `
+  -Organization "asos" `
+  -Project "Customer" `
+  -Team "Analytics and Experimentation" `
+  -Months 3 `
+  -ConfigFile ".\config\asos-customer-analytics-experimentation.json"
+```
+
+**If NOT using configuration (defaults):**
+```powershell
+cd src\scripts
+.\Generate-FlowDashboard.ps1 `
+  -Organization "{organization}" `
+  -Project "{project}" `
+  -Team "{team}" `
+  -Months {months} `
+  -WorkflowStartColumn "{workflowStartColumn}"
+```
+
+**Example with defaults:**
+```powershell
+cd src\scripts
+.\Generate-FlowDashboard.ps1 `
+  -Organization "asos" `
+  -Project "Customer" `
+  -Team "Analytics and Experimentation" `
+  -Months 3 `
+  -WorkflowStartColumn "In Development"
 ```
 
 **This master script will:**
-1. Fetch raw work item data from Azure DevOps APIs
+1. Fetch raw work item data from Azure DevOps APIs (using configured state filters if available)
 2. Process it to calculate flow metrics (throughput, cycle time, flow efficiency, etc.)
 3. Extract columnTime data from state transition history
 4. Build the dashboard data JSON file

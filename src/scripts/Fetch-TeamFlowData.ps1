@@ -25,8 +25,14 @@
 .PARAMETER OutputPath
     Path to save the output JSON file
 
+.PARAMETER ConfigFile
+    Path to board configuration JSON file (optional)
+
 .EXAMPLE
     .\Fetch-TeamFlowData.ps1 -Organization "asos" -Project "Customer" -Team "Analytics and Experimentation" -Months 3
+
+.EXAMPLE
+    .\Fetch-TeamFlowData.ps1 -Organization "asos" -Project "Customer" -Team "Analytics and Experimentation" -ConfigFile ".\config\board-config.json" -Months 3
 #>
 
 [CmdletBinding()]
@@ -44,8 +50,21 @@ param(
     [int]$Months = 3,
     
     [Parameter(Mandatory = $false)]
-    [string]$OutputPath = (Join-Path $PSScriptRoot "flow-data-$(Get-Date -Format 'yyyy-MM-dd').json")
+    [string]$OutputPath = (Join-Path $PSScriptRoot "flow-data-$(Get-Date -Format 'yyyy-MM-dd').json"),
+    
+    [Parameter(Mandatory = $false)]
+    [string]$ConfigFile = $null
 )
+
+# Load configuration if provided
+$config = $null
+if ($ConfigFile -and (Test-Path $ConfigFile)) {
+    Write-Host "Loading board configuration from: $ConfigFile" -ForegroundColor Cyan
+    $config = Get-Content $ConfigFile -Raw | ConvertFrom-Json
+    Write-Host "  [OK] Configuration loaded" -ForegroundColor Green
+} else {
+    Write-Host "Using default configuration (no config file provided)" -ForegroundColor Gray
+}
 
 # Check for PAT
 $pat = $env:ADO_PAT
@@ -88,7 +107,17 @@ Write-Host "`nStep 2: Querying completed work items..." -ForegroundColor Yellow
 $startDateStr = $startDate.ToString('yyyy-MM-dd')
 $endDateStr = $endDate.ToString('yyyy-MM-dd')
 
-$wiqlQuery = "SELECT [System.Id], [System.WorkItemType], [System.Title], [System.State], [System.CreatedDate], [Microsoft.VSTS.Common.ClosedDate], [Microsoft.VSTS.Common.ActivatedDate], [System.BoardColumn], [System.Tags] FROM WorkItems WHERE [System.TeamProject] = '$Project' AND [System.AreaPath] UNDER '$teamAreaPath' AND [System.State] IN ('Closed', 'Done') AND [Microsoft.VSTS.Common.ClosedDate] >= '$startDateStr' AND [Microsoft.VSTS.Common.ClosedDate] <= '$endDateStr' ORDER BY [Microsoft.VSTS.Common.ClosedDate] DESC"
+# Determine completed states from config or use defaults
+if ($config -and $config.states.completed.includeStates) {
+    $completedStates = $config.states.completed.includeStates
+    Write-Host "  Using configured completed states: $($completedStates -join ', ')" -ForegroundColor Gray
+} else {
+    $completedStates = @('Closed', 'Done')
+    Write-Host "  Using default completed states: $($completedStates -join ', ')" -ForegroundColor Gray
+}
+
+$completedStatesClause = ($completedStates | ForEach-Object { "'$_'" }) -join ', '
+$wiqlQuery = "SELECT [System.Id], [System.WorkItemType], [System.Title], [System.State], [System.CreatedDate], [Microsoft.VSTS.Common.ClosedDate], [Microsoft.VSTS.Common.ActivatedDate], [System.BoardColumn], [System.Tags] FROM WorkItems WHERE [System.TeamProject] = '$Project' AND [System.AreaPath] UNDER '$teamAreaPath' AND [System.State] IN ($completedStatesClause) AND [Microsoft.VSTS.Common.ClosedDate] >= '$startDateStr' AND [Microsoft.VSTS.Common.ClosedDate] <= '$endDateStr' ORDER BY [Microsoft.VSTS.Common.ClosedDate] DESC"
 
 $wiqlUrl = "$baseUrl/_apis/wit/wiql?api-version=7.0"
 $wiqlBody = @{ query = $wiqlQuery } | ConvertTo-Json
@@ -105,7 +134,17 @@ try {
 # Step 3: Query for current active work items
 Write-Host "`nStep 3: Querying active work items..." -ForegroundColor Yellow
 
-$activeWiqlQuery = "SELECT [System.Id], [System.WorkItemType], [System.Title], [System.State], [System.CreatedDate], [Microsoft.VSTS.Common.ActivatedDate], [System.BoardColumn], [System.Tags] FROM WorkItems WHERE [System.TeamProject] = '$Project' AND [System.AreaPath] UNDER '$teamAreaPath' AND [System.State] NOT IN ('Closed', 'Done', 'Removed') ORDER BY [System.CreatedDate] ASC"
+# Determine excluded states from config or use defaults
+if ($config -and $config.states.active.excludeStates) {
+    $excludedStates = $config.states.active.excludeStates
+    Write-Host "  Using configured excluded states: $($excludedStates -join ', ')" -ForegroundColor Gray
+} else {
+    $excludedStates = @('Closed', 'Done', 'Removed')
+    Write-Host "  Using default excluded states: $($excludedStates -join ', ')" -ForegroundColor Gray
+}
+
+$excludedStatesClause = ($excludedStates | ForEach-Object { "'$_'" }) -join ', '
+$activeWiqlQuery = "SELECT [System.Id], [System.WorkItemType], [System.Title], [System.State], [System.CreatedDate], [Microsoft.VSTS.Common.ActivatedDate], [System.BoardColumn], [System.Tags] FROM WorkItems WHERE [System.TeamProject] = '$Project' AND [System.AreaPath] UNDER '$teamAreaPath' AND [System.State] NOT IN ($excludedStatesClause) ORDER BY [System.CreatedDate] ASC"
 
 $activeWiqlBody = @{ query = $activeWiqlQuery } | ConvertTo-Json
 

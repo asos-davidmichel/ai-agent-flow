@@ -31,8 +31,15 @@
     The board column where active work begins (for cycle time calculation).
     If not specified, will attempt to use a default.
 
+.PARAMETER ConfigFile
+    Path to board configuration JSON file (optional).
+    When provided, uses configuration for state categorization and metric boundaries.
+
 .EXAMPLE
     .\Generate-FlowDashboard.ps1 -Organization "asos" -Project "Customer" -Team "Analytics and Experimentation" -Months 3 -WorkflowStartColumn "In Development"
+
+.EXAMPLE
+    .\Generate-FlowDashboard.ps1 -Organization "asos" -Project "Customer" -Team "Analytics and Experimentation" -ConfigFile ".\config\board-config.json" -Months 3
 #>
 
 [CmdletBinding()]
@@ -53,7 +60,10 @@ param(
     [switch]$SkipFetch,
     
     [Parameter(Mandatory = $false)]
-    [string]$WorkflowStartColumn
+    [string]$WorkflowStartColumn,
+    
+    [Parameter(Mandatory = $false)]
+    [string]$ConfigFile = $null
 )
 
 $ErrorActionPreference = "Stop"
@@ -88,12 +98,20 @@ $flowDataPath = Join-Path $outputFolder "flow-data-$dateStamp.json"
 
 if (-not $SkipFetch) {
     Write-Host "[1/4] Fetching data from Azure DevOps..." -ForegroundColor Yellow
-    & (Join-Path $PSScriptRoot "Fetch-TeamFlowData.ps1") `
-        -Organization $Organization `
-        -Project $Project `
-        -Team $Team `
-        -Months $Months `
-        -OutputPath $flowDataPath
+    
+    $fetchParams = @{
+        Organization = $Organization
+        Project = $Project
+        Team = $Team
+        Months = $Months
+        OutputPath = $flowDataPath
+    }
+    
+    if ($ConfigFile) {
+        $fetchParams['ConfigFile'] = $ConfigFile
+    }
+    
+    & (Join-Path $PSScriptRoot "Fetch-TeamFlowData.ps1") @fetchParams
         
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Failed to fetch data from ADO"
