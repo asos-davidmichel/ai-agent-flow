@@ -181,6 +181,10 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.07);
         }
         
+        .chart-card-full {
+            grid-column: 1 / -1;
+        }
+        
         .chart-card h2 {
             font-size: 18px;
             font-weight: 600;
@@ -432,8 +436,8 @@
             <!-- Tab 1: Time Metrics (Throughput, Cycle & Lead Time, Efficiency) -->
             <div id="time-metrics" class="tab-content active">
                 <div class="charts-grid">
-            <!-- Throughput Trend -->
-            <div class="chart-card">
+            <!-- Throughput Trend (Full Width) -->
+            <div class="chart-card chart-card-full">
                 <h2>📈 Throughput Trend</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
                     Shows the number of items completed over time.
@@ -468,8 +472,8 @@
                 <div class="insight-box" id="leadTimeInsight"></div>
             </div>
 
-            <!-- Bug Rate Trend -->
-            <div class="chart-card">
+            <!-- Bug Rate Trend (Full Width) -->
+            <div class="chart-card chart-card-full">
                 <h2>🐛 Bug Rate Trend</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
                     Tracks the percentage of bugs in two ways: <strong style="color: #3B82F6;">WIP Bug Rate</strong> shows % of bugs being worked on, while <strong style="color: #f97316;">Completion Bug Rate</strong> shows % of bugs completed each week.
@@ -1204,14 +1208,31 @@
         Chart.defaults.color = '#4a5568';
 
         // Throughput Chart with clickable points
-        // Calculate throughput trend
-        function calculateThroughputTrend(data) {
+        // Calculate linear regression trend line
+        function calculateLinearRegression(data) {
             const n = data.length;
             if (n < 2) return data;
-            const firstValue = data[0];
-            const lastValue = data[n - 1];
-            const slope = (lastValue - firstValue) / (n - 1);
-            return data.map((_, i) => firstValue + slope * i);
+            
+            // Calculate means
+            let sumX = 0, sumY = 0;
+            for (let i = 0; i < n; i++) {
+                sumX += i;
+                sumY += data[i];
+            }
+            const meanX = sumX / n;
+            const meanY = sumY / n;
+            
+            // Calculate slope and intercept
+            let numerator = 0, denominator = 0;
+            for (let i = 0; i < n; i++) {
+                numerator += (i - meanX) * (data[i] - meanY);
+                denominator += (i - meanX) * (i - meanX);
+            }
+            const slope = denominator !== 0 ? numerator / denominator : 0;
+            const intercept = meanY - slope * meanX;
+            
+            // Generate trend line
+            return data.map((_, i) => slope * i + intercept);
         }
 
         window.dashboardCharts.throughputChart = new Chart(document.getElementById('throughputChart'), {
@@ -1234,7 +1255,7 @@
                     pointHitRadius: 15
                 }, {
                     label: 'Trend',
-                    data: calculateThroughputTrend(dashboardData.charts.throughput.values),
+                    data: calculateLinearRegression(dashboardData.charts.throughput.values),
                     borderColor: '#9ca3af',
                     backgroundColor: 'transparent',
                     borderWidth: 2,
@@ -3123,6 +3144,18 @@
                         spanGaps: true
                     },
                     {
+                        label: 'WIP Trend',
+                        data: calculateLinearRegression(dashboardData.charts.bugRate.wipRate),
+                        borderColor: '#93C5FD',
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        borderDash: [10, 5],
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0,
+                        spanGaps: true
+                    },
+                    {
                         label: 'Completion Bug Rate (%)',
                         data: dashboardData.charts.bugRate.completionRate,
                         borderColor: '#f97316',
@@ -3134,6 +3167,18 @@
                         pointHoverRadius: 7,
                         spanGaps: true,
                         borderDash: [5, 5]
+                    },
+                    {
+                        label: 'Completion Trend',
+                        data: calculateLinearRegression(dashboardData.charts.bugRate.completionRate),
+                        borderColor: '#FCA5A5',
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        borderDash: [10, 5],
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0,
+                        spanGaps: true
                     }
                 ]
             },
@@ -3175,7 +3220,19 @@
                                 const dataPoint = tooltipModel.dataPoints[0];
                                 const index = dataPoint.dataIndex;
                                 const datasetIndex = dataPoint.datasetIndex;
+                                
+                                // Filter out trend lines (indices 1 and 3)
+                                if (datasetIndex === 1 || datasetIndex === 3) {
+                                    if (!isTooltipHovered) {
+                                        hideTooltipWithDelay();
+                                    }
+                                    return;
+                                }
+                                
                                 const weekLabel = dashboardData.charts.bugRate.labels[index];
+                                
+                                // Map dataset index: 0 = WIP, 2 = Completion
+                                const isWIP = (datasetIndex === 0);
                                 
                                 // WIP data for this week
                                 const wipBugCount = dashboardData.charts.bugRate.wipBugCount[index];
@@ -3220,7 +3277,7 @@
                                 }
                                 
                                 // Build HTML - show only the hovered dataset's data
-                                if (datasetIndex === 0) {
+                                if (isWIP) {
                                     // WIP Bug Rate tooltip
                                     tooltipEl.innerHTML = `
                                         <div class="tooltip-title">Week of ${weekLabel}</div>
@@ -3401,7 +3458,7 @@
                     pointBorderWidth: 2
                 }, {
                     label: 'Trend',
-                    data: calculateThroughputTrend(dashboardData.charts.blockedItems.values),
+                    data: calculateLinearRegression(dashboardData.charts.blockedItems.values),
                     borderColor: '#9ca3af',
                     backgroundColor: 'transparent',
                     borderWidth: 2,
