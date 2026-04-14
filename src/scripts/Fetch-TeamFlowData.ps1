@@ -239,3 +239,6 @@ Write-Host "  1. Process this data to calculate flow metrics" -ForegroundColor G
 Write-Host "  2. Extract columnTime from state transitions" -ForegroundColor Gray
 Write-Host "  3. Generate dashboard JSON" -ForegroundColor Gray
 Write-Host ""
+
+# Exit successfully
+exit 0

@@ -51,6 +51,15 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Auto-load PAT from user environment if not already in session
+if ([string]::IsNullOrWhiteSpace($env:ADO_PAT) -and [string]::IsNullOrWhiteSpace($env:AZURE_DEVOPS_EXT_PAT)) {
+    $storedPat = [System.Environment]::GetEnvironmentVariable('ADO_PAT', 'User')
+    if (-not [string]::IsNullOrWhiteSpace($storedPat)) {
+        $env:ADO_PAT = $storedPat
+        Write-Verbose "Auto-loaded ADO_PAT from user environment"
+    }
+}
+
 # Create dated output folder
 $dateStamp = Get-Date -Format 'yyyy-MM-dd'
 $projectRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent

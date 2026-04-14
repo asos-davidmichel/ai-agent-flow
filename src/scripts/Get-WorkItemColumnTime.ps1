@@ -50,6 +50,14 @@ if ([string]::IsNullOrWhiteSpace($PersonalAccessToken)) {
         $PersonalAccessToken = $env:ADO_PAT
     }
     if ([string]::IsNullOrWhiteSpace($PersonalAccessToken)) {
+        # Try loading from user environment variables
+        $PersonalAccessToken = [System.Environment]::GetEnvironmentVariable('ADO_PAT', 'User')
+        if (-not [string]::IsNullOrWhiteSpace($PersonalAccessToken)) {
+            $env:ADO_PAT = $PersonalAccessToken
+            Write-Verbose "Auto-loaded ADO_PAT from user environment"
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($PersonalAccessToken)) {
         Write-Error "No PAT provided. Set AZURE_DEVOPS_EXT_PAT or ADO_PAT environment variable, or pass -PersonalAccessToken parameter."
         return $null
     }
