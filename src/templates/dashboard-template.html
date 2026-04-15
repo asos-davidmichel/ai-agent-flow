@@ -730,17 +730,6 @@
                 <div class="insight-box" id="timeInColumnInsight"></div>
             </div>
 
-            <!-- State Distribution -->
-            <div class="chart-card">
-                <h2>📊 Backlog State Distribution</h2>
-                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    Shows how work items are distributed across different workflow states.
-                </p>
-                <div class="chart-container">
-                    <canvas id="stateChart"></canvas>
-                </div>
-                <div class="insight-box" id="stateInsight"></div>
-            </div>
         </div>
             </div>
 
@@ -824,12 +813,36 @@
                 <h2>🔴 Current Blocked Items</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
                     Currently blocked items sorted by how long they've been blocked.<br>
-                    <strong>Goal:</strong> Prioritize unblocking these items over starting new work.
+                    Prioritize unblocking these items over starting new work.
                 </p>
                 <div class="chart-container">
                     <canvas id="currentBlockedItemsChart"></canvas>
                 </div>
                 <div class="insight-box" id="currentBlockedItemsInsight"></div>
+            </div>
+
+            <!-- Blocker Timeline -->
+            <div class="chart-card">
+                <h2>📅 Blocker Timeline</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    When items became blocked/on-hold (based on when the blocker tag was added).
+                </p>
+                <div class="chart-container">
+                    <canvas id="blockedTimelineChart"></canvas>
+                </div>
+                <div class="insight-box" id="blockedTimelineInsight"></div>
+            </div>
+
+            <!-- Blocking vs Unblocking Rate -->
+            <div class="chart-card">
+                <h2>📈 Blocker Flow (Blocked vs Unblocked)</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    Weekly flow of blockers: bars up = items becoming blocked, bars down = items becoming unblocked.
+                </p>
+                <div class="chart-container">
+                    <canvas id="blockerRatesChart"></canvas>
+                </div>
+                <div class="insight-box" id="blockerRatesInsight"></div>
             </div>
 
             <!-- Stale Work -->
@@ -899,6 +912,33 @@
         // The data object will be injected here by the Python script
         const dashboardData = /* DATA_PLACEHOLDER */;
         // ===== END DATA INJECTION =====
+
+        // ===== COLOUR HELPERS =====
+        function darkenHexColor(hex, amount = 0.18) {
+            if (!hex || typeof hex !== 'string') return hex;
+            const input = hex.trim();
+            if (!input.startsWith('#')) return hex;
+
+            let h = input.slice(1);
+            if (h.length === 3) {
+                h = h.split('').map(ch => ch + ch).join('');
+            }
+            if (h.length !== 6) return hex;
+
+            const r = parseInt(h.slice(0, 2), 16);
+            const g = parseInt(h.slice(2, 4), 16);
+            const b = parseInt(h.slice(4, 6), 16);
+            if ([r, g, b].some(Number.isNaN)) return hex;
+
+            const clamp = (v) => Math.max(0, Math.min(255, v));
+            const factor = 1 - amount;
+            const rr = clamp(Math.round(r * factor));
+            const gg = clamp(Math.round(g * factor));
+            const bb = clamp(Math.round(b * factor));
+
+            const toHex = (v) => v.toString(16).padStart(2, '0');
+            return `#${toHex(rr)}${toHex(gg)}${toHex(bb)}`;
+        }
 
         // ===== BOARD CONFIGURATION =====
         // CUSTOMIZE THESE SETTINGS FOR YOUR AZURE DEVOPS BOARD
@@ -992,22 +1032,24 @@
             let className = '';
             let explanation = '';
             
+            const hasPrevious = previousValue !== null && previousValue !== undefined;
+
             if (trend.direction === 'up') {
                 arrow = '↑';
                 className = trend.isGood ? 'trend-up-good' : 'trend-up-bad';
-                if (previousValue !== null) {
+                if (hasPrevious) {
                     explanation = `<span style="color: #9ca3af; font-size: 11px; margin-left: 4px;">up from ${previousValue}</span>`;
                 }
             } else if (trend.direction === 'down') {
                 arrow = '↓';
                 className = trend.isGood ? 'trend-down-good' : 'trend-down-bad';
-                if (previousValue !== null) {
+                if (hasPrevious) {
                     explanation = `<span style="color: #9ca3af; font-size: 11px; margin-left: 4px;">down from ${previousValue}</span>`;
                 }
             } else {
                 arrow = '→';
                 className = 'trend-stable';
-                if (previousValue !== null) {
+                if (hasPrevious) {
                     explanation = `<span style="color: #9ca3af; font-size: 11px; margin-left: 4px;">stable at ${previousValue}</span>`;
                 }
             }
@@ -1223,7 +1265,6 @@
         // Bug Rate Insight
         document.getElementById('bugRateInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.bugRate}</p>`;
         document.getElementById('netFlowInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.netFlow}</p>`;
-        document.getElementById('stateInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.state}</p>`;
         
         // Render insights for new charts
         if (dashboardData.insights.blockedItems) {
@@ -3260,14 +3301,14 @@
                     return sortedBlockerColors[index];
                 }
                 
-                // Normal stale items use gray gradient (darker for more stale)
+                // Normal stale items use amber/yellow gradient (darker for more stale)
                 const normalized = maxValue === minValue ? 1 : (value - minValue) / (maxValue - minValue);
                 if (normalized > 0.66) {
-                    return '#475569'; // Dark slate for most stale
+                    return '#d97706'; // amber-600
                 } else if (normalized > 0.33) {
-                    return '#64748b'; // Medium slate for middle
+                    return '#f59e0b'; // amber-500
                 } else {
-                    return '#94a3b8'; // Light slate for least stale
+                    return '#fbbf24'; // amber-400
                 }
             });
             
@@ -3280,17 +3321,8 @@
                         data: sortedValues,
                         backgroundColor: colorScale,
                         borderColor: colorScale.map((color, index) => {
-                            // Use darker shades based on category or staleness
-                            if (sortedBlockerColors[index]) {
-                                // Darken the blocker category color
-                                if (color === '#ef4444') return '#dc2626'; // Blocked (red)
-                                if (color === '#3b82f6') return '#2563eb'; // Hold (blue)
-                                if (color === '#eab308') return '#ca8a04'; // Other
-                            }
-                            // Gray gradient borders
-                            if (color === '#475569') return '#334155';
-                            if (color === '#64748b') return '#475569';
-                            return '#64748b';
+                            // Always use a darker shade of the fill colour
+                            return darkenHexColor(color, sortedBlockerColors[index] ? 0.22 : 0.18);
                         }),
                         borderWidth: 2
                     }]
@@ -3343,7 +3375,7 @@
                                             ${blockedBadge}
                                             <strong>ID:</strong> <a href="${adoUrl}" target="_blank">#${id}</a><br>
                                             <strong>Title:</strong> ${title}<br><br>
-                                            <strong style="color: #f97316;">⏰ Days Since Updated:</strong> ${days} days
+                                            <strong style="color: #f59e0b;">⏰ Days Since Updated:</strong> ${days} days
                                         </div>
                                         <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
                                     `;
@@ -3360,7 +3392,7 @@
                     scales: {
                         x: {
                             beginAtZero: true,
-                            title: { display: true, text: 'Days Since Last Update (blue: normal, red/orange: blocked)' },
+                            title: { display: true, text: 'Days Since Last Update' },
                             grid: { color: '#e2e8f0' }
                         },
                         y: {
@@ -3957,37 +3989,6 @@
             }
         });
 
-        // State Distribution Chart
-        new Chart(document.getElementById('stateChart'), {
-            type: 'doughnut',
-            data: {
-                labels: dashboardData.charts.state.labels,
-                datasets: [{
-                    data: dashboardData.charts.state.values,
-                    backgroundColor: dashboardData.charts.state.colors,
-                    borderColor: '#fff',
-                    borderWidth: 3
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { position: 'bottom' },
-                    tooltip: {
-                        backgroundColor: 'rgba(0,0,0,0.8)',
-                        padding: 12,
-                        callbacks: {
-                            label: function(context) {
-                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                const percentage = ((context.parsed / total) * 100).toFixed(1);
-                                return context.label + ': ' + context.parsed + ' items (' + percentage + '%)';
-                            }
-                        }
-                    }
-                }
-            }
-        });
 
         // 1. Blocked Items by Column Chart (vertical stacked bars by category)
         if (dashboardData.charts.blockedItems.current) {
@@ -4198,6 +4199,175 @@
             ctx.fillStyle = '#6b7280';
             ctx.textAlign = 'center';
             ctx.fillText('No currently blocked items', ctx.canvas.width / 2, ctx.canvas.height / 2);
+        }
+
+        // 3. Blocker Timeline (stacked weekly counts by category)
+        if (dashboardData.charts.blockedTimeline && dashboardData.charts.blockedTimeline.labels && dashboardData.charts.blockedTimeline.labels.length > 0) {
+            const tl = dashboardData.charts.blockedTimeline;
+            const labels = tl.labels;
+            const categories = tl.categories || {};
+            const series = tl.series || {};
+
+            const datasets = [];
+            for (const [categoryKey, categoryConfig] of Object.entries(categories)) {
+                const data = series[categoryKey] || new Array(labels.length).fill(0);
+                datasets.push({
+                    label: categoryConfig.label || categoryKey,
+                    data,
+                    backgroundColor: categoryConfig.color,
+                    borderColor: categoryConfig.color,
+                    borderWidth: 2
+                });
+            }
+
+            window.dashboardCharts.blockedTimelineChart = new Chart(document.getElementById('blockedTimelineChart'), {
+                type: 'bar',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: datasets.length > 1, position: 'top' }
+                    },
+                    scales: {
+                        x: { stacked: datasets.length > 1, grid: { display: false } },
+                        y: { stacked: datasets.length > 1, beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: '#e2e8f0' } }
+                    }
+                }
+            });
+
+            const totals = labels.map((_, i) => datasets.reduce((sum, ds) => sum + (ds.data[i] || 0), 0));
+            const total = totals.reduce((a, b) => a + b, 0);
+            const peakIndex = totals.length ? totals.indexOf(Math.max(...totals)) : -1;
+            const peakLabel = peakIndex >= 0 ? labels[peakIndex] : 'N/A';
+            const peakValue = peakIndex >= 0 ? totals[peakIndex] : 0;
+
+            const computedInsight = `${total} items became blocked/on-hold across ${labels.length} week${labels.length !== 1 ? 's' : ''}. Peak week: ${peakLabel} (${peakValue}).`;
+            const insightText = (dashboardData.insights && dashboardData.insights.blockedTimeline) ? dashboardData.insights.blockedTimeline : computedInsight;
+            document.getElementById('blockedTimelineInsight').innerHTML = `<p><strong>Insight:</strong> ${insightText}</p>`;
+        } else {
+            const insightText = (dashboardData.insights && dashboardData.insights.blockedTimeline) ? dashboardData.insights.blockedTimeline : 'No blocker timeline data available.';
+            document.getElementById('blockedTimelineInsight').innerHTML = `<p><strong>Insight:</strong> ${insightText}</p>`;
+        }
+
+        // 4. Blocker flow (blocked up, unblocked down)
+        if (dashboardData.charts.blockerRates && dashboardData.charts.blockerRates.labels) {
+            const rates = dashboardData.charts.blockerRates;
+            const labels = rates.labels || [];
+
+            const blockedTotals = Array.isArray(rates.blockedTotals) ? rates.blockedTotals : new Array(labels.length).fill(0);
+            const unblockedTotals = Array.isArray(rates.unblockedTotals) ? rates.unblockedTotals : new Array(labels.length).fill(0);
+
+            const netValues = Array.isArray(rates.netValues)
+                ? rates.netValues
+                : blockedTotals.map((b, i) => (b || 0) - (unblockedTotals[i] || 0));
+
+            const blockedColor = '#f43f5e'; // rose
+            const unblockedColor = '#14b8a6'; // teal
+
+            const datasets = [
+                {
+                    label: 'Blocked',
+                    data: blockedTotals,
+                    backgroundColor: blockedColor,
+                    borderColor: darkenHexColor(blockedColor, 0.18),
+                    borderWidth: 2
+                },
+                {
+                    label: 'Unblocked',
+                    data: unblockedTotals.map(v => -(v || 0)),
+                    backgroundColor: unblockedColor,
+                    borderColor: darkenHexColor(unblockedColor, 0.18),
+                    borderWidth: 2
+                },
+                {
+                    type: 'line',
+                    label: 'Net trend',
+                    data: calculateLinearRegression(netValues),
+                    borderColor: '#6366f1', // indigo
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    borderDash: [6, 4],
+                    pointRadius: 0,
+                    tension: 0,
+                    isTrend: true
+                }
+            ];
+
+            window.dashboardCharts.blockerRatesChart = new Chart(document.getElementById('blockerRatesChart'), {
+                type: 'bar',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const dsLabel = context.dataset.label;
+                                    const raw = context.parsed.y;
+
+                                    if (dsLabel === 'Blocked') {
+                                        return `Blocked: ${raw}`;
+                                    }
+                                    if (dsLabel === 'Unblocked') {
+                                        return `Unblocked: ${Math.abs(raw)}`;
+                                    }
+
+                                    // Trend line
+                                    const v = context.parsed.y;
+                                    return v > 0 ? `Net trend: +${v.toFixed(2)}` : `Net trend: ${v.toFixed(2)}`;
+                                },
+                                afterBody: function(context) {
+                                    const idx = context[0].dataIndex;
+                                    const net = (blockedTotals[idx] || 0) - (unblockedTotals[idx] || 0);
+                                    if (net > 0) return [`Net: +${net} (accumulating blockers)`];
+                                    if (net < 0) return [`Net: ${net} (draining blockers)`];
+                                    return ['Net: 0 (balanced)'];
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            title: { display: true, text: 'Items / week (down = unblocked)' },
+                            grid: {
+                                color: function(context) {
+                                    if (context.tick.value === 0) {
+                                        return '#111827';
+                                    }
+                                    return '#e2e8f0';
+                                },
+                                lineWidth: function(context) {
+                                    if (context.tick.value === 0) {
+                                        return 2;
+                                    }
+                                    return 1;
+                                }
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return value > 0 ? '+' + value : value;
+                                }
+                            }
+                        },
+                        x: {
+                            grid: { display: false },
+                            title: { display: true, text: 'Week starting (Mon)' }
+                        }
+                    }
+                }
+            });
+
+            const insightText = (dashboardData.insights && dashboardData.insights.blockerRates) ? dashboardData.insights.blockerRates : 'Blocker flow is not available.';
+            document.getElementById('blockerRatesInsight').innerHTML = `<p><strong>Insight:</strong> ${insightText}</p>`;
+        } else {
+            const insightText = (dashboardData.insights && dashboardData.insights.blockerRates) ? dashboardData.insights.blockerRates : 'No blocker flow data available.';
+            document.getElementById('blockerRatesInsight').innerHTML = `<p><strong>Insight:</strong> ${insightText}</p>`;
         }
         
         // Set blocked items insight

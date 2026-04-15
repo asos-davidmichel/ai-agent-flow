@@ -270,6 +270,8 @@ You need to analyze the following charts and generate brief, actionable insights
 - **bugRate**: Look at `charts.bugRate.avgWIPBugRate`, `charts.bugRate.avgCompletionBugRate`, current bug count
 - **staleWork**: Look at `charts.staleWork` for item count, worst age, blocked items, patterns
 - **blockedItems**: Look at count, categories, durations, column/type distribution
+- **blockedTimeline**: Look at `charts.blockedTimeline.labels` and `charts.blockedTimeline.series` for when items became blocked/on-hold (full analysis timeline)
+- **blockerRates**: Look at `charts.blockerRates.blockedTotals` and `charts.blockerRates.unblockedTotals` for weekly total blocking/unblocking rates
 - **bugDistribution**: Look at `charts.bugDistribution` for how bugs are distributed across columns
 
 **3. Generate insights using AI:**
@@ -289,6 +291,8 @@ $dashboardData.insights.cycleTime = "{AI-generated insight}"
 $dashboardData.insights.bugRate = "{AI-generated insight}"
 $dashboardData.insights.staleWork = "{AI-generated insight}"
 $dashboardData.insights.blockedItems = "{AI-generated insight}"
+$dashboardData.insights.blockedTimeline = "{AI-generated insight}"
+$dashboardData.insights.blockerRates = "{AI-generated insight}"
 $dashboardData.insights.bugDistribution = "{AI-generated insight}"
 
 # Save updated JSON

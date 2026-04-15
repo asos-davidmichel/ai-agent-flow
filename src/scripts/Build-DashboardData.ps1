@@ -387,59 +387,99 @@ $dateRange = ([DateTime]$rawData.metadata.endDate) - ([DateTime]$rawData.metadat
 $weeks = [Math]::Max(1, $dateRange.TotalDays / 7)
 $throughputTotal = [Math]::Round($completedWithMetrics.Count / $weeks, 1)
 
-# Build throughput chart (grouped by week)
-$completedByWeek = $completedWithMetrics | Group-Object {
-    $date = [DateTime]$_.completedDate
-    # Get week start date (Sunday)
-    $weekStart = $date.AddDays(-([int]$date.DayOfWeek))
-    $weekStart.ToString('dd MMM')
-} | Sort-Object { 
-    # Sort by parsing the date
-    [DateTime]::ParseExact($_.Name, 'dd MMM', $null)
+# Build throughput chart (grouped by week) - ALWAYS show full analysis timeline
+$analysisStart = [DateTime]$rawData.metadata.startDate
+$analysisEnd = [DateTime]$rawData.metadata.endDate
+
+function Get-WeekStartSunday([DateTime]$date) {
+    $d = $date.Date
+    return $d.AddDays(-[int]$d.DayOfWeek)
+}
+
+$firstWeekStart = Get-WeekStartSunday $analysisStart
+$lastWeekStart = Get-WeekStartSunday $analysisEnd
+
+$weekStarts = @()
+for ($d = $firstWeekStart; $d -le $lastWeekStart; $d = $d.AddDays(7)) {
+    $weekStarts += $d
+}
+
+$completedByWeekMap = @{}
+foreach ($item in $completedWithMetrics) {
+    if (-not $item.completedDate) { continue }
+    $weekStart = Get-WeekStartSunday ([DateTime]$item.completedDate)
+    $key = $weekStart.ToString('yyyy-MM-dd')
+    if (-not $completedByWeekMap.ContainsKey($key)) {
+        $completedByWeekMap[$key] = @()
+    }
+    $completedByWeekMap[$key] += $item
+}
+
+$throughputLabels = @($weekStarts | ForEach-Object { $_.ToString('dd MMM') })
+$throughputValues = @()
+$throughputItems = @()
+
+foreach ($ws in $weekStarts) {
+    $key = $ws.ToString('yyyy-MM-dd')
+    $weekItems = if ($completedByWeekMap.ContainsKey($key)) { @($completedByWeekMap[$key]) } else { @() }
+
+    $throughputValues += $weekItems.Count
+    $throughputItems += ,@($weekItems | ForEach-Object { @{ id = $_.id; title = $_.title } })
 }
 
 $throughputChart = @{
-    labels = @($completedByWeek | ForEach-Object { $_.Name })
-    values = @($completedByWeek | ForEach-Object { $_.Count })
-    items = @($completedByWeek | ForEach-Object {
-        ,@($_.Group | ForEach-Object { @{id=$_.id; title=$_.title} })
-    })
+    labels = $throughputLabels
+    values = $throughputValues
+    items = $throughputItems
 }
 
-# Cycle time trend chart (weekly averages)
+# Cycle time trend chart (weekly averages) - full analysis timeline
+$cycleTimeTrendValues = @()
+foreach ($ws in $weekStarts) {
+    $key = $ws.ToString('yyyy-MM-dd')
+    $weekItems = if ($completedByWeekMap.ContainsKey($key)) { @($completedByWeekMap[$key]) } else { @() }
+    $weekCycleTimes = @($weekItems | ForEach-Object { $_.cycleTime } | Where-Object { $_ -gt 0 })
+
+    $cycleTimeTrendValues += if ($weekCycleTimes.Count -gt 0) {
+        [Math]::Round(($weekCycleTimes | Measure-Object -Average).Average, 1)
+    } else {
+        0
+    }
+}
+
 $cycleTimeTrendChart = @{
-    labels = @($completedByWeek | ForEach-Object { $_.Name })
-    values = @($completedByWeek | ForEach-Object { 
-        $weekItems = $_.Group
-        $weekCycleTimes = $weekItems | ForEach-Object { $_.cycleTime } | Where-Object { $_ -gt 0 }
-        if ($weekCycleTimes.Count -gt 0) { 
-            [Math]::Round(($weekCycleTimes | Measure-Object -Average).Average, 1) 
-        } else { 0 }
-    })
+    labels = $throughputLabels
+    values = $cycleTimeTrendValues
 }
 
-# Lead time trend chart (weekly averages)
+# Lead time trend chart (weekly averages) - full analysis timeline
+$leadTimeTrendValues = @()
+foreach ($ws in $weekStarts) {
+    $key = $ws.ToString('yyyy-MM-dd')
+    $weekItems = if ($completedByWeekMap.ContainsKey($key)) { @($completedByWeekMap[$key]) } else { @() }
+    $weekLeadTimes = @($weekItems | ForEach-Object { $_.leadTime } | Where-Object { $_ -gt 0 })
+
+    $leadTimeTrendValues += if ($weekLeadTimes.Count -gt 0) {
+        [Math]::Round(($weekLeadTimes | Measure-Object -Average).Average, 1)
+    } else {
+        0
+    }
+}
+
 $leadTimeTrendChart = @{
-    labels = @($completedByWeek | ForEach-Object { $_.Name })
-    values = @($completedByWeek | ForEach-Object { 
-        $weekItems = $_.Group
-        $weekLeadTimes = $weekItems | ForEach-Object { $_.leadTime } | Where-Object { $_ -gt 0 }
-        if ($weekLeadTimes.Count -gt 0) { 
-            [Math]::Round(($weekLeadTimes | Measure-Object -Average).Average, 1) 
-        } else { 0 }
-    })
+    labels = $throughputLabels
+    values = $leadTimeTrendValues
 }
 
 # Calculate coefficient of variation for batch detection
-$throughputValues = @($completedByWeek | ForEach-Object { $_.Count })
-$throughputMean = ($throughputValues | Measure-Object -Average).Average
-$throughputStdDev = [Math]::Sqrt(($throughputValues | ForEach-Object { [Math]::Pow($_ - $throughputMean, 2) } | Measure-Object -Sum).Sum / $throughputValues.Count)
+$throughputMean = if ($throughputValues.Count -gt 0) { ($throughputValues | Measure-Object -Average).Average } else { 0 }
+$throughputStdDev = if ($throughputValues.Count -gt 0) {
+    [Math]::Sqrt((($throughputValues | ForEach-Object { [Math]::Pow($_ - $throughputMean, 2) } | Measure-Object -Sum).Sum) / $throughputValues.Count)
+} else { 0 }
 $throughputCV = if ($throughputMean -gt 0) { $throughputStdDev / $throughputMean } else { 0 }
 
 # Calculate weekly WIP snapshots for historical bug rate (FIXED: now includes active items)
-$startDate = [DateTime]$rawData.metadata.startDate
-$endDate = [DateTime]$rawData.metadata.endDate
-$wipSnapshots = Get-WeeklyWIPSnapshot -completedItems $rawData.completedItems -activeItems $rawData.activeItems -startDate $startDate -endDate $endDate
+$wipSnapshots = Get-WeeklyWIPSnapshot -completedItems $rawData.completedItems -activeItems $rawData.activeItems -startDate $analysisStart -endDate $analysisEnd
 
 # Build bug rate chart (weekly WIP bug percentage) with full tooltip data
 $bugRateLabels = @()
@@ -768,7 +808,10 @@ if ($blockedItems.Count -gt 0) {
         
         $blockerDatesData = $blockerDatesJson | ConvertFrom-Json
         foreach ($item in $blockerDatesData) {
-            $blockerDates[$item.id] = $item.daysBlocked
+            $blockerDates[$item.id] = @{
+                blockerAddedDate = $item.blockerAddedDate
+                daysBlocked = $item.daysBlocked
+            }
         }
         Write-Host "  [OK] Retrieved blocker history for $($blockedIds.Count) items" -ForegroundColor Green
     } catch {
@@ -828,12 +871,14 @@ foreach ($blockedEntry in $blockedItems) {
     $blockedByState[$state]++
     
     # Calculate days blocked (from tag history) or days since changed as fallback
-    $daysBlocked = if ($blockerDates.ContainsKey($item.id) -and $null -ne $blockerDates[$item.id]) {
-        $blockerDates[$item.id]
+    $blockerAddedDate = $null
+    $daysBlocked = 0
+
+    if ($blockerDates.ContainsKey($item.id) -and $null -ne $blockerDates[$item.id]) {
+        $blockerAddedDate = $blockerDates[$item.id].blockerAddedDate
+        $daysBlocked = $blockerDates[$item.id].daysBlocked
     } elseif ($changedDate) {
-        [Math]::Floor(((Get-Date) - [DateTime]$changedDate).TotalDays)
-    } else {
-        0
+        $daysBlocked = [Math]::Floor(((Get-Date) - [DateTime]$changedDate).TotalDays)
     }
     
     $blockedItemDetails += [PSCustomObject]@{
@@ -843,14 +888,337 @@ foreach ($blockedEntry in $blockedItems) {
         state = $state
         column = $column
         daysSinceChanged = $daysBlocked
+        blockerAddedDate = $blockerAddedDate
         category = $category.key
         categoryLabel = $category.label
         categoryColor = $category.color
     }
 }
 
+$blockedItemDetailsAll = @($blockedItemDetails)
+
 # Sort blocked items by how long they've been stale
 $blockedItemDetails = @($blockedItemDetails | Sort-Object -Property daysSinceChanged -Descending | Select-Object -First 20)
+
+# Build blocked timeline (when items became blocked)
+$blockedTimelineLabels = @()
+$blockedTimelineSeries = [ordered]@{}
+
+$categoryKeys = if ($blockerCategories.Keys) { $blockerCategories.Keys } else { $blockerCategories.PSObject.Properties.Name }
+foreach ($categoryKey in $categoryKeys) {
+    $blockedTimelineSeries[$categoryKey] = @()
+}
+
+function Get-WeekStartMonday([DateTime]$date) {
+    $d = $date.Date
+    $daysSinceMonday = (([int]$d.DayOfWeek + 6) % 7)
+    return $d.AddDays(-$daysSinceMonday).Date
+}
+
+# Always show the full analysis timeline for time-based charts
+$timelineFirstWeekStart = Get-WeekStartMonday $analysisStart
+$timelineLastWeekStart = Get-WeekStartMonday $analysisEnd
+$timelineWeekStarts = @()
+for ($d = $timelineFirstWeekStart; $d -le $timelineLastWeekStart; $d = $d.AddDays(7)) {
+    $timelineWeekStarts += $d
+}
+
+$timelineWeekKeys = @($timelineWeekStarts | ForEach-Object { $_.ToString('yyyy-MM-dd') })
+$blockedTimelineLabels = @($timelineWeekStarts | ForEach-Object { $_.ToString('dd MMM') })
+
+# Initialise buckets for every week in the analysis period (ensures full x-axis)
+$weeklyBuckets = @{}
+foreach ($wk in $timelineWeekKeys) {
+    $weeklyBuckets[$wk] = @{}
+    foreach ($categoryKey in $categoryKeys) {
+        $weeklyBuckets[$wk][$categoryKey] = 0
+    }
+}
+
+if ($blockedItemDetailsAll.Count -gt 0) {
+    $now = Get-Date
+
+    foreach ($detail in $blockedItemDetailsAll) {
+        # Determine when the blocker tag was added
+        $blockedStart = $null
+        if ($detail.blockerAddedDate) {
+            $blockedStart = [DateTime]$detail.blockerAddedDate
+        } else {
+            $daysBlocked = [int]$detail.daysSinceChanged
+            $blockedStart = ($now).AddDays(-$daysBlocked).Date
+        }
+
+        # Only count events within the analysis period
+        if ($blockedStart -ge $analysisStart -and $blockedStart -le $analysisEnd) {
+            $weekStart = Get-WeekStartMonday $blockedStart
+            $weekKey = $weekStart.ToString('yyyy-MM-dd')
+            if ($weeklyBuckets.ContainsKey($weekKey) -and $weeklyBuckets[$weekKey].ContainsKey($detail.category)) {
+                $weeklyBuckets[$weekKey][$detail.category]++
+            }
+        }
+
+    }
+}
+
+foreach ($categoryKey in $categoryKeys) {
+    $blockedTimelineSeries[$categoryKey] = @($timelineWeekKeys | ForEach-Object { [int]$weeklyBuckets[$_][$categoryKey] })
+}
+
+# Build blocking/unblocking rates (weekly) with category breakdown - full analysis timeline
+$blockedRateSeries = [ordered]@{}
+$unblockedRateSeries = [ordered]@{}
+foreach ($categoryKey in $categoryKeys) {
+    $blockedRateSeries[$categoryKey] = @(0) * $timelineWeekKeys.Count
+    $unblockedRateSeries[$categoryKey] = @(0) * $timelineWeekKeys.Count
+}
+
+$weekKeyToIndex = @{}
+for ($i = 0; $i -lt $timelineWeekKeys.Count; $i++) {
+    $weekKeyToIndex[$timelineWeekKeys[$i]] = $i
+}
+
+function Get-BlockerEventsFromUpdates {
+    param(
+        $WorkItem,
+        $Categories
+    )
+
+    $events = @()
+    if (-not $WorkItem -or -not $WorkItem.updates) { return $events }
+
+    $previousTags = $null
+
+    $sortedUpdates = $WorkItem.updates | Sort-Object { 
+        $date = [DateTime]$_.revisedDate
+        if ($date.Year -ge 9999) { [DateTime]::MaxValue } else { $date }
+    }
+
+    foreach ($update in $sortedUpdates) {
+        $updateDate = [DateTime]$update.revisedDate
+        if ($updateDate.Year -ge 9999) { continue }
+
+        $tagsField = $update.fields.'System.Tags'
+        if (-not $tagsField) { continue }
+
+        $oldTags = if ($null -ne $tagsField.oldValue) {
+            [string]$tagsField.oldValue
+        } elseif ($null -ne $previousTags) {
+            [string]$previousTags
+        } else {
+            ''
+        }
+
+        $newTags = if ($null -ne $tagsField.newValue) {
+            [string]$tagsField.newValue
+        } else {
+            ''
+        }
+
+        $oldCategory = Get-BlockerCategory -tags $oldTags -categories $Categories
+        $newCategory = Get-BlockerCategory -tags $newTags -categories $Categories
+
+        $hadBlockerBefore = $null -ne $oldCategory
+        $hasBlockerNow = $null -ne $newCategory
+
+        if ($hasBlockerNow -and -not $hadBlockerBefore) {
+            $events += [PSCustomObject]@{ type = 'blocked'; categoryKey = $newCategory.key; date = $updateDate }
+        } elseif (-not $hasBlockerNow -and $hadBlockerBefore) {
+            $events += [PSCustomObject]@{ type = 'unblocked'; categoryKey = $oldCategory.key; date = $updateDate }
+        }
+
+        $previousTags = $newTags
+    }
+
+    return $events
+}
+
+$blockerEvents = @()
+
+# Completed items: derive block/unblock events from update history
+foreach ($wi in $rawData.completedItems) {
+    $blockerEvents += Get-BlockerEventsFromUpdates -WorkItem $wi -Categories $blockerCategories
+}
+
+# Active currently blocked items: include their blocker-added date (unblock date is unknown unless completed)
+foreach ($blockedEntry in $blockedItems) {
+    $id = $blockedEntry.item.id
+    if ($blockerDates.ContainsKey($id) -and $blockerDates[$id].blockerAddedDate) {
+        $addedDate = [DateTime]$blockerDates[$id].blockerAddedDate
+        $blockerEvents += [PSCustomObject]@{ type = 'blocked'; categoryKey = $blockedEntry.category.key; date = $addedDate }
+    }
+}
+
+foreach ($ev in $blockerEvents) {
+    if (-not $ev.date) { continue }
+    $dt = [DateTime]$ev.date
+    if ($dt -lt $analysisStart -or $dt -gt $analysisEnd) { continue }
+
+    $weekStart = Get-WeekStartMonday $dt
+    $weekKey = $weekStart.ToString('yyyy-MM-dd')
+    if (-not $weekKeyToIndex.ContainsKey($weekKey)) { continue }
+
+    $idx = [int]$weekKeyToIndex[$weekKey]
+    $cat = $ev.categoryKey
+
+    if ($ev.type -eq 'blocked') {
+        if ($blockedRateSeries.Contains($cat)) {
+            $blockedRateSeries[$cat][$idx] = [int]$blockedRateSeries[$cat][$idx] + 1
+        }
+    } elseif ($ev.type -eq 'unblocked') {
+        if ($unblockedRateSeries.Contains($cat)) {
+            $unblockedRateSeries[$cat][$idx] = [int]$unblockedRateSeries[$cat][$idx] + 1
+        }
+    }
+}
+
+$blockedRateTotals = @()
+$unblockedRateTotals = @()
+for ($i = 0; $i -lt $timelineWeekKeys.Count; $i++) {
+    $blockedRateTotals += ($categoryKeys | ForEach-Object { [int]$blockedRateSeries[$_][$i] } | Measure-Object -Sum).Sum
+    $unblockedRateTotals += ($categoryKeys | ForEach-Object { [int]$unblockedRateSeries[$_][$i] } | Measure-Object -Sum).Sum
+}
+
+# Net flow of blockers (blocked - unblocked) per week
+$blockedNetValues = @()
+$blockedNetCumulative = @()
+$runningNet = 0
+for ($i = 0; $i -lt $timelineWeekKeys.Count; $i++) {
+    $net = [int]$blockedRateTotals[$i] - [int]$unblockedRateTotals[$i]
+    $blockedNetValues += $net
+    $runningNet += $net
+    $blockedNetCumulative += $runningNet
+}
+
+# Build daily WIP and daily WIP x age breakdown across the full analysis timeline
+function Get-LinearRegressionLine {
+    param(
+        [Parameter(Mandatory = $true)]
+        [double[]]$Values
+    )
+
+    $n = $Values.Count
+    if ($n -lt 2) { return @($Values) }
+
+    $sumX = 0.0
+    $sumY = 0.0
+    $sumXY = 0.0
+    $sumX2 = 0.0
+
+    for ($i = 0; $i -lt $n; $i++) {
+        $x = [double]$i
+        $y = [double]$Values[$i]
+        $sumX += $x
+        $sumY += $y
+        $sumXY += ($x * $y)
+        $sumX2 += ($x * $x)
+    }
+
+    $den = ($n * $sumX2 - $sumX * $sumX)
+    $slope = if ($den -ne 0) { ($n * $sumXY - $sumX * $sumY) / $den } else { 0.0 }
+    $intercept = ($sumY / $n) - $slope * ($sumX / $n)
+
+    $line = @()
+    for ($i = 0; $i -lt $n; $i++) {
+        $line += [Math]::Round(($slope * $i + $intercept), 3)
+    }
+    return $line
+}
+
+$analysisStartDate = $analysisStart.Date
+$analysisEndDate = $analysisEnd.Date
+$dayStarts = @()
+for ($d = $analysisStartDate; $d -le $analysisEndDate; $d = $d.AddDays(1)) {
+    $dayStarts += $d
+}
+
+$dailyWipLabels = @($dayStarts | ForEach-Object { $_.ToString('dd MMM') })
+$dayCount = $dayStarts.Count
+
+$wipDiff = New-Object int[] ($dayCount + 1)
+$wipAge0to1 = New-Object int[] $dayCount
+$wipAge1to7 = New-Object int[] $dayCount
+$wipAge7to14 = New-Object int[] $dayCount
+$wipAge14Plus = New-Object int[] $dayCount
+
+$wipActiveStates = @('Active', 'In Progress')
+
+function Add-WipPeriod {
+    param(
+        [Parameter(Mandatory = $true)]
+        [DateTime]$Start,
+
+        [Parameter(Mandatory = $true)]
+        [DateTime]$End
+    )
+
+    $s = $Start.Date
+    $e = $End.Date
+
+    if ($e -lt $analysisStartDate -or $s -gt $analysisEndDate) { return }
+
+    if ($s -lt $analysisStartDate) { $s = $analysisStartDate }
+    if ($e -gt $analysisEndDate) { $e = $analysisEndDate }
+
+    $sIdx = [int](($s - $analysisStartDate).TotalDays)
+    $eIdx = [int](($e - $analysisStartDate).TotalDays)
+
+    if ($sIdx -lt 0 -or $sIdx -ge $dayCount) { return }
+    if ($eIdx -lt 0) { return }
+    if ($eIdx -ge $dayCount) { $eIdx = $dayCount - 1 }
+
+    $wipDiff[$sIdx]++
+    if (($eIdx + 1) -lt $wipDiff.Length) {
+        $wipDiff[$eIdx + 1]--
+    }
+
+    for ($i = $sIdx; $i -le $eIdx; $i++) {
+        $currentDay = $analysisStartDate.AddDays($i)
+        $ageDays = [int](($currentDay - $s).TotalDays)
+
+        if ($ageDays -le 1) {
+            $wipAge0to1[$i]++
+        } elseif ($ageDays -le 7) {
+            $wipAge1to7[$i]++
+        } elseif ($ageDays -le 14) {
+            $wipAge7to14[$i]++
+        } else {
+            $wipAge14Plus[$i]++
+        }
+    }
+}
+
+# Completed items contribute WIP between ActivatedDate and ClosedDate
+foreach ($wi in $rawData.completedItems) {
+    $fields = $wi.fields
+    $activated = $fields.'Microsoft.VSTS.Common.ActivatedDate'
+    $closed = $fields.'Microsoft.VSTS.Common.ClosedDate'
+
+    if ($activated -and $closed) {
+        Add-WipPeriod -Start ([DateTime]$activated) -End ([DateTime]$closed)
+    }
+}
+
+# Current active items contribute WIP only if currently in an active state
+foreach ($wi in $rawData.activeItems) {
+    $fields = $wi.fields
+    $state = $fields.'System.State'
+    if ($wipActiveStates -notcontains $state) { continue }
+
+    $activated = $fields.'Microsoft.VSTS.Common.ActivatedDate'
+    $created = $fields.'System.CreatedDate'
+
+    $start = if ($activated) { [DateTime]$activated } elseif ($created) { [DateTime]$created } else { $analysisStartDate }
+    Add-WipPeriod -Start $start -End $analysisEndDate
+}
+
+$dailyWipValues = @()
+$running = 0
+for ($i = 0; $i -lt $dayCount; $i++) {
+    $running += $wipDiff[$i]
+    $dailyWipValues += [int]$running
+}
+
+$dailyWipTrend = Get-LinearRegressionLine -Values ([double[]]$dailyWipValues)
 
 # Calculate bug rate statistics for insight (using WIP percentages)
 $avgWIPBugRate = if ($bugRateWIP.Count -gt 0) { 
@@ -1001,8 +1369,53 @@ for ($i = 0; $i -lt ($boardColumns.Count - 1); $i++) {
     $transitions += "$($boardColumns[$i]) → $($boardColumns[$i + 1])"
 }
 
+# Precompute insights for blocker charts (so they can be AI-overridden via JSON)
+$blockedTimelineTotals = @()
+for ($i = 0; $i -lt $timelineWeekKeys.Count; $i++) {
+    $blockedTimelineTotals += ($categoryKeys | ForEach-Object { [int]$blockedTimelineSeries[$_][$i] } | Measure-Object -Sum).Sum
+}
+
+$totalBlockedStarts = ($blockedTimelineTotals | Measure-Object -Sum).Sum
+$peakBlockedStarts = if ($blockedTimelineTotals.Count -gt 0) { ($blockedTimelineTotals | Measure-Object -Maximum).Maximum } else { 0 }
+$peakBlockedIndex = if ($blockedTimelineTotals.Count -gt 0) { $blockedTimelineTotals.IndexOf($peakBlockedStarts) } else { -1 }
+$peakBlockedWeek = if ($peakBlockedIndex -ge 0) { $blockedTimelineLabels[$peakBlockedIndex] } else { 'N/A' }
+
+$blockedTimelineInsightText = "$totalBlockedStarts items became blocked/on-hold during the analysis period. Peak week: $peakBlockedWeek ($peakBlockedStarts)."
+
+$totalBlockedEvents = ($blockedRateTotals | Measure-Object -Sum).Sum
+$totalUnblockedEvents = ($unblockedRateTotals | Measure-Object -Sum).Sum
+$weeksInAnalysis = [Math]::Max(1, $timelineWeekKeys.Count)
+$avgBlockedPerWeek = [Math]::Round(($totalBlockedEvents / $weeksInAnalysis), 2)
+$avgUnblockedPerWeek = [Math]::Round(($totalUnblockedEvents / $weeksInAnalysis), 2)
+$netBlocked = $totalBlockedEvents - $totalUnblockedEvents
+$netText = if ($netBlocked -gt 0) { "Net +$netBlocked blocked (more blocking than unblocking)." } elseif ($netBlocked -lt 0) { "Net $netBlocked blocked (more unblocking than blocking)." } else { "Net 0 (balanced)." }
+
+$blockerRatesInsightText = "Blocked events: $totalBlockedEvents, unblocked events: $totalUnblockedEvents across $weeksInAnalysis week$($(if ($weeksInAnalysis -ne 1) { 's' } else { '' })). Average per week: $avgBlockedPerWeek blocked, $avgUnblockedPerWeek unblocked. $netText Note: The dashed line shows the trend of weekly net flow (blocked - unblocked), not the cumulative blocked count."
+
+# Current blocked metric (card)
+$backlogSize = $rawData.activeItems.Count
+$blockedCount = $blockedItems.Count
+$blockedPercentage = if ($backlogSize -gt 0) { [Math]::Round(($blockedCount / $backlogSize) * 100, 1) } else { 0 }
+$blockedClass = if ($blockedPercentage -gt 10) {
+    'trend-warning'
+} elseif ($blockedPercentage -gt 5) {
+    'trend-neutral'
+} else {
+    'trend-good'
+}
+
+# Trend for blocked count: infer direction from net blocked vs unblocked events in the analysis period
+# (Net +ve means blockers accumulated; net -ve means blockers drained)
+$blockedTrend = if ($netBlocked -gt 0) {
+    @{ direction = 'up'; isGood = $false }
+} elseif ($netBlocked -lt 0) {
+    @{ direction = 'down'; isGood = $true }
+} else {
+    @{ direction = 'stable'; isGood = $true }
+}
+
 # Build final data structure matching template expectations
-$dashboardData = @{
+$dashboardData = @{ 
     teamName = "$($rawData.metadata.team) ($($rawData.metadata.project))"
     period = "$([DateTime]::Parse($rawData.metadata.startDate).ToString('dd MMM yyyy')) - $([DateTime]::Parse($rawData.metadata.endDate).ToString('dd MMM yyyy')) ($($rawData.metadata.months) months)"
     adoOrg = $rawData.metadata.organization
@@ -1041,11 +1454,7 @@ $dashboardData = @{
             pbis = if ($pbiCycleTimes.Count -gt 0) { [Math]::Round(($pbiCycleTimes | Measure-Object -Average).Average, 1) } else { 0 }
             median = $cycleTimeMedian
             p85 = if ($cycleTimes) { ($cycleTimes | Sort-Object)[([Math]::Ceiling($cycleTimes.Count * 0.85) - 1)] } else { 0 }
-            trend = Calculate-Trend -values @($completedByWeek | ForEach-Object { 
-                $weekItems = $_.Group
-                $weekCycleTimes = $weekItems | ForEach-Object { $_.cycleTime } | Where-Object { $_ -gt 0 }
-                if ($weekCycleTimes.Count -gt 0) { ($weekCycleTimes | Measure-Object -Average).Average } else { 0 }
-            }) -higherIsBetter $false
+            trend = Calculate-Trend -values @($cycleTimeTrendChart.values) -higherIsBetter $false
         }
         leadTime = @{
             bugs = if ($bugLeadTimes.Count -gt 0) { [Math]::Round(($bugLeadTimes | Measure-Object -Average).Average, 1) } else { 0 }
@@ -1053,11 +1462,7 @@ $dashboardData = @{
             avg = [Math]::Round(($leadTimes | Measure-Object -Average).Average, 1)
             median = $leadTimeMedian
             p85 = if ($leadTimes) { ($leadTimes | Sort-Object)[([Math]::Ceiling($leadTimes.Count * 0.85) - 1)] } else { 0 }
-            trend = Calculate-Trend -values @($completedByWeek | ForEach-Object { 
-                $weekItems = $_.Group
-                $weekLeadTimes = $weekItems | ForEach-Object { $_.leadTime } | Where-Object { $_ -gt 0 }
-                if ($weekLeadTimes.Count -gt 0) { ($weekLeadTimes | Measure-Object -Average).Average } else { 0 }
-            }) -higherIsBetter $false
+            trend = Calculate-Trend -values @($leadTimeTrendChart.values) -higherIsBetter $false
         }
         workStartEfficiency = @{
             percentage = "50.0"
@@ -1099,10 +1504,10 @@ $dashboardData = @{
             trend = @{ direction = "stable"; isGood = $true }
         }
         blocked = @{
-            count = 0
-            percentage = "0"
-            class = "trend-good"
-            trend = @{ direction = "stable"; isGood = $true }
+            count = $blockedCount
+            percentage = "$blockedPercentage"
+            class = $blockedClass
+            trend = $blockedTrend
         }
     }
     
@@ -1187,9 +1592,9 @@ $dashboardData = @{
             values = @()
         }
         dailyWip = @{
-            labels = @()
-            values = @()
-            trend = @()
+            labels = $dailyWipLabels
+            values = $dailyWipValues
+            trend = $dailyWipTrend
         }
         staleWork = @{
             labels = $staleWorkLabels
@@ -1202,11 +1607,11 @@ $dashboardData = @{
             blockerColors = $staleWorkBlockerColors
         }
         wipAgeBreakdown = @{
-            labels = @()
-            age14Plus = @()
-            age7to14 = @()
-            age1to7 = @()
-            age0to1 = @()
+            labels = $dailyWipLabels
+            age14Plus = @($wipAge14Plus)
+            age7to14 = @($wipAge7to14)
+            age1to7 = @($wipAge1to7)
+            age0to1 = @($wipAge0to1)
         }
         netFlow = @{
             labels = @()
@@ -1230,6 +1635,21 @@ $dashboardData = @{
                 categories = $blockerCategories
                 details = $blockedItemDetails
             }
+        }
+        blockedTimeline = @{
+            labels = $blockedTimelineLabels
+            series = $blockedTimelineSeries
+            categories = $blockerCategories
+        }
+        blockerRates = @{
+            labels = $blockedTimelineLabels
+            weekKeys = $timelineWeekKeys
+            blockedSeries = $blockedRateSeries
+            unblockedSeries = $unblockedRateSeries
+            blockedTotals = $blockedRateTotals
+            unblockedTotals = $unblockedRateTotals
+            netValues = $blockedNetValues
+            categories = $blockerCategories
         }
         transitionRates = @{
             labels = @()
@@ -1388,6 +1808,8 @@ $dashboardData = @{
         } else {
             "No items currently blocked. Blocked items are identified by configured blocker tags."
         }
+        blockedTimeline = $blockedTimelineInsightText
+        blockerRates = $blockerRatesInsightText
         transitionRates = "Transition analysis"
         bugDistribution = if ($activeBugs.Count -gt 0) {
             $totalBugs = $activeBugs.Count
