@@ -901,8 +901,8 @@
             // These are WITHIN the workflow (after cycle time starts)
             waitingColumns: ['Ready for QA', 'Ready for Release', 'Ready for release'],
             
-            // BEFORE WORKFLOW columns: Backlog states before cycle time starts (New, Backlog, Ready for Dev)
-            beforeWorkflowColumns: ['New', 'Backlog', 'Ready for Dev'],
+            // BEFORE WORKFLOW columns: Pre-workflow states before cycle time starts (New, Ready for Dev, etc.)
+            beforeWorkflowColumns: ['New', 'Ready for Dev'],
             
             // AFTER WORKFLOW columns: Work is completed (Closed, Done, Removed)
             afterWorkflowColumns: ['Closed', 'Done', 'Removed'],
@@ -910,7 +910,6 @@
             // COLUMN ICONS for tooltips and visualizations
             columnIcons: {
                 'New': '⊗',                    // BEFORE WORKFLOW
-                'Backlog': '⊗',                // BEFORE WORKFLOW  
                 'Ready for Dev': '⊗',          // BEFORE WORKFLOW (cycle time starts from In Development)
                 'In Development': '✓',         // ACTIVE
                 'In Review': '✓',              // ACTIVE
@@ -1137,7 +1136,7 @@
         const cycleTime85th = dashboardData.metrics.cycleTime.p85;
         const bugsCycleTime = dashboardData.metrics.cycleTime.bugs;
         const pbisCycleTime = dashboardData.metrics.cycleTime.pbis;
-        const cycleTimeInsight = `Cycle time (from ${getCycleStartColumn()} to completion) averages ${cycleTimeAvg} days (median: ${cycleTimeMedian} days, 85th percentile: ${cycleTime85th} days). ${dashboardData.hasBugPbiSplit ? `Bugs: ${bugsCycleTime} days, PBIs: ${pbisCycleTime} days. ` : ''}This measures time actively in workflow columns, excluding backlog waiting time (${getBeforeWorkflowLabel()}).`;
+        const cycleTimeInsight = `Cycle time (from ${getCycleStartColumn()} to completion) averages ${cycleTimeAvg} days (median: ${cycleTimeMedian} days, 85th percentile: ${cycleTime85th} days). ${dashboardData.hasBugPbiSplit ? `Bugs: ${bugsCycleTime} days, PBIs: ${pbisCycleTime} days. ` : ''}This measures time actively in workflow columns, excluding time before workflow starts (${getBeforeWorkflowLabel()}).`;
         document.getElementById('cycleTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${cycleTimeInsight}</p>`;
         
         // Generate dynamic lead time insight
@@ -1168,17 +1167,17 @@
             
             // Update the insight to reflect the actual method
             const leadTimeInsight = leadTimeMethod === 'creation' 
-                ? `Lead time averages ${leadTimeAvg} days (median: ${leadTimeMedian} days, 85th percentile: ${leadTime85th} days) from creation to completion. This includes both backlog time (~${backlogTime} days) and cycle time (${cycleTimeAvg} days). ${leadTimeAvg > cycleTimeAvg * 1.5 ? 'Items wait significantly before development starts.' : 'Items move relatively quickly into development.'}`
-                : `Lead time averages ${leadTimeAvg} days (median: ${leadTimeMedian} days, 85th percentile: ${leadTime85th} days) from board entry to completion. This includes both backlog time (~${backlogTime} days) and cycle time (${cycleTimeAvg} days). ${leadTimeAvg > cycleTimeAvg * 1.5 ? 'Items wait significantly before development starts.' : 'Items move relatively quickly into development.'}`;
+                ? `Lead time averages ${leadTimeAvg} days (median: ${leadTimeMedian} days, 85th percentile: ${leadTime85th} days) from creation to completion. This includes both pre-workflow time in ${getBeforeWorkflowLabel()} (~${backlogTime} days) and cycle time (${cycleTimeAvg} days). ${leadTimeAvg > cycleTimeAvg * 1.5 ? 'Items wait significantly before development starts.' : 'Items move relatively quickly into development.'}`
+                : `Lead time averages ${leadTimeAvg} days (median: ${leadTimeMedian} days, 85th percentile: ${leadTime85th} days) from board entry to completion. This includes both pre-workflow time in ${getBeforeWorkflowLabel()} (~${backlogTime} days) and cycle time (${cycleTimeAvg} days). ${leadTimeAvg > cycleTimeAvg * 1.5 ? 'Items wait significantly before development starts.' : 'Items move relatively quickly into development.'}`;
             document.getElementById('leadTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${leadTimeInsight}</p>`;
         } else {
             // Fallback for old dashboards without metricDefinitions
             document.getElementById('leadTimeDescription').innerText = 'Overall time an individual item takes from creation to completion (closed). [Legacy calculation]';
-            const leadTimeInsight = `Lead time averages ${leadTimeAvg} days (median: ${leadTimeMedian} days, 85th percentile: ${leadTime85th} days) from creation to completion. This includes both backlog time (${getBeforeWorkflowLabel()}: ~${backlogTime} days) and cycle time (${getCycleStartColumn()} onwards: ${cycleTimeAvg} days). ${leadTimeAvg > cycleTimeAvg * 1.5 ? 'Items wait significantly in backlog before development starts.' : 'Items move relatively quickly from backlog to development.'}`;  
+            const leadTimeInsight = `Lead time averages ${leadTimeAvg} days (median: ${leadTimeMedian} days, 85th percentile: ${leadTime85th} days) from creation to completion. This includes both pre-workflow time in ${getBeforeWorkflowLabel()} (~${backlogTime} days) and cycle time from ${getCycleStartColumn()} onwards (${cycleTimeAvg} days). ${leadTimeAvg > cycleTimeAvg * 1.5 ? 'Items wait significantly before workflow starts.' : 'Items move relatively quickly into workflow.'}`; 
             document.getElementById('leadTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${leadTimeInsight}</p>`;
         }
                 document.getElementById('columnCategorizationDescription').innerHTML = `Understanding how workflow columns are classified is essential for interpreting efficiency metrics. <strong>Cycle time starts from the first ACTIVE column (${getCycleStartColumn()}).</strong>`;
-        document.getElementById('wseDescription').innerText = `Measures how quickly work starts after being created. Cycle time starts when items reach "${getCycleStartColumn()}" (first active column). High values (>50%) mean items leave the backlog quickly. Low values indicate long delays in the "${getBeforeWorkflowLabel()}" columns.`;
+        document.getElementById('wseDescription').innerText = `Measures how quickly work starts after being created. Cycle time starts when items reach "${getCycleStartColumn()}" (first active column). High values (>50%) mean items leave pre-workflow columns quickly. Low values indicate long delays in the "${getBeforeWorkflowLabel()}" columns.`;
         document.getElementById('ctfeDescription').innerText = `Measures flow during cycle time (from ${getCycleStartColumn()} onwards). Active columns: ${getActiveColumnsLabel()}. Waiting columns: ${getWaitingColumnsLabel()}. High values (>80%) mean minimal waiting in Ready states.`;
         document.getElementById('ltfeDescription').innerText = `Measures overall efficiency from creation to completion. High values (>40%) mean most time is spent actively working. Low values indicate items spend most time waiting - either in backlog before starting or queued between workflow stages.`;
         
@@ -2105,7 +2104,7 @@
         const backlogPct = (100 - parseFloat(wseAvg)).toFixed(0);
         let wseInterpretation = '';
         if (parseFloat(wseAvg) >= 80) {
-            wseInterpretation = `Excellent - items leave the backlog (${getBeforeWorkflowLabel()}) quickly.`;
+            wseInterpretation = `Excellent - items leave pre-workflow columns (${getBeforeWorkflowLabel()}) quickly.`;
         } else if (parseFloat(wseAvg) >= 60) {
             wseInterpretation = `Good - most time is spent from ${getCycleStartColumn()} onwards rather than waiting in backlog.`;
         } else if (parseFloat(wseAvg) >= 40) {
@@ -2113,7 +2112,7 @@
         } else {
             wseInterpretation = 'Poor - most time spent waiting in backlog before cycle time starts.';
         }
-        const wseInsight = `Average work start efficiency ${wseAvg}% - items spend ${wseAvg}% of total time from ${getCycleStartColumn()} onwards (cycle time). The remaining ${backlogPct}% is backlog time in the ${getBeforeWorkflowLabel()} columns. ${wseInterpretation} Best: #${wseBest.id} at ${wseBest.efficiency}%. Worst: #${wseWorst.id} at ${wseWorst.efficiency}%.`;
+        const wseInsight = `Average work start efficiency ${wseAvg}% - items spend ${wseAvg}% of total time from ${getCycleStartColumn()} onwards (cycle time). The remaining ${backlogPct}% is pre-workflow time in the ${getBeforeWorkflowLabel()} columns. ${wseInterpretation} Best: #${wseBest.id} at ${wseBest.efficiency}%. Worst: #${wseWorst.id} at ${wseWorst.efficiency}%.`;
         document.getElementById('workStartEfficiencyInsight').innerHTML = `<p><strong>Insight:</strong> ${wseInsight}</p>`;
 
         // Filter to top/bottom N items (always best to worst)
@@ -2147,7 +2146,7 @@
                         borderWidth: 1
                     },
                     {
-                        label: 'Backlog Time (' + getBeforeWorkflowLabel() + ')',
+                        label: 'Pre-workflow Time (' + getBeforeWorkflowLabel() + ')',
                         data: wseBacklogDelayData,
                         backgroundColor: boardConfig.colors.waitingTime,
                         borderColor: '#64748b',
@@ -2192,7 +2191,7 @@
                                 html += `<div style="margin-bottom: 8px; font-size: 12px; color: #9ca3af;">Completed: ${item.completedDate} | Type: ${item.type}</div>`;
                                 html += `<div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px; margin-top: 8px;">`;
                                 html += `<div>Cycle Time (From ${getCycleStartColumn()}): <strong>${item.cycleTime} days</strong></div>`;
-                                html += `<div>Backlog Time (${getBeforeWorkflowLabel()}): <strong>${item.backlogDelay} days</strong></div>`;
+                                html += `<div>Pre-workflow Time (${getBeforeWorkflowLabel()}): <strong>${item.backlogDelay} days</strong></div>`;
                                 html += `<div style="margin-top: 8px;">Lead Time: <strong>${item.leadTime} days</strong></div>`;
                                 html += `<div>Work Start Efficiency: <strong>${item.efficiency}%</strong></div>`;
                                 html += `</div>`;
