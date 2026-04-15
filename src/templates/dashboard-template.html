@@ -450,7 +450,7 @@
 
             <!-- Cycle Time Distribution -->
             <div class="chart-card">
-                <h2>⏱️ Cycle Time by Completion Date</h2>
+                <h2>⏱️ Cycle Time Distribution</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;" id="cycleTimeDescription">
                     <!-- Populated dynamically -->
                 </p>
@@ -460,9 +460,20 @@
                 <div class="insight-box" id="cycleTimeInsight"></div>
             </div>
 
+            <!-- Cycle Time Over Time -->
+            <div class="chart-card">
+                <h2>📈 Cycle Time Trend</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    Average cycle time per week with linear regression trend line.
+                </p>
+                <div class="chart-container">
+                    <canvas id="cycleTimeTrendChart"></canvas>
+                </div>
+            </div>
+
             <!-- Lead Time Distribution -->
             <div class="chart-card">
-                <h2>🕐 Lead Time by Completion Date</h2>
+                <h2>🕐 Lead Time Distribution</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;" id="leadTimeDescription">
                     <!-- Populated dynamically -->
                 </p>
@@ -470,6 +481,17 @@
                     <canvas id="leadTimeChart"></canvas>
                 </div>
                 <div class="insight-box" id="leadTimeInsight"></div>
+            </div>
+
+            <!-- Lead Time Over Time -->
+            <div class="chart-card">
+                <h2>📈 Lead Time Trend</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    Average lead time per week with linear regression trend line.
+                </p>
+                <div class="chart-container">
+                    <canvas id="leadTimeTrendChart"></canvas>
+                </div>
             </div>
 
             <!-- Bug Rate Trend -->
@@ -487,12 +509,23 @@
 
             <!-- Current Bugs by Column -->
             <div class="chart-card">
-                <h2>📍 Current Bugs by Column</h2>
+                <h2>📍 Bug Breakdown by Column</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    Shows the current distribution of active bugs across board columns. Click legend items to toggle visibility.
+                    Current distribution of active bugs across board columns. Click legend items to toggle visibility.
                 </p>
                 <div class="chart-container">
                     <canvas id="currentBugsChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Current Bugs by State -->
+            <div class="chart-card">
+                <h2>🏷️ Bug Breakdown by State</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    Current distribution of active bugs by work item state. Click legend items to toggle visibility.
+                </p>
+                <div class="chart-container">
+                    <canvas id="currentBugsStateChart"></canvas>
                 </div>
             </div>
         </div>
@@ -1584,6 +1617,83 @@
             }))
         };
         
+        // Cycle Time Trend Chart (weekly averages with linear regression)
+        const cycleTimeTrendData = dashboardData.charts.cycleTimeTrend || { labels: [], values: [] };
+        if (cycleTimeTrendData.values && cycleTimeTrendData.values.length > 0) {
+            const cycleTimeTrendLine = calculateLinearRegression(cycleTimeTrendData.values);
+            
+            new Chart(document.getElementById('cycleTimeTrendChart'), {
+                type: 'line',
+                data: {
+                    labels: cycleTimeTrendData.labels,
+                    datasets: [
+                        {
+                            label: 'Average Cycle Time',
+                            data: cycleTimeTrendData.values,
+                            borderColor: '#4299e1',
+                            backgroundColor: 'rgba(66, 153, 225, 0.1)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        },
+                        {
+                            label: 'Trend',
+                            data: cycleTimeTrendLine,
+                            borderColor: '#fc8181',
+                            backgroundColor: 'transparent',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            fill: false,
+                            pointRadius: 0,
+                            pointHoverRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    if (context.datasetIndex === 0) {
+                                        return `Avg Cycle Time: ${context.parsed.y} days`;
+                                    } else {
+                                        return `Trend: ${context.parsed.y.toFixed(1)} days`;
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Days'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Week'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
         new Chart(document.getElementById('leadTimeChart'), {
             type: 'scatter',
             data: leadTimeChartData,
@@ -1775,6 +1885,83 @@
                 }
             }
         });
+
+        // Lead Time Trend Chart (weekly averages with linear regression)
+        const leadTimeTrendData = dashboardData.charts.leadTimeTrend || { labels: [], values: [] };
+        if (leadTimeTrendData.values && leadTimeTrendData.values.length > 0) {
+            const leadTimeTrendLine = calculateLinearRegression(leadTimeTrendData.values);
+            
+            new Chart(document.getElementById('leadTimeTrendChart'), {
+                type: 'line',
+                data: {
+                    labels: leadTimeTrendData.labels,
+                    datasets: [
+                        {
+                            label: 'Average Lead Time',
+                            data: leadTimeTrendData.values,
+                            borderColor: '#9f7aea',
+                            backgroundColor: 'rgba(159, 122, 234, 0.1)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        },
+                        {
+                            label: 'Trend',
+                            data: leadTimeTrendLine,
+                            borderColor: '#fc8181',
+                            backgroundColor: 'transparent',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            fill: false,
+                            pointRadius: 0,
+                            pointHoverRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    if (context.datasetIndex === 0) {
+                                        return `Avg Lead Time: ${context.parsed.y} days`;
+                                    } else {
+                                        return `Trend: ${context.parsed.y.toFixed(1)} days`;
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Days'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Week'
+                            }
+                        }
+                    }
+                }
+            });
+        }
 
         // Work Start Efficiency Chart (Cycle / Lead Time) - Stacked Bar
         // Collect all items in chronological order
@@ -3430,6 +3617,82 @@
                                     const percentage = ((item.count / total) * 100).toFixed(1);
                                     return [
                                         `Column: ${item.column}`,
+                                        `Bugs: ${item.count}`,
+                                        `Percentage: ${percentage}%`
+                                    ];
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Current Bugs by State Chart
+        const bugsByState = dashboardData.charts.currentBugsByState || [];
+        if (bugsByState.length > 0) {
+            const stateColors = [
+                '#EF4444', '#F97316', '#F59E0B', '#EAB308', '#84CC16', 
+                '#22C55E', '#10B981', '#14B8A6', '#06B6D4', '#0EA5E9', 
+                '#3B82F6', '#6366F1', '#8B5CF6', '#A855F7', '#D946EF'
+            ];
+            
+            new Chart(document.getElementById('currentBugsStateChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: bugsByState.map(item => `${item.state} (${item.count})`),
+                    datasets: [{
+                        label: 'Bugs',
+                        data: bugsByState.map(item => item.count),
+                        backgroundColor: stateColors.slice(0, bugsByState.length),
+                        borderColor: '#ffffff',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            onClick: function(e, legendItem, legend) {
+                                const index = legendItem.index;
+                                const chart = legend.chart;
+                                const meta = chart.getDatasetMeta(0);
+                                
+                                // Toggle visibility
+                                meta.data[index].hidden = !meta.data[index].hidden;
+                                chart.update();
+                            },
+                            labels: {
+                                padding: 15,
+                                font: { size: 12 },
+                                generateLabels: function(chart) {
+                                    const data = chart.data;
+                                    if (data.labels.length && data.datasets.length) {
+                                        return data.labels.map((label, i) => {
+                                            const meta = chart.getDatasetMeta(0);
+                                            const item = bugsByState[i];
+                                            return {
+                                                text: `${item.state}: ${item.count} bugs`,
+                                                fillStyle: data.datasets[0].backgroundColor[i],
+                                                hidden: meta.data[i].hidden,
+                                                index: i
+                                            };
+                                        });
+                                    }
+                                    return [];
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const item = bugsByState[context.dataIndex];
+                                    const total = bugsByState.reduce((sum, b) => sum + b.count, 0);
+                                    const percentage = ((item.count / total) * 100).toFixed(1);
+                                    return [
+                                        `State: ${item.state}`,
                                         `Bugs: ${item.count}`,
                                         `Percentage: ${percentage}%`
                                     ];

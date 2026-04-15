@@ -406,6 +406,30 @@ $throughputChart = @{
     })
 }
 
+# Cycle time trend chart (weekly averages)
+$cycleTimeTrendChart = @{
+    labels = @($completedByWeek | ForEach-Object { $_.Name })
+    values = @($completedByWeek | ForEach-Object { 
+        $weekItems = $_.Group
+        $weekCycleTimes = $weekItems | ForEach-Object { $_.cycleTime } | Where-Object { $_ -gt 0 }
+        if ($weekCycleTimes.Count -gt 0) { 
+            [Math]::Round(($weekCycleTimes | Measure-Object -Average).Average, 1) 
+        } else { 0 }
+    })
+}
+
+# Lead time trend chart (weekly averages)
+$leadTimeTrendChart = @{
+    labels = @($completedByWeek | ForEach-Object { $_.Name })
+    values = @($completedByWeek | ForEach-Object { 
+        $weekItems = $_.Group
+        $weekLeadTimes = $weekItems | ForEach-Object { $_.leadTime } | Where-Object { $_ -gt 0 }
+        if ($weekLeadTimes.Count -gt 0) { 
+            [Math]::Round(($weekLeadTimes | Measure-Object -Average).Average, 1) 
+        } else { 0 }
+    })
+}
+
 # Calculate coefficient of variation for batch detection
 $throughputValues = @($completedByWeek | ForEach-Object { $_.Count })
 $throughputMean = ($throughputValues | Measure-Object -Average).Average
@@ -495,6 +519,20 @@ foreach ($bug in $activeBugs) {
     $bugColumnBreakdown[$column]++
 }
 
+# Current bug breakdown by state (for pie chart)
+$bugStateBreakdown = @{}
+foreach ($bug in $activeBugs) {
+    $state = $bug.fields.'System.State'
+    if ([string]::IsNullOrWhiteSpace($state)) {
+        $state = "Unknown"
+    }
+    
+    if (-not $bugStateBreakdown.ContainsKey($state)) {
+        $bugStateBreakdown[$state] = 0
+    }
+    $bugStateBreakdown[$state]++
+}
+
 # Get board columns order for sorting
 $boardColumns = $rawData.boardConfig.columns
 if (-not $boardColumns) {
@@ -517,6 +555,17 @@ foreach ($col in ($bugColumnBreakdown.Keys | Sort-Object)) {
         $currentBugsByColumn += @{
             column = $col
             count = $bugColumnBreakdown[$col]
+        }
+    }
+}
+
+# Format bug breakdown by state for output
+$currentBugsByState = @()
+foreach ($state in ($bugStateBreakdown.Keys | Sort-Object)) {
+    if ($bugStateBreakdown[$state] -gt 0) {
+        $currentBugsByState += @{
+            state = $state
+            count = $bugStateBreakdown[$state]
         }
     }
 }
@@ -841,6 +890,9 @@ $dashboardData = @{
             currentActiveBugs = @($activeBugs | ForEach-Object { @{id=$_.id; title=$_.fields.'System.Title'} })
         }
         currentBugsByColumn = $currentBugsByColumn
+        currentBugsByState = $currentBugsByState
+        cycleTimeTrend = $cycleTimeTrendChart
+        leadTimeTrend = $leadTimeTrendChart
         workItemAge = @{
             labels = @()
             states = @()
