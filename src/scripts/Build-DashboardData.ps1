@@ -1220,6 +1220,45 @@ for ($i = 0; $i -lt $dayCount; $i++) {
 
 $dailyWipTrend = Get-LinearRegressionLine -Values ([double[]]$dailyWipValues)
 
+# Insights: Daily WIP
+$dailyWipAvg = if ($dailyWipValues.Count -gt 0) { [Math]::Round((($dailyWipValues | Measure-Object -Average).Average), 1) } else { 0 }
+$dailyWipMin = if ($dailyWipValues.Count -gt 0) { ($dailyWipValues | Measure-Object -Minimum).Minimum } else { 0 }
+$dailyWipMax = if ($dailyWipValues.Count -gt 0) { ($dailyWipValues | Measure-Object -Maximum).Maximum } else { 0 }
+$dailyWipStartValue = if ($dailyWipValues.Count -gt 0) { $dailyWipValues[0] } else { 0 }
+$dailyWipEndValue = if ($dailyWipValues.Count -gt 0) { $dailyWipValues[-1] } else { 0 }
+$dailyWipTrendObj = Calculate-Trend -values @($dailyWipValues) -higherIsBetter $false
+$dailyWipTrendText = if ($dailyWipTrendObj.direction -eq 'up') { 'increasing' } elseif ($dailyWipTrendObj.direction -eq 'down') { 'decreasing' } else { 'stable' }
+$dailyWipInsightText = "Daily WIP averaged $dailyWipAvg items/day (range: $dailyWipMin-$dailyWipMax). Trend is $dailyWipTrendText; latest day is $dailyWipEndValue (start was $dailyWipStartValue)."
+
+# Insights: WIP age breakdown
+$wipAgeInsightText = 'No WIP age breakdown available.'
+if ($dayCount -gt 0) {
+    $lastIdx = $dayCount - 1
+    $last0to1 = [int]$wipAge0to1[$lastIdx]
+    $last1to7 = [int]$wipAge1to7[$lastIdx]
+    $last7to14 = [int]$wipAge7to14[$lastIdx]
+    $last14Plus = [int]$wipAge14Plus[$lastIdx]
+    $lastTotal = $last0to1 + $last1to7 + $last7to14 + $last14Plus
+    $lastPct14Plus = if ($lastTotal -gt 0) { [Math]::Round(($last14Plus / $lastTotal) * 100, 0) } else { 0 }
+
+    $peak14Plus = [int](($wipAge14Plus | Measure-Object -Maximum).Maximum)
+
+    $peak14PlusIdx = -1
+    for ($i = 0; $i -lt $wipAge14Plus.Count; $i++) {
+        if ([int]$wipAge14Plus[$i] -eq $peak14Plus) {
+            $peak14PlusIdx = $i
+            break
+        }
+    }
+
+    $peak14PlusLabel = if ($peak14PlusIdx -ge 0 -and $peak14PlusIdx -lt $dailyWipLabels.Count) { $dailyWipLabels[$peak14PlusIdx] } else { 'N/A' }
+
+    $age14TrendObj = Calculate-Trend -values @($wipAge14Plus) -higherIsBetter $false
+    $age14TrendText = if ($age14TrendObj.direction -eq 'up') { 'increasing' } elseif ($age14TrendObj.direction -eq 'down') { 'decreasing' } else { 'stable' }
+
+    $wipAgeInsightText = "Latest day WIP was $lastTotal, with $last14Plus ($lastPct14Plus%) aged >14 days. Peak >14-day WIP was $peak14Plus on $peak14PlusLabel. The >14-day segment is $age14TrendText."
+}
+
 # Calculate bug rate statistics for insight (using WIP percentages)
 $avgWIPBugRate = if ($bugRateWIP.Count -gt 0) { 
     [Math]::Round(($bugRateWIP | Measure-Object -Average).Average, 1) 
@@ -1496,12 +1535,17 @@ $dashboardData = @{
             trend = @{ direction = "stable"; isGood = $true }
         }
         wip = @{
-            count = $rawData.activeItems.Count
-            avgAge = "0"
-            minAge = 0
-            maxAge = 0
-            class = "trend-warning"
-            trend = @{ direction = "stable"; isGood = $true }
+            # Current WIP = in-progress items (matches Daily WIP chart end-of-period)
+            count = $dailyWipEndValue
+            avgAge = "$dailyWipAvg"
+            minAge = $dailyWipMin
+            maxAge = $dailyWipMax
+            class = if ($dailyWipTrendObj.direction -eq 'up') { 'trend-warning' } elseif ($dailyWipTrendObj.direction -eq 'down') { 'trend-good' } else { 'trend-neutral' }
+            trend = @{ 
+                direction = $dailyWipTrendObj.direction
+                isGood = $dailyWipTrendObj.isGood
+                previousValue = $dailyWipStartValue
+            }
         }
         blocked = @{
             count = $blockedCount
@@ -1674,9 +1718,9 @@ $dashboardData = @{
         cycleTime = "Median cycle time: $cycleTimeMedian days"
         leadTime = "Median lead time: $leadTimeMedian days"
         workItemAge = "$($rawData.activeItems.Count) items in progress"
-        dailyWip = "WIP tracking"
+        dailyWip = $dailyWipInsightText
         timeInColumn = "Column metrics"
-        wipAgeBreakdown = "Age distribution"
+        wipAgeBreakdown = $wipAgeInsightText
         wip = "$($rawData.activeItems.Count) items in WIP"
         bugRate = if ($maxBugRate -gt 50) {
             "WIP bug rate averaged $avgWIPBugRate% (peak: $maxBugRate% at $maxBugRateWeek). Completion bug rate averaged $avgCompletionBugRate%. Currently $($activeBugs.Count) bugs in WIP ($currentActiveBugRate%). High WIP bug rates may indicate quality issues - consider root cause analysis."

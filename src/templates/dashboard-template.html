@@ -1049,9 +1049,7 @@
             } else {
                 arrow = '→';
                 className = 'trend-stable';
-                if (hasPrevious) {
-                    explanation = `<span style="color: #9ca3af; font-size: 11px; margin-left: 4px;">stable at ${previousValue}</span>`;
-                }
+                // Don't show "stable at X" text - the arrow is enough
             }
             
             return `<span class="trend-indicator ${className}">${arrow}</span>${explanation}`;
@@ -1164,9 +1162,9 @@
                     <span>${dashboardData.metrics.wip.count}</span>
                     ${getTrendIndicator(dashboardData.metrics.wip.trend, dashboardData.metrics.wip.count, dashboardData.metrics.wip.trend.previousValue)}
                 </div>
-                <div class="metric-label">active items</div>
+                <div class="metric-label">items in progress</div>
                 <div class="metric-trend ${dashboardData.metrics.wip.class}">
-                    Avg: ${dashboardData.metrics.wip.avgAge} days | Range: ${dashboardData.metrics.wip.minAge}-${dashboardData.metrics.wip.maxAge} days
+                    Daily avg: ${dashboardData.metrics.wip.avgAge} | Range: ${dashboardData.metrics.wip.minAge}-${dashboardData.metrics.wip.maxAge}
                 </div>
             </div>
             
