@@ -1074,6 +1074,16 @@
             </div>
             
             <div class="metric-card">
+                <h3>Bug Rate</h3>
+                <div class="metric-value">
+                    <span>${dashboardData.metrics.bugRate.percentage}%</span>
+                    ${getTrendIndicator(dashboardData.metrics.bugRate.trend, dashboardData.metrics.bugRate.percentage + '%', dashboardData.metrics.bugRate.trend.previousValue)}
+                </div>
+                <div class="metric-label">of completed work</div>
+                <div class="metric-trend ${dashboardData.metrics.bugRate.class}">${dashboardData.metrics.bugRate.count} of ${dashboardData.metrics.bugRate.total} completed items</div>
+            </div>
+            
+            <div class="metric-card">
                 <h3>⚡ Lead Flow Efficiency</h3>
                 <div class="metric-value">
                     <span id="overallLtfeValue">-</span>
@@ -1091,16 +1101,6 @@
                 </div>
                 <div class="metric-label">items/week</div>
                 <div class="metric-trend ${dashboardData.metrics.systemStability.class}" id="systemStabilityText">${dashboardData.metrics.systemStability.text}</div>
-            </div>
-            
-            <div class="metric-card">
-                <h3>Bug Rate</h3>
-                <div class="metric-value">
-                    <span>${dashboardData.metrics.bugRate.percentage}%</span>
-                    ${getTrendIndicator(dashboardData.metrics.bugRate.trend, dashboardData.metrics.bugRate.percentage + '%', dashboardData.metrics.bugRate.trend.previousValue)}
-                </div>
-                <div class="metric-label">of completed work</div>
-                <div class="metric-trend ${dashboardData.metrics.bugRate.class}">${dashboardData.metrics.bugRate.count} of ${dashboardData.metrics.bugRate.total} completed items</div>
             </div>
             
             <div class="metric-card">
