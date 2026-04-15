@@ -430,7 +430,7 @@
                 <button class="tab-button" onclick="switchTab(event, 'flow-system')">🔄 Flow</button>
                 <button class="tab-button" onclick="switchTab(event, 'wip-tracking')">📊 Work in Progress</button>
                 <button class="tab-button" onclick="switchTab(event, 'aging-analysis')">📈 Aging Analysis</button>
-                <button class="tab-button" onclick="switchTab(event, 'blocked-items')">🚫 Blocked Items</button>
+                <button class="tab-button" onclick="switchTab(event, 'blocked-items')">⚠️ Blockers & Issues</button>
             </div>
 
             <!-- Tab 1: Time Metrics (Throughput, Cycle & Lead Time, Efficiency) -->
@@ -804,19 +804,32 @@
         </div>
             </div>
 
-            <!-- Tab 5: Blocked Items -->
+            <!-- Tab 5: Blockers & Issues -->
             <div id="blocked-items" class="tab-content">
                 <div class="charts-grid">
-            <!-- Blocked Items Over Time -->
+            <!-- Blocked Items by Column -->
             <div class="chart-card">
-                <h2>🚫 Blocked Items Over Time</h2>
+                <h2>🚫 Blocked Items by Column</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    Shows the number of blocked items each day with a trend line.
+                    Distribution of blocked items across all workflow columns.
                 </p>
                 <div class="chart-container">
                     <canvas id="blockedItemsChart"></canvas>
                 </div>
                 <div class="insight-box" id="blockedItemsInsight"></div>
+            </div>
+
+            <!-- Current Blocked Items -->
+            <div class="chart-card">
+                <h2>🔴 Current Blocked Items</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    Currently blocked items sorted by how long they've been blocked.<br>
+                    <strong>Goal:</strong> Prioritize unblocking these items over starting new work.
+                </p>
+                <div class="chart-container">
+                    <canvas id="currentBlockedItemsChart"></canvas>
+                </div>
+                <div class="insight-box" id="currentBlockedItemsInsight"></div>
             </div>
 
             <!-- Stale Work -->
@@ -1745,9 +1758,9 @@
                                 label: function(context) {
                                     if (context.datasetIndex === 0) {
                                         return `Avg Cycle Time: ${context.parsed.y} days`;
-                                    } else {
-                                        return `Trend: ${context.parsed.y.toFixed(1)} days`;
                                     }
+                                    // Don't show tooltip for trend line
+                                    return null;
                                 }
                             }
                         }
@@ -2037,9 +2050,9 @@
                                 label: function(context) {
                                     if (context.datasetIndex === 0) {
                                         return `Avg Lead Time: ${context.parsed.y} days`;
-                                    } else {
-                                        return `Trend: ${context.parsed.y.toFixed(1)} days`;
                                     }
+                                    // Don't show tooltip for trend line
+                                    return null;
                                 }
                             }
                         }
@@ -3210,38 +3223,51 @@
             // Sort by value descending (worst first)
             staleItems.sort((a, b) => b.value - a.value);
             
-            // Extract sorted arrays - add blocked indicator to labels
-            const sortedLabels = staleItems.map(item => item.blocked ? `🚫 #${item.id}` : `#${item.id}`);
+            // Extract sorted arrays - add blocker category indicator to labels
+            const sortedLabels = staleItems.map(item => {
+                if (item.blocked && dashboardData.charts.staleWork.blockerLabels) {
+                    const idx = dashboardData.charts.staleWork.ids.indexOf(item.id);
+                    const label = dashboardData.charts.staleWork.blockerLabels[idx];
+                    return label ? `[${label}] #${item.id}` : `#${item.id}`;
+                }
+                return `#${item.id}`;
+            });
             const sortedValues = staleItems.map(item => item.value);
             const sortedIds = staleItems.map(item => item.id);
             const sortedTitles = staleItems.map(item => item.title);
             const sortedBlocked = staleItems.map(item => item.blocked);
+            const sortedBlockerColors = staleItems.map(item => {
+                if (item.blocked && dashboardData.charts.staleWork.blockerColors) {
+                    const idx = dashboardData.charts.staleWork.ids.indexOf(item.id);
+                    return dashboardData.charts.staleWork.blockerColors[idx] || null;
+                }
+                return null;
+            });
+            const sortedBlockerLabels = staleItems.map(item => {
+                if (item.blocked && dashboardData.charts.staleWork.blockerLabels) {
+                    const idx = dashboardData.charts.staleWork.ids.indexOf(item.id);
+                    return dashboardData.charts.staleWork.blockerLabels[idx] || null;
+                }
+                return null;
+            });
             
-            // Create color gradient based on staleness - red for worst offenders
+            // Create color scale - use blocker category colors for blocked items, blue for others
             const maxValue = Math.max(...sortedValues);
             const minValue = Math.min(...sortedValues);
             const colorScale = sortedValues.map((value, index) => {
-                // Normalize value between 0 and 1
-                const normalized = maxValue === minValue ? 1 : (value - minValue) / (maxValue - minValue);
-                
-                // If blocked, use darker/different colors
-                if (sortedBlocked[index]) {
-                    if (normalized > 0.66) {
-                        return '#991b1b'; // Dark red for blocked worst
-                    } else if (normalized > 0.33) {
-                        return '#b91c1c'; // Red for blocked middle
-                    } else {
-                        return '#dc2626'; // Regular red for blocked better
-                    }
+                // If has blocker category, use that color
+                if (sortedBlockerColors[index]) {
+                    return sortedBlockerColors[index];
                 }
                 
-                // Red (worst) to yellow (better) gradient for non-blocked
+                // Normal stale items use blue gradient (darker for more stale)
+                const normalized = maxValue === minValue ? 1 : (value - minValue) / (maxValue - minValue);
                 if (normalized > 0.66) {
-                    return '#dc2626'; // Red for worst 33%
+                    return '#2563eb'; // Dark blue for most stale
                 } else if (normalized > 0.33) {
-                    return '#f97316'; // Orange for middle 33%
+                    return '#3b82f6'; // Medium blue for middle
                 } else {
-                    return '#fb923c'; // Light orange for best 33%
+                    return '#60a5fa'; // Light blue for least stale
                 }
             });
             
@@ -3253,13 +3279,18 @@
                         label: 'Days Since Updated',
                         data: sortedValues,
                         backgroundColor: colorScale,
-                        borderColor: colorScale.map(color => {
-                            // Darker border for each color
-                            if (color === '#991b1b') return '#7f1d1d';
-                            if (color === '#b91c1c') return '#991b1b';
-                            if (color === '#dc2626') return '#991b1b';
-                            if (color === '#f97316') return '#ea580c';
-                            return '#f97316';
+                        borderColor: colorScale.map((color, index) => {
+                            // Use darker shades based on category or staleness
+                            if (sortedBlockerColors[index]) {
+                                // Darken the blocker category color
+                                if (color === '#ef4444') return '#dc2626'; // Blocked
+                                if (color === '#f97316') return '#ea580c'; // Hold
+                                if (color === '#eab308') return '#ca8a04'; // Other
+                            }
+                            // Blue gradient borders
+                            if (color === '#2563eb') return '#1d4ed8';
+                            if (color === '#3b82f6') return '#2563eb';
+                            return '#3b82f6';
                         }),
                         borderWidth: 2
                     }]
@@ -3299,9 +3330,11 @@
                                     const title = sortedTitles[index];
                                     const days = sortedValues[index];
                                     const blocked = sortedBlocked[index];
+                                    const blockerLabel = sortedBlockerLabels[index];
+                                    const blockerColor = sortedBlockerColors[index];
                                     const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${id}`;
                                     
-                                    const blockedBadge = blocked ? '<span style="background: #991b1b; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: bold;">🚫 BLOCKED</span><br>' : '';
+                                    const blockedBadge = blockerLabel ? `<span style="background: ${blockerColor}; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: bold;">${blockerLabel.toUpperCase()}</span><br>` : '';
                                     
                                     // Build HTML
                                     tooltipEl.innerHTML = `
@@ -3327,7 +3360,7 @@
                     scales: {
                         x: {
                             beginAtZero: true,
-                            title: { display: true, text: 'Days Since Updated' },
+                            title: { display: true, text: 'Days Since Last Update (blue: normal, red/orange: blocked)' },
                             grid: { color: '#e2e8f0' }
                         },
                         y: {
@@ -3956,106 +3989,229 @@
             }
         });
 
-        // Blocked Items Over Time Chart
-        new Chart(document.getElementById('blockedItemsChart'), {
-            type: 'line',
-            data: {
-                labels: dashboardData.charts.blockedItems.labels,
-                datasets: [{
-                    label: 'Blocked Items',
-                    data: dashboardData.charts.blockedItems.values,
-                    borderColor: '#ef4444',
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: 6,
-                    pointHoverRadius: 10,
-                    pointBackgroundColor: '#ef4444',
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 2
-                }, {
-                    label: 'Trend',
-                    data: calculateLinearRegression(dashboardData.charts.blockedItems.values),
-                    borderColor: '#9ca3af',
-                    backgroundColor: 'transparent',
-                    borderWidth: 2,
-                    borderDash: [10, 5],
-                    pointRadius: 0,
-                    fill: false,
-                    tension: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        enabled: false,
-                        external: function(context) {
-                            // Use custom tooltip
-                            const tooltipEl = document.getElementById('customTooltip');
-                            const tooltipModel = context.tooltip;
-                            
-                            if (tooltipModel.opacity === 0) {
-                                if (!isTooltipHovered) {
-                                    hideTooltipWithDelay();
-                                }
-                                return;
-                            }
-                            
-                            if (tooltipHideTimeout) {
-                                clearTimeout(tooltipHideTimeout);
-                                tooltipHideTimeout = null;
-                            }
-                            
-                            if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
-                                const dataPoint = tooltipModel.dataPoints[0];
-                                if (dataPoint.datasetIndex !== 0) return; // Only show for actual data, not trend line
-                                
-                                const index = dataPoint.dataIndex;
-                                const date = dashboardData.charts.blockedItems.labels[index];
-                                const count = dashboardData.charts.blockedItems.values[index];
-                                const items = dashboardData.charts.blockedItems.items ? dashboardData.charts.blockedItems.items[index] : null;
-                                
-                                let html = `<div style="font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 6px;">Date: ${date}</div>`;
-                                html += `<div style="margin-bottom: 8px;">Blocked Items: <strong>${count}</strong></div>`;
-                                
-                                if (items && items.length > 0) {
-                                    html += `<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.2);"><strong>Items:</strong></div>`;
-                                    items.forEach(item => {
-                                        const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
-                                        const shortTitle = item.title.length > 50 ? item.title.substring(0, 50) + '...' : item.title;
-                                        html += `<div style="margin: 4px 0;"><a href="${adoUrl}" target="_blank" style="color: #60a5fa; text-decoration: none;">#${item.id}</a>: ${shortTitle}</div>`;
-                                    });
-                                } else {
-                                    html += `<div style="margin-top: 8px; font-style: italic; opacity: 0.7;">No item details available</div>`;
-                                }
-                                
-                                tooltipEl.innerHTML = html;
-                                tooltipEl.classList.add('visible');
-                                
-                                const position = context.chart.canvas.getBoundingClientRect();
-                                tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
-                                tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        title: { display: true, text: 'Number of Blocked Items' },
-                        grid: { color: '#e2e8f0' }
-                    },
-                    x: {
-                        title: { display: true, text: 'Date' },
-                        grid: { display: false }
-                    }
+        // 1. Blocked Items by Column Chart (vertical stacked bars by category)
+        if (dashboardData.charts.blockedItems.current) {
+            const blockedByColumn = dashboardData.charts.blockedItems.current.byColumn;
+            const columns = Object.keys(blockedByColumn);
+            const details = dashboardData.charts.blockedItems.current.details;
+            const categories = dashboardData.charts.blockedItems.current.categories;
+            const byCategory = dashboardData.charts.blockedItems.current.byCategory;
+            
+            // Build datasets - one per category
+            const datasets = [];
+            if (categories && byCategory) {
+                for (const [categoryKey, categoryConfig] of Object.entries(categories)) {
+                    // Calculate counts per column for this category
+                    const categoryData = columns.map(col => {
+                        return details.filter(item => item.column === col && item.category === categoryKey).length;
+                    });
+                    
+                    datasets.push({
+                        label: categoryConfig.label,
+                        data: categoryData,
+                        backgroundColor: categoryConfig.color,
+                        borderColor: categoryConfig.color,
+                        borderWidth: 2
+                    });
                 }
             }
-        });
+            
+            // Add gray bars for columns with no blocks
+            const totalCounts = columns.map((col, i) => {
+                let total = 0;
+                datasets.forEach(ds => total += ds.data[i]);
+                return total;
+            });
+            
+            new Chart(document.getElementById('blockedItemsChart'), {
+                type: 'bar',
+                data: {
+                    labels: columns,
+                    datasets: datasets.length > 0 ? datasets : [{
+                        label: 'Blocked Items',
+                        data: totalCounts,
+                        backgroundColor: totalCounts.map(c => c > 0 ? '#ef4444' : '#d1d5db'),
+                        borderColor: totalCounts.map(c => c > 0 ? '#dc2626' : '#9ca3af'),
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { 
+                            display: datasets.length > 1,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            enabled: false,
+                            external: function(context) {
+                                const tooltipEl = document.getElementById('customTooltip');
+                                const tooltipModel = context.tooltip;
+                                
+                                if (tooltipModel.opacity === 0) {
+                                    if (!isTooltipHovered) {
+                                        hideTooltipWithDelay();
+                                    }
+                                    return;
+                                }
+                                
+                                if (tooltipHideTimeout) {
+                                    clearTimeout(tooltipHideTimeout);
+                                    tooltipHideTimeout = null;
+                                }
+                                
+                                if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
+                                    const dataPoint = tooltipModel.dataPoints[0];
+                                    const column = columns[dataPoint.dataIndex];
+                                    const itemsInColumn = details.filter(item => item.column === column);
+                                    
+                                    let html = `<div class="tooltip-title">Blocked in ${column}</div>`;
+                                    html += `<div class="tooltip-content">`;
+                                    html += `<strong>Total:</strong> ${itemsInColumn.length} item${itemsInColumn.length !== 1 ? 's' : ''}<br><br>`;
+                                    
+                                    if (itemsInColumn.length > 0) {
+                                        html += `<strong>Items:</strong><br>`;
+                                        itemsInColumn.forEach(item => {
+                                            const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
+                                            const shortTitle = item.title.length > 40 ? item.title.substring(0, 40) + '...' : item.title;
+                                            const categoryBadge = item.categoryLabel ? `<span style="color: ${item.categoryColor}; font-weight: bold;">[${item.categoryLabel}]</span> ` : '';
+                                            html += `<div style="margin: 4px 0 4px 8px;">• ${categoryBadge}<a href="${adoUrl}" target="_blank" style="color: #60a5fa;">#${item.id}</a>: ${shortTitle} <em style="color: #9ca3af;">(${item.daysSinceChanged}d)</em></div>`;
+                                        });
+                                    }
+                                    
+                                    html += `</div><div class="close-hint">Hover to keep open • Click elsewhere to close</div>`;
+                                    tooltipEl.innerHTML = html;
+                                    tooltipEl.classList.add('visible');
+                                    
+                                    const position = context.chart.canvas.getBoundingClientRect();
+                                    tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
+                                    tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            stacked: datasets.length > 1,
+                            title: { display: true, text: 'Number of Blocked Items' },
+                            grid: { color: '#e2e8f0' },
+                            ticks: { stepSize: 1 }
+                        },
+                        x: {
+                            stacked: datasets.length > 1,
+                            title: { display: true, text: 'Board Column' },
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // 2. Current Blocked Items (horizontal bar chart showing each item with days blocked, color-coded by category)
+        if (dashboardData.charts.blockedItems.current && dashboardData.charts.blockedItems.current.count > 0) {
+            const details = dashboardData.charts.blockedItems.current.details;
+            const labels = details.map(item => `#${item.id}`);
+            const daysBlocked = details.map(item => item.daysSinceChanged);
+            const barColors = details.map(item => item.categoryColor || '#3b82f6');
+            const borderColors = details.map(item => item.categoryColor || '#2563eb');
+            
+            new Chart(document.getElementById('currentBlockedItemsChart'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Days Blocked',
+                        data: daysBlocked,
+                        backgroundColor: barColors,
+                        borderColor: borderColors,
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            enabled: false,
+                            external: function(context) {
+                                const tooltipEl = document.getElementById('customTooltip');
+                                const tooltipModel = context.tooltip;
+                                
+                                if (tooltipModel.opacity === 0) {
+                                    if (!isTooltipHovered) {
+                                        hideTooltipWithDelay();
+                                    }
+                                    return;
+                                }
+                                
+                                if (tooltipHideTimeout) {
+                                    clearTimeout(tooltipHideTimeout);
+                                    tooltipHideTimeout = null;
+                                }
+                                
+                                if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
+                                    const dataPoint = tooltipModel.dataPoints[0];
+                                    const item = details[dataPoint.dataIndex];
+                                    const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
+                                    const categoryBadge = item.categoryLabel ? `<span style="color: ${item.categoryColor}; font-weight: bold;">${item.categoryLabel}</span>` : '';
+                                    
+                                    let html = `<div class="tooltip-title">Blocked Item ${categoryBadge}</div>`;
+                                    html += `<div class="tooltip-content">`;
+                                    html += `<strong>ID:</strong> <a href="${adoUrl}" target="_blank" style="color: #60a5fa;">#${item.id}</a><br>`;
+                                    html += `<strong>Title:</strong> ${item.title}<br>`;
+                                    html += `<strong>Column:</strong> ${item.column}<br>`;
+                                    html += `<strong>Type:</strong> ${item.workItemType}<br><br>`;
+                                    html += `<strong style="color: ${item.categoryColor || '#3b82f6'};">⏰ Days Blocked:</strong> ${item.daysSinceChanged} days`;
+                                    html += `</div><div class="close-hint">Hover to keep open • Click elsewhere to close</div>`;
+                                    
+                                    tooltipEl.innerHTML = html;
+                                    tooltipEl.classList.add('visible');
+                                    
+                                    const position = context.chart.canvas.getBoundingClientRect();
+                                    tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
+                                    tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Days Blocked' },
+                            grid: { color: '#e2e8f0' }
+                        },
+                        y: {
+                            title: { display: false },
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        } else {
+            // No blocked items
+            const ctx = document.getElementById('currentBlockedItemsChart').getContext('2d');
+            ctx.font = '16px Arial';
+            ctx.fillStyle = '#6b7280';
+            ctx.textAlign = 'center';
+            ctx.fillText('No currently blocked items', ctx.canvas.width / 2, ctx.canvas.height / 2);
+        }
+        
+        // Set blocked items insight
+        document.getElementById('blockedItemsInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.blockedItems}</p>`;
+        
+        // Set current blocked items insight if any blocked items exist
+        if (dashboardData.charts.blockedItems.current && dashboardData.charts.blockedItems.current.count > 0) {
+            const blockedDetails = dashboardData.charts.blockedItems.current.details;
+            const avgDays = Math.round(blockedDetails.reduce((sum, item) => sum + item.daysSinceChanged, 0) / blockedDetails.length);
+            const longest = blockedDetails[0];
+            document.getElementById('currentBlockedItemsInsight').innerHTML = `<p><strong>Insight:</strong> ${blockedDetails.length} blocked items. Average blocked duration: ${avgDays} days. Longest: #${longest.id} at ${longest.daysSinceChanged} days.</p>`;
+        } else {
+            document.getElementById('currentBlockedItemsInsight').innerHTML = `<p><strong>Insight:</strong> No blocked items.</p>`;
+        }
 
         // Transition Rate Ratios Chart
         new Chart(document.getElementById('transitionRatesChart'), {

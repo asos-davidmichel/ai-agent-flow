@@ -148,6 +148,43 @@
         }
       }
     },
+    "blockers": {
+      "type": "object",
+      "description": "Indicators used to identify blocked or on-hold work",
+      "properties": {
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tags used to indicate blocked/on-hold status (case-insensitive partial match)"
+        },
+        "columns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Column names that indicate blocked status"
+        },
+        "categories": {
+          "type": "object",
+          "description": "Categorization of different blocker types",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "tags": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "color": {
+                "type": "string",
+                "description": "Chart color for this category (hex)"
+              },
+              "label": {
+                "type": "string",
+                "description": "Display label for this category"
+              }
+            }
+          }
+        }
+      }
+    },
     "workItemTypes": {
       "type": "object",
       "properties": {

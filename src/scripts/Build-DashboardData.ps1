@@ -570,6 +570,60 @@ foreach ($state in ($bugStateBreakdown.Keys | Sort-Object)) {
     }
 }
 
+# Configure blocker detection (used for both blocked items and stale work)
+$blockerConfig = $config.blockers
+$blockerTags = if ($blockerConfig -and $blockerConfig.tags) {
+    $blockerConfig.tags
+} else {
+    @('blocked')  # Fallback to default
+}
+
+$blockerCategories = if ($blockerConfig -and $blockerConfig.categories) {
+    $blockerConfig.categories
+} else {
+    @{
+        blocked = @{
+            tags = @('blocked')
+            color = '#ef4444'
+            label = 'Blocked'
+        }
+    }
+}
+
+# Function to determine blocker category for an item
+function Get-BlockerCategory {
+    param($tags, $categories)
+    
+    if (-not $tags) { return $null }
+    
+    # Handle both hashtables and PSCustomObject (from JSON)
+    $categoryKeys = if ($categories.Keys) {
+        $categories.Keys
+    } else {
+        $categories.PSObject.Properties.Name
+    }
+    
+    foreach ($categoryKey in $categoryKeys) {
+        $category = if ($categories.$categoryKey) {
+            $categories.$categoryKey
+        } else {
+            $categories[$categoryKey]
+        }
+        
+        foreach ($tagPattern in $category.tags) {
+            if ($tags -like "*$tagPattern*") {
+                return @{
+                    key = $categoryKey
+                    label = $category.label
+                    color = $category.color
+                }
+            }
+        }
+    }
+    
+    return $null
+}
+
 # Calculate stale work (items not updated recently)
 # Tasks and Epics are already excluded from data fetch
 $staleWorkItems = @()
@@ -580,9 +634,9 @@ foreach ($item in $rawData.activeItems) {
         $changedDate = [DateTime]$changedDateStr
         $daysSinceChanged = [Math]::Floor(($now - $changedDate).TotalDays)
         
-        # Check if item is blocked (has "blocked" tag - case insensitive)
+        # Check if item has blocker category
         $tags = $item.fields.'System.Tags'
-        $isBlocked = $tags -and ($tags -like '*blocked*')
+        $blockerCategory = Get-BlockerCategory -tags $tags -categories $blockerCategories
         
         $staleWorkItems += [PSCustomObject]@{
             id = $item.id
@@ -591,7 +645,10 @@ foreach ($item in $rawData.activeItems) {
             state = $item.fields.'System.State'
             column = $item.fields.'System.BoardColumn'
             daysSinceChanged = $daysSinceChanged
-            isBlocked = $isBlocked
+            isBlocked = $null -ne $blockerCategory
+            blockerCategory = if ($blockerCategory) { $blockerCategory.key } else { $null }
+            blockerLabel = if ($blockerCategory) { $blockerCategory.label } else { $null }
+            blockerColor = if ($blockerCategory) { $blockerCategory.color } else { $null }
         }
     }
 }
@@ -605,6 +662,9 @@ $staleWorkValues = @()
 $staleWorkIds = @()
 $staleWorkTitles = @()
 $staleWorkBlocked = @()
+$staleWorkBlockerCategories = @()
+$staleWorkBlockerLabels = @()
+$staleWorkBlockerColors = @()
 
 foreach ($item in $staleWorkItems) {
     $typeIcon = if ($item.workItemType -eq 'Bug') { '🐛' } else { '📋' }
@@ -613,7 +673,184 @@ foreach ($item in $staleWorkItems) {
     $staleWorkIds += $item.id
     $staleWorkTitles += $item.title
     $staleWorkBlocked += $item.isBlocked
+    $staleWorkBlockerCategories += $item.blockerCategory
+    $staleWorkBlockerLabels += $item.blockerLabel
+    $staleWorkBlockerColors += $item.blockerColor
 }
+
+# Calculate blocked items using configured blocker indicators
+# Read blocker configuration from board config (with fallback to legacy behavior)
+$blockerConfig = $config.blockers
+$blockerTags = if ($blockerConfig -and $blockerConfig.tags) {
+    $blockerConfig.tags
+} else {
+    @('blocked')  # Fallback to default
+}
+
+$blockerCategories = if ($blockerConfig -and $blockerConfig.categories) {
+    $blockerConfig.categories
+} else {
+    @{
+        blocked = @{
+            tags = @('blocked')
+            color = '#ef4444'
+            label = 'Blocked'
+        }
+    }
+}
+
+# Function to determine blocker category for an item
+function Get-BlockerCategory {
+    param($tags, $categories)
+    
+    if (-not $tags) { return $null }
+    
+    # Handle both hashtables and PSCustomObject (from JSON)
+    $categoryKeys = if ($categories.Keys) {
+        $categories.Keys
+    } else {
+        $categories.PSObject.Properties.Name
+    }
+    
+    foreach ($categoryKey in $categoryKeys) {
+        $category = if ($categories.$categoryKey) {
+            $categories.$categoryKey
+        } else {
+            $categories[$categoryKey]
+        }
+        
+        foreach ($tagPattern in $category.tags) {
+            if ($tags -like "*$tagPattern*") {
+                return @{
+                    key = $categoryKey
+                    label = $category.label
+                    color = $category.color
+                }
+            }
+        }
+    }
+    
+    return $null
+}
+
+# Identify blocked items
+$blockedItems = @()
+foreach ($item in $rawData.activeItems) {
+    $tags = $item.fields.'System.Tags'
+    $category = Get-BlockerCategory -tags $tags -categories $blockerCategories
+    
+    if ($category) {
+        $blockedItems += [PSCustomObject]@{
+            item = $item
+            category = $category
+        }
+    }
+}
+
+# Get actual blocker tag addition dates from revision history
+Write-Host "  Querying blocker tag history for $($blockedItems.Count) blocked items..." -ForegroundColor Gray
+$blockerDates = @{}
+if ($blockedItems.Count -gt 0) {
+    $blockedIds = @($blockedItems | ForEach-Object { $_.item.id })
+    $allBlockerTags = @()
+    $categoryKeys = if ($blockerCategories.Keys) { $blockerCategories.Keys } else { $blockerCategories.PSObject.Properties.Name }
+    foreach ($categoryKey in $categoryKeys) {
+        $category = if ($blockerCategories.$categoryKey) { $blockerCategories.$categoryKey } else { $blockerCategories[$categoryKey] }
+        $allBlockerTags += $category.tags
+    }
+    
+    try {
+        $blockerDatesJson = & (Join-Path $PSScriptRoot "Get-BlockerTagAddedDate.ps1") `
+            -Organization $rawData.metadata.organization `
+            -Project $rawData.metadata.project `
+            -WorkItemIds $blockedIds `
+            -BlockerTags $allBlockerTags
+        
+        $blockerDatesData = $blockerDatesJson | ConvertFrom-Json
+        foreach ($item in $blockerDatesData) {
+            $blockerDates[$item.id] = $item.daysBlocked
+        }
+        Write-Host "  [OK] Retrieved blocker history for $($blockedIds.Count) items" -ForegroundColor Green
+    } catch {
+        Write-Warning "Failed to get blocker tag dates: $_. Using days since changed as fallback."
+    }
+}
+
+# Initialize blocked by column with ALL columns (even if count is 0)
+$boardColumns = $rawData.boardConfig.columns
+$blockedByColumn = [ordered]@{}
+foreach ($col in $boardColumns) {
+    $blockedByColumn[$col] = 0
+}
+
+# Initialize blocked by category
+$blockedByCategory = @{}
+$categoryKeys = if ($blockerCategories.Keys) { $blockerCategories.Keys } else { $blockerCategories.PSObject.Properties.Name }
+foreach ($categoryKey in $categoryKeys) {
+    $blockedByCategory[$categoryKey] = 0
+}
+
+# Group blocked items
+$blockedByType = @{}
+$blockedByState = @{}
+$blockedItemDetails = @()
+
+foreach ($blockedEntry in $blockedItems) {
+    $item = $blockedEntry.item
+    $category = $blockedEntry.category
+    
+    $column = $item.fields.'System.BoardColumn'
+    $workItemType = $item.fields.'System.WorkItemType'
+    $state = $item.fields.'System.State'
+    $changedDate = $item.fields.'System.ChangedDate'
+    
+    # Count by category
+    $blockedByCategory[$category.key]++
+    
+    # Count by column (increment existing)
+    if ($blockedByColumn.Contains($column)) {
+        $blockedByColumn[$column]++
+    } else {
+        # Column not in board config - add it
+        $blockedByColumn[$column] = 1
+    }
+    
+    # Count by type
+    if (-not $blockedByType.ContainsKey($workItemType)) {
+        $blockedByType[$workItemType] = 0
+    }
+    $blockedByType[$workItemType]++
+    
+    # Count by state  
+    if (-not $blockedByState.ContainsKey($state)) {
+        $blockedByState[$state] = 0
+    }
+    $blockedByState[$state]++
+    
+    # Calculate days blocked (from tag history) or days since changed as fallback
+    $daysBlocked = if ($blockerDates.ContainsKey($item.id) -and $null -ne $blockerDates[$item.id]) {
+        $blockerDates[$item.id]
+    } elseif ($changedDate) {
+        [Math]::Floor(((Get-Date) - [DateTime]$changedDate).TotalDays)
+    } else {
+        0
+    }
+    
+    $blockedItemDetails += [PSCustomObject]@{
+        id = $item.id
+        title = $item.fields.'System.Title'
+        workItemType = $workItemType
+        state = $state
+        column = $column
+        daysSinceChanged = $daysBlocked
+        category = $category.key
+        categoryLabel = $category.label
+        categoryColor = $category.color
+    }
+}
+
+# Sort blocked items by how long they've been stale
+$blockedItemDetails = @($blockedItemDetails | Sort-Object -Property daysSinceChanged -Descending | Select-Object -First 20)
 
 # Calculate bug rate statistics for insight (using WIP percentages)
 $avgWIPBugRate = if ($bugRateWIP.Count -gt 0) { 
@@ -960,6 +1197,9 @@ $dashboardData = @{
             ids = $staleWorkIds
             titles = $staleWorkTitles
             blocked = $staleWorkBlocked
+            blockerCategories = $staleWorkBlockerCategories
+            blockerLabels = $staleWorkBlockerLabels
+            blockerColors = $staleWorkBlockerColors
         }
         wipAgeBreakdown = @{
             labels = @()
@@ -981,10 +1221,15 @@ $dashboardData = @{
            colors = @()
         }
         blockedItems = @{
-            labels = @()
-            values = @()
-            trend = @()
-            items = @()
+            current = @{
+                count = $blockedItems.Count
+                byColumn = $blockedByColumn
+                byType = $blockedByType
+                byState = $blockedByState
+                byCategory = $blockedByCategory
+                categories = $blockerCategories
+                details = $blockedItemDetails
+            }
         }
         transitionRates = @{
             labels = @()
@@ -1071,7 +1316,78 @@ $dashboardData = @{
         }
         netFlow = "Flow analysis"
         state = "State distribution"
-        blockedItems = "Blocked items tracking"
+        blockedItems = if ($blockedItems.Count -gt 0) {
+            $count = $blockedItems.Count
+            
+            # Category breakdown
+            $categoryBreakdown = @()
+            $categoryKeys = if ($blockedByCategory.Keys) { $blockedByCategory.Keys } else { $blockedByCategory.PSObject.Properties.Name }
+            foreach ($categoryKey in $categoryKeys) {
+                $catCount = $blockedByCategory[$categoryKey]
+                if ($catCount -gt 0) {
+                    # Handle both hashtables and PSCustomObject
+                    $catLabel = if ($blockerCategories.$categoryKey) {
+                        $blockerCategories.$categoryKey.label
+                    } else {
+                        $blockerCategories[$categoryKey].label
+                    }
+                    $categoryBreakdown += "$catCount $catLabel"
+                }
+            }
+            $categoryMessage = if ($categoryBreakdown.Count -gt 0) {
+                "(" + ($categoryBreakdown -join ", ") + "). "
+            } else {
+                ". "
+            }
+            
+            # Find patterns in blocked items
+            $topColumn = $blockedByColumn.GetEnumerator() | Sort-Object -Property Value -Descending | Select-Object -First 1
+            $topType = $blockedByType.GetEnumerator() | Sort-Object -Property Value -Descending | Select-Object -First 1
+            
+            # Calculate average blocked duration
+            $blockedDurations = @($blockedItemDetails | ForEach-Object { $_.daysSinceChanged })
+            $avgBlockedDuration = if ($blockedDurations.Count -gt 0) {
+                [Math]::Round(($blockedDurations | Measure-Object -Average).Average, 0)
+            } else { 0 }
+            $longestBlocked = ($blockedItemDetails | Select-Object -First 1)
+            
+            # Build insight message
+            $baseMessage = "$count items currently blocked " + $categoryMessage
+            
+            $columnMessage = if ($topColumn -and $topColumn.Value -ge ($count * 0.5)) {
+                "$($topColumn.Value) are in '$($topColumn.Key)' column. "
+            } elseif ($topColumn) {
+                "Distributed across columns, with $($topColumn.Value) in '$($topColumn.Key)'. "
+            } else {
+                ""
+            }
+            
+            $typeMessage = if ($topType -and $topType.Value -ge ($count * 0.7)) {
+                "$($topType.Value) are $($topType.Key)s. "
+            } elseif ($topType) {
+                "Mix of types: $($topType.Value) $($topType.Key)s. "
+            } else {
+                ""
+            }
+            
+            $durationMessage = if ($longestBlocked) {
+                "Longest blocked: #$($longestBlocked.id) at $($longestBlocked.daysSinceChanged) days (avg: $avgBlockedDuration days). "
+            } else {
+                ""
+            }
+            
+            $actionMessage = if ($avgBlockedDuration -gt 14) {
+                "Average blocked duration over 2 weeks suggests systemic blockers - review dependencies and impediments."
+            } elseif ($count -gt 10) {
+                "High number of blocked items may indicate process or dependency issues."
+            } else {
+                "Review blocked items to identify and remove impediments."
+            }
+            
+            $baseMessage + $columnMessage + $typeMessage + $durationMessage + $actionMessage
+        } else {
+            "No items currently blocked. Blocked items are identified by configured blocker tags."
+        }
         transitionRates = "Transition analysis"
         bugDistribution = if ($activeBugs.Count -gt 0) {
             $totalBugs = $activeBugs.Count

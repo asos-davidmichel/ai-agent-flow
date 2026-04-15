@@ -116,9 +116,49 @@ Based on the categorization, explain how metrics will be calculated:
 - States: Only Done states
 - Date filter: Based on close/completion date
 
-### Step 7: Generate configuration
+### Step 7: Discover blocker reporting patterns
 
-Create a configuration summary:
+**Important:** Before generating the final configuration, discover how this team reports blocked/on-hold work.
+
+Tell the user:
+"Let me check how your team reports blocked or on-hold work..."
+
+Run the `/ado-blocked` prompt with the same board URL to analyze blocker patterns.
+
+The ado-blocked prompt will:
+1. Scan work items for blocker indicators (tags, states, columns, title patterns)
+2. Identify distinct blocker categories (e.g., "blocked", "hold", "waiting")
+3. Report observed terminology and mechanisms
+
+**Interpret the results:**
+
+If blocker patterns are discovered:
+- Extract each distinct pattern/category found
+- For each category, note:
+  - Tag patterns used (e.g., "blocked", "blocked by", "hold", "on hold")
+  - Column names indicating blocked status
+  - Color assignment (use red #ef4444 for "blocked", orange #f97316 for "hold", yellow #eab308 for "waiting")
+
+If no patterns found:
+- Skip blocker configuration
+- Dashboard will not show blocker tracking
+
+**Example discovered patterns:**
+```
+Category "blocked":
+  - Tags: ["blocked", "blocked by"]
+  - Color: #ef4444
+  - Label: "Blocked"
+
+Category "hold":
+  - Tags: ["hold", "on hold"]
+  - Color: #f97316
+  - Label: "On Hold"
+```
+
+### Step 8: Generate configuration
+
+Create a configuration summary including blocker patterns:
 
 ```markdown
 ## Board Configuration: {Team}
@@ -138,6 +178,15 @@ Create a configuration summary:
 - **Lead Time Start**: {chosen option}
 - **Lead Time End**: {Done state}
 
+### Blocker Patterns (Auto-discovered)
+[If patterns found:]
+- **Categories Found**: [{category1}, {category2}, ...]
+- **Detection Method**: {tags/columns/states}
+- **Terminology**: {exact tag patterns observed}
+
+[If no patterns found:]
+- **No blocker patterns detected** - Blocker tracking will be disabled
+
 ### WIQL Query Recommendations
 
 **Active Items:**
@@ -154,22 +203,94 @@ AND [Microsoft.VSTS.Common.ClosedDate] >= 'start_date'
 ### Notes
 - [Any special handling notes]
 - [Ambiguous states and their treatment]
+- [Blocker pattern notes if applicable]
 ```
 
-### Step 8: Validation questions
+### Step 9: Validation questions
 
 Ask the user to validate:
 
 1. "Does this configuration match your workflow?"
 2. "Are there any states or columns that should be treated differently?"
 3. "Should items in '{ambiguous_state}' count as active or completed?"
+4. "Are the discovered blocker patterns correct? Any categories missing?"
 
-### Step 9: Next steps
+### Step 10: Save configuration to JSON file
+
+**Generate the board configuration JSON file:**
+
+Create file: `config/{org}-{project}-{team-slug}.json`
+
+Example filename: `config/asos-customer-analytics-experimentation.json`
+
+**JSON structure including blocker configuration:**
+```json
+{
+  "organization": "{org}",
+  "project": "{project}",
+  "team": "{team}",
+  "boardUrl": "{boardUrl}",
+  "columns": [
+    "{column1}",
+    "{column2}",
+    ...
+  ],
+  "stateCategories": {
+    "backlog": ["{backlog_states}"],
+    "inProgress": ["{in_progress_states}"],
+    "done": ["{done_states}"]
+  },
+  "metrics": {
+    "cycleTime": {
+      "startColumn": "{first_in_progress_column}",
+      "endStates": ["{done_states}"]
+    },
+    "leadTime": {
+      "startMethod": "{board_entry|creation_date|backlog_exit}",
+      "endStates": ["{done_states}"]
+    }
+  },
+  "queries": {
+    "activeItemsFilter": "[System.State] NOT IN ('{done_state1}', '{done_state2}', 'Removed')",
+    "completedItemsFilter": "[System.State] IN ('{done_state1}', '{done_state2}')"
+  },
+  "blockers": {
+    "tags": ["{all_blocker_tags}"],
+    "columns": ["{blocker_column_names_if_any}"],
+    "categories": {
+      "{category1}": {
+        "tags": ["{tag_pattern1}", "{tag_pattern2}"],
+        "color": "{hex_color}",
+        "label": "{Display Label}"
+      },
+      "{category2}": {
+        "tags": ["{tag_pattern3}", "{tag_pattern4}"],
+        "color": "{hex_color}",
+        "label": "{Display Label}"
+      }
+    }
+  }
+}
+```
+
+**If no blocker patterns found, omit the entire `blockers` section or set it to:**
+```json
+"blockers": {
+  "tags": [],
+  "columns": [],
+  "categories": {}
+}
+```
+
+Write the configuration file and confirm to the user:
+"✅ Configuration saved to: config/{filename}.json"
+
+### Step 11: Next steps
 
 Suggest:
-1. "I can update the Fetch-TeamFlowData.ps1 script with these settings"
-2. "Would you like to save this configuration as documentation?"
-3. "Ready to generate a dashboard with these settings?"
+1. "Configuration saved! Ready to generate a dashboard with these settings?"
+2. "You can always re-run `/ado-board-config` to update the configuration"
+3. "Use `/ado-flow` with your board URL to generate the dashboard"
 
 ## Key Principles
 
