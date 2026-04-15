@@ -469,6 +469,7 @@
                 <div class="chart-container">
                     <canvas id="cycleTimeTrendChart"></canvas>
                 </div>
+                <div class="insight-box" id="cycleTimeTrendInsight"></div>
             </div>
 
             <!-- Lead Time Distribution -->
@@ -492,6 +493,7 @@
                 <div class="chart-container">
                     <canvas id="leadTimeTrendChart"></canvas>
                 </div>
+                <div class="insight-box" id="leadTimeTrendInsight"></div>
             </div>
 
             <!-- Bug Rate Trend -->
@@ -507,25 +509,28 @@
                 <div class="insight-box" id="bugRateInsight"></div>
             </div>
 
-            <!-- Current Bugs by Column -->
+            <!-- Bug Breakdown Charts -->
             <div class="chart-card">
-                <h2>📍 Bug Breakdown by Column</h2>
+                <h2>🐛 Bug Breakdown</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    Current distribution of active bugs across board columns. Click legend items to toggle visibility.
+                    Current distribution of active bugs by column and state. Click legend items to toggle visibility.
                 </p>
-                <div class="chart-container">
-                    <canvas id="currentBugsChart"></canvas>
-                </div>
-            </div>
-
-            <!-- Current Bugs by State -->
-            <div class="chart-card">
-                <h2>🏷️ Bug Breakdown by State</h2>
-                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    Current distribution of active bugs by work item state. Click legend items to toggle visibility.
-                </p>
-                <div class="chart-container">
-                    <canvas id="currentBugsStateChart"></canvas>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <!-- Bug Breakdown by Column -->
+                    <div>
+                        <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 10px; color: #4a5568;">📍 By Column</h3>
+                        <div style="position: relative; height: 250px;">
+                            <canvas id="currentBugsChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <!-- Bug Breakdown by State -->
+                    <div>
+                        <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 10px; color: #4a5568;">🏷️ By State</h3>
+                        <div style="position: relative; height: 250px;">
+                            <canvas id="currentBugsStateChart"></canvas>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1306,6 +1311,52 @@
             return data.map((_, i) => slope * i + intercept);
         }
 
+        // Helper function to calculate slope from regression line
+        function calculateSlope(data) {
+            const regression = calculateLinearRegression(data);
+            if (regression.length < 2) return 0;
+            return (regression[regression.length - 1] - regression[0]) / regression.length;
+        }
+
+        // Helper function to update metric card trend indicator based on linear regression
+        function updateMetricTrend(metricName, chartData, lowerIsBetter = true, threshold = 0.05) {
+            if (!chartData || !chartData.values || chartData.values.length < 2) return;
+            
+            const values = chartData.values;
+            const slope = calculateSlope(values);
+            const avgValue = values.reduce((a, b) => a + b, 0) / values.length;
+            const relativeSlope = avgValue !== 0 ? Math.abs(slope / avgValue) : 0;
+            
+            // Determine if trend is significant
+            let arrow, color;
+            if (relativeSlope < threshold) {
+                // Stable trend
+                arrow = '→';
+                color = '#6b7280'; // gray
+            } else if (slope > 0) {
+                // Increasing trend
+                arrow = '↑';
+                color = lowerIsBetter ? '#ef4444' : '#22c55e'; // red if lower is better, green otherwise
+            } else {
+                // Decreasing trend
+                arrow = '↓';
+                color = lowerIsBetter ? '#22c55e' : '#ef4444'; // green if lower is better, red otherwise
+            }
+            
+            // Find the metric card and update the trend indicator
+            const metricCards = document.querySelectorAll('.metric-card');
+            metricCards.forEach(card => {
+                const heading = card.querySelector('h3');
+                if (heading && heading.textContent.trim() === metricName) {
+                    const trendIndicator = card.querySelector('.trend-indicator');
+                    if (trendIndicator) {
+                        trendIndicator.textContent = arrow;
+                        trendIndicator.style.color = color;
+                    }
+                }
+            });
+        }
+
         window.dashboardCharts.throughputChart = new Chart(document.getElementById('throughputChart'), {
             type: 'line',
             data: {
@@ -1622,6 +1673,29 @@
         if (cycleTimeTrendData.values && cycleTimeTrendData.values.length > 0) {
             const cycleTimeTrendLine = calculateLinearRegression(cycleTimeTrendData.values);
             
+            // Calculate trend insights
+            const ctTrendSlope = cycleTimeTrendLine.length > 1 
+                ? (cycleTimeTrendLine[cycleTimeTrendLine.length - 1] - cycleTimeTrendLine[0]) / cycleTimeTrendLine.length
+                : 0;
+            const ctStartValue = cycleTimeTrendLine[0];
+            const ctEndValue = cycleTimeTrendLine[cycleTimeTrendLine.length - 1];
+            const ctChange = ((ctEndValue - ctStartValue) / ctStartValue * 100).toFixed(0);
+            const ctActualAvg = (cycleTimeTrendData.values.reduce((a, b) => a + b, 0) / cycleTimeTrendData.values.length).toFixed(1);
+            const ctRelativeSlope = parseFloat(ctActualAvg) !== 0 ? Math.abs(ctTrendSlope / parseFloat(ctActualAvg)) : 0;
+            
+            const ctDaysChange = Math.abs(ctEndValue - ctStartValue).toFixed(1);
+            
+            let ctTrendText = '';
+            if (ctRelativeSlope < 0.05) {  // Same 5% threshold as arrow indicator
+                ctTrendText = `Cycle time is stable over ${cycleTimeTrendData.values.length} weeks, averaging ${ctActualAvg} days with minimal variation (±${ctDaysChange} days). This consistency suggests predictable delivery timelines.`;
+            } else if (ctTrendSlope < 0) {
+                ctTrendText = `Cycle time is improving by ${ctDaysChange} days (${Math.abs(ctChange)}%) over ${cycleTimeTrendData.values.length} weeks, from ${ctStartValue.toFixed(1)} to ${ctEndValue.toFixed(1)} days (avg: ${ctActualAvg} days). The team is delivering work more efficiently.`;
+            } else {
+                ctTrendText = `Cycle time is degrading by ${ctDaysChange} days (+${ctChange}%) over ${cycleTimeTrendData.values.length} weeks, from ${ctStartValue.toFixed(1)} to ${ctEndValue.toFixed(1)} days (avg: ${ctActualAvg} days). Consider investigating workflow bottlenecks.`;
+            }
+            
+            document.getElementById('cycleTimeTrendInsight').innerHTML = `<p><strong>Insight:</strong> ${ctTrendText}</p>`;
+            
             new Chart(document.getElementById('cycleTimeTrendChart'), {
                 type: 'line',
                 data: {
@@ -1890,6 +1964,29 @@
         const leadTimeTrendData = dashboardData.charts.leadTimeTrend || { labels: [], values: [] };
         if (leadTimeTrendData.values && leadTimeTrendData.values.length > 0) {
             const leadTimeTrendLine = calculateLinearRegression(leadTimeTrendData.values);
+            
+            // Calculate trend insights
+            const ltTrendSlope = leadTimeTrendLine.length > 1 
+                ? (leadTimeTrendLine[leadTimeTrendLine.length - 1] - leadTimeTrendLine[0]) / leadTimeTrendLine.length
+                : 0;
+            const ltStartValue = leadTimeTrendLine[0];
+            const ltEndValue = leadTimeTrendLine[leadTimeTrendLine.length - 1];
+            const ltChange = ((ltEndValue - ltStartValue) / ltStartValue * 100).toFixed(0);
+            const ltActualAvg = (leadTimeTrendData.values.reduce((a, b) => a + b, 0) / leadTimeTrendData.values.length).toFixed(1);
+            const ltRelativeSlope = parseFloat(ltActualAvg) !== 0 ? Math.abs(ltTrendSlope / parseFloat(ltActualAvg)) : 0;
+            
+            const ltDaysChange = Math.abs(ltEndValue - ltStartValue).toFixed(1);
+            
+            let ltTrendText = '';
+            if (ltRelativeSlope < 0.05) {  // Same 5% threshold as arrow indicator
+                ltTrendText = `Lead time is stable over ${leadTimeTrendData.values.length} weeks, averaging ${ltActualAvg} days with minimal variation (±${ltDaysChange} days). This consistency indicates predictable delivery from commitment to completion.`;
+            } else if (ltTrendSlope < 0) {
+                ltTrendText = `Lead time is improving by ${ltDaysChange} days (${Math.abs(ltChange)}%) over ${leadTimeTrendData.values.length} weeks, from ${ltStartValue.toFixed(1)} to ${ltEndValue.toFixed(1)} days (avg: ${ltActualAvg} days). Overall delivery speed is increasing.`;
+            } else {
+                ltTrendText = `Lead time is degrading by ${ltDaysChange} days (+${ltChange}%) over ${leadTimeTrendData.values.length} weeks, from ${ltStartValue.toFixed(1)} to ${ltEndValue.toFixed(1)} days (avg: ${ltActualAvg} days). Consider reviewing both backlog management and workflow efficiency.`;
+            }
+            
+            document.getElementById('leadTimeTrendInsight').innerHTML = `<p><strong>Insight:</strong> ${ltTrendText}</p>`;
             
             new Chart(document.getElementById('leadTimeTrendChart'), {
                 type: 'line',
@@ -3986,6 +4083,16 @@
                 }
             }
         });
+        
+        // Update metric card trend indicators based on linear regression
+        // These override the default trend indicators with regression-based trends
+        updateMetricTrend('Throughput', dashboardData.charts.throughput, false); // Higher throughput is better
+        updateMetricTrend('Cycle Time', dashboardData.charts.cycleTimeTrend, true); // Lower cycle time is better
+        updateMetricTrend('Lead Time', dashboardData.charts.leadTimeTrend, true); // Lower lead time is better
+        // Bug rate - use completion rate (matches the metric card)
+        if (dashboardData.charts.bugRate && dashboardData.charts.bugRate.completionRate) {
+            updateMetricTrend('Bug Rate', { values: dashboardData.charts.bugRate.completionRate }, true); // Lower bug rate is better
+        }
         
         console.log('Dashboard initialized successfully!');
         } catch (error) {

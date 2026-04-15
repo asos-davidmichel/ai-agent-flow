@@ -17,8 +17,19 @@ param()
 try {
     $projectRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
     $templatePath = Join-Path $projectRoot 'src\templates\dashboard-template.html'
-    $dataPath = Join-Path $projectRoot 'output\dashboard-data.json'
-    $outputPath = Join-Path $projectRoot 'output\dashboard.html'
+    
+    # Find the latest analysis folder
+    $outputFolder = Join-Path $projectRoot 'output'
+    $latestAnalysis = Get-ChildItem -Path $outputFolder -Directory -Filter "analysis-*" | 
+        Sort-Object Name -Descending | 
+        Select-Object -First 1
+    
+    if (-not $latestAnalysis) {
+        throw "No analysis folder found in output directory"
+    }
+    
+    $dataPath = Join-Path $latestAnalysis.FullName 'dashboard-data.json'
+    $outputPath = Join-Path $latestAnalysis.FullName 'dashboard.html'
 
     if (-not (Test-Path $templatePath)) {
         throw "Template file not found: $templatePath"
@@ -28,6 +39,7 @@ try {
         throw "Data file not found: $dataPath"
     }
 
+    Write-Verbose "Using analysis folder: $($latestAnalysis.Name)"
     Write-Verbose "Reading template from: $templatePath"
     $template = Get-Content $templatePath -Raw -Encoding UTF8
 
