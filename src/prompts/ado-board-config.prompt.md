@@ -137,7 +137,42 @@ If blocker patterns are discovered:
 - For each category, note:
   - Tag patterns used (e.g., "blocked", "blocked by", "hold", "on hold")
   - Column names indicating blocked status
-  - Color assignment (use red #ef4444 for "blocked", orange #f97316 for "hold", yellow #eab308 for "waiting")
+  - Color assignment:
+    - First, try to detect the colour from Azure DevOps board card styling rules (if configured)
+    - If no rules are found (or the API doesn’t return any), fall back to sensible defaults
+
+**Detect card styling colours (optional, best-effort):**
+
+Azure DevOps boards can have card styling rules (e.g. “when Tags contains blocked, colour the card red”).
+These rules are **not always configured**, and in that case the API will return an empty ruleset.
+
+Run this best-effort check to fetch rules for the **Backlog items** board:
+
+```powershell
+$org = "{org}"
+$project = "{project}"
+$pat = $env:ADO_PAT
+$basic = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(':' + $pat))
+$headers = @{ Authorization = 'Basic ' + $basic }
+
+# 1) Find the board’s canonical URL
+$boards = Invoke-RestMethod -Uri "https://dev.azure.com/$org/$project/_apis/work/boards?api-version=7.1" -Headers $headers -Method Get
+$board = $boards.value | Where-Object { $_.name -eq 'Backlog items' } | Select-Object -First 1
+
+# 2) Fetch card styling rules (may be empty)
+if ($board) {
+  Invoke-RestMethod -Uri ("$($board.url)/cardrulesettings?api-version=7.1-preview.2") -Headers $headers -Method Get | ConvertTo-Json -Depth 20
+}
+```
+
+**Interpreting the result:**
+- If `rules.styles` contains entries with `settings.backgroundColor`, prefer those colours for the matching blocker category.
+- If `rules` is empty (common), **do not ask the user**; use defaults.
+
+**Default colour fallback (when not detected):**
+- “blocked” → red `#ef4444`
+- “hold” → blue `#3b82f6`
+- “waiting” → yellow `#eab308`
 
 If no patterns found:
 - Skip blocker configuration
@@ -152,7 +187,7 @@ Category "blocked":
 
 Category "hold":
   - Tags: ["hold", "on hold"]
-  - Color: #f97316
+  - Color: #3b82f6
   - Label: "On Hold"
 ```
 

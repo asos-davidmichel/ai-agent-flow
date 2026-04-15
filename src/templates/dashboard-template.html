@@ -3251,7 +3251,7 @@
                 return null;
             });
             
-            // Create color scale - use blocker category colors for blocked items, blue for others
+            // Create color scale - use blocker category colors for blocked items, gray for others
             const maxValue = Math.max(...sortedValues);
             const minValue = Math.min(...sortedValues);
             const colorScale = sortedValues.map((value, index) => {
@@ -3260,14 +3260,14 @@
                     return sortedBlockerColors[index];
                 }
                 
-                // Normal stale items use blue gradient (darker for more stale)
+                // Normal stale items use gray gradient (darker for more stale)
                 const normalized = maxValue === minValue ? 1 : (value - minValue) / (maxValue - minValue);
                 if (normalized > 0.66) {
-                    return '#2563eb'; // Dark blue for most stale
+                    return '#475569'; // Dark slate for most stale
                 } else if (normalized > 0.33) {
-                    return '#3b82f6'; // Medium blue for middle
+                    return '#64748b'; // Medium slate for middle
                 } else {
-                    return '#60a5fa'; // Light blue for least stale
+                    return '#94a3b8'; // Light slate for least stale
                 }
             });
             
@@ -3283,14 +3283,14 @@
                             // Use darker shades based on category or staleness
                             if (sortedBlockerColors[index]) {
                                 // Darken the blocker category color
-                                if (color === '#ef4444') return '#dc2626'; // Blocked
-                                if (color === '#f97316') return '#ea580c'; // Hold
+                                if (color === '#ef4444') return '#dc2626'; // Blocked (red)
+                                if (color === '#3b82f6') return '#2563eb'; // Hold (blue)
                                 if (color === '#eab308') return '#ca8a04'; // Other
                             }
-                            // Blue gradient borders
-                            if (color === '#2563eb') return '#1d4ed8';
-                            if (color === '#3b82f6') return '#2563eb';
-                            return '#3b82f6';
+                            // Gray gradient borders
+                            if (color === '#475569') return '#334155';
+                            if (color === '#64748b') return '#475569';
+                            return '#64748b';
                         }),
                         borderWidth: 2
                     }]
