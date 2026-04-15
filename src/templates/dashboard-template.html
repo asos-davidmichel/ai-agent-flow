@@ -509,14 +509,14 @@
                 <div class="insight-box" id="bugRateInsight"></div>
             </div>
 
-            <!-- Bug Breakdown Charts -->
+            <!-- Bug Distribution Charts -->
             <div class="chart-card">
-                <h2>🐛 Bug Breakdown</h2>
+                <h2>🐛 Bug Distribution</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
                     Current distribution of active bugs by column and state. Click legend items to toggle visibility.
                 </p>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                    <!-- Bug Breakdown by Column -->
+                    <!-- Bug Distribution by Column -->
                     <div>
                         <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 10px; color: #4a5568;">📍 By Column</h3>
                         <div style="position: relative; height: 250px;">
@@ -524,7 +524,7 @@
                         </div>
                     </div>
                     
-                    <!-- Bug Breakdown by State -->
+                    <!-- Bug Distribution by State -->
                     <div>
                         <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 10px; color: #4a5568;">🏷️ By State</h3>
                         <div style="position: relative; height: 250px;">
@@ -532,6 +532,7 @@
                         </div>
                     </div>
                 </div>
+                <div class="insight-box" id="bugDistributionInsight"></div>
             </div>
         </div>
             </div>
@@ -1199,6 +1200,9 @@
         }
         if (dashboardData.insights.staleWork) {
             document.getElementById('staleWorkInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.staleWork}</p>`;
+        }
+        if (dashboardData.insights.bugDistribution) {
+            document.getElementById('bugDistributionInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.bugDistribution}</p>`;
         }
         if (dashboardData.insights.wipAgeBreakdown) {
             document.getElementById('wipAgeBreakdownInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.wipAgeBreakdown}</p>`;
@@ -3661,7 +3665,7 @@
             new Chart(document.getElementById('currentBugsChart'), {
                 type: 'doughnut',
                 data: {
-                    labels: bugsByColumn.map(item => `${item.column} (${item.count})`),
+                    labels: bugsByColumn.map(item => item.column),
                     datasets: [{
                         label: 'Bugs',
                         data: bugsByColumn.map(item => item.count),
@@ -3695,7 +3699,7 @@
                                             const meta = chart.getDatasetMeta(0);
                                             const item = bugsByColumn[i];
                                             return {
-                                                text: `${item.column}: ${item.count} bugs`,
+                                                text: item.column,
                                                 fillStyle: data.datasets[0].backgroundColor[i],
                                                 hidden: meta.data[i].hidden,
                                                 index: i
@@ -3737,7 +3741,7 @@
             new Chart(document.getElementById('currentBugsStateChart'), {
                 type: 'doughnut',
                 data: {
-                    labels: bugsByState.map(item => `${item.state} (${item.count})`),
+                    labels: bugsByState.map(item => item.state),
                     datasets: [{
                         label: 'Bugs',
                         data: bugsByState.map(item => item.count),
@@ -3771,7 +3775,7 @@
                                             const meta = chart.getDatasetMeta(0);
                                             const item = bugsByState[i];
                                             return {
-                                                text: `${item.state}: ${item.count} bugs`,
+                                                text: item.state,
                                                 fillStyle: data.datasets[0].backgroundColor[i],
                                                 hidden: meta.data[i].hidden,
                                                 index: i

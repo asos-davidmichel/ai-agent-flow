@@ -306,6 +306,52 @@ The workflow is complete when:
 - "Team not found" → Check team name URL encoding (spaces, special characters)
 - "No work items found" → Check date range or team area path
 
+## Insight Generation Guidelines
+
+When generating or modifying insight text for dashboard charts, follow these principles:
+
+### What to Notice
+
+Insight text should identify **remarkable patterns** in the data:
+- **Peaks or valleys** - Significant spikes or drops in the data
+- **High variation** - Inconsistent or unstable patterns (coefficient of variation > 0.3)
+- **Trends** - Clear upward, downward, or stable patterns over time
+- **Waves or cycles** - Recurring patterns that suggest periodic behavior
+- **Balance or imbalance** - Distribution across categories (even vs concentrated)
+
+### Interpretation Style
+
+**Be careful with wild interpretation.** Instead of making definitive claims:
+
+❌ **Bad:** "The team is struggling with quality issues."
+✅ **Good:** "High bug rates suggest the team may be experiencing quality challenges."
+
+❌ **Bad:** "Developers are lazy in Q1."
+✅ **Good:** "Low throughput in Q1 suggests potential capacity constraints or increased complexity."
+
+**Use tentative language:**
+- "This suggests that..."
+- "This may indicate..."
+- "This could mean..."
+- "Consider investigating..."
+- "Monitor for..."
+
+**Connect observations to actionable context:**
+- Link high variation to batch working or release patterns
+- Connect imbalanced distributions to bottlenecks or focus areas
+- Relate stable trends to predictability and consistency
+
+**Example insight patterns:**
+```
+"Bug distribution shows 70% concentrated in Review columns. This suggests 
+potential bottlenecks in the review process - consider increasing review 
+capacity or improving review efficiency."
+
+"Cycle time shows high variability (5-45 days range). This inconsistent 
+delivery pattern may indicate varying work complexity or capacity 
+constraints - consider work item sizing analysis."
+```
+
 ## Tone
 
 Use British English. Be clear and direct. Focus on successfully completing the task - running the script and opening the dashboard.
