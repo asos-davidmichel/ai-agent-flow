@@ -117,7 +117,7 @@ if ($config -and $config.states.completed.includeStates) {
 }
 
 $completedStatesClause = ($completedStates | ForEach-Object { "'$_'" }) -join ', '
-$wiqlQuery = "SELECT [System.Id], [System.WorkItemType], [System.Title], [System.State], [System.CreatedDate], [Microsoft.VSTS.Common.ClosedDate], [Microsoft.VSTS.Common.ActivatedDate], [System.BoardColumn], [System.Tags] FROM WorkItems WHERE [System.TeamProject] = '$Project' AND [System.AreaPath] UNDER '$teamAreaPath' AND [System.State] IN ($completedStatesClause) AND [Microsoft.VSTS.Common.ClosedDate] >= '$startDateStr' AND [Microsoft.VSTS.Common.ClosedDate] <= '$endDateStr' ORDER BY [Microsoft.VSTS.Common.ClosedDate] DESC"
+$wiqlQuery = "SELECT [System.Id], [System.WorkItemType], [System.Title], [System.State], [System.CreatedDate], [Microsoft.VSTS.Common.ClosedDate], [Microsoft.VSTS.Common.ActivatedDate], [System.BoardColumn], [System.Tags] FROM WorkItems WHERE [System.TeamProject] = '$Project' AND [System.AreaPath] UNDER '$teamAreaPath' AND [System.State] IN ($completedStatesClause) AND [System.WorkItemType] NOT IN ('Task', 'Epic') AND [Microsoft.VSTS.Common.ClosedDate] >= '$startDateStr' AND [Microsoft.VSTS.Common.ClosedDate] <= '$endDateStr' ORDER BY [Microsoft.VSTS.Common.ClosedDate] DESC"
 
 $wiqlUrl = "$baseUrl/_apis/wit/wiql?api-version=7.0"
 $wiqlBody = @{ query = $wiqlQuery } | ConvertTo-Json
@@ -144,7 +144,7 @@ if ($config -and $config.states.active.excludeStates) {
 }
 
 $excludedStatesClause = ($excludedStates | ForEach-Object { "'$_'" }) -join ', '
-$activeWiqlQuery = "SELECT [System.Id], [System.WorkItemType], [System.Title], [System.State], [System.CreatedDate], [Microsoft.VSTS.Common.ActivatedDate], [System.BoardColumn], [System.Tags] FROM WorkItems WHERE [System.TeamProject] = '$Project' AND [System.AreaPath] UNDER '$teamAreaPath' AND [System.State] NOT IN ($excludedStatesClause) ORDER BY [System.CreatedDate] ASC"
+$activeWiqlQuery = "SELECT [System.Id], [System.WorkItemType], [System.Title], [System.State], [System.CreatedDate], [System.ChangedDate], [Microsoft.VSTS.Common.ActivatedDate], [System.BoardColumn], [System.Tags] FROM WorkItems WHERE [System.TeamProject] = '$Project' AND [System.AreaPath] UNDER '$teamAreaPath' AND [System.State] NOT IN ($excludedStatesClause) AND [System.WorkItemType] NOT IN ('Task', 'Epic') ORDER BY [System.CreatedDate] ASC"
 
 $activeWiqlBody = @{ query = $activeWiqlQuery } | ConvertTo-Json
 

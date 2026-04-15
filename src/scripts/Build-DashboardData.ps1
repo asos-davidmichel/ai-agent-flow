@@ -570,6 +570,51 @@ foreach ($state in ($bugStateBreakdown.Keys | Sort-Object)) {
     }
 }
 
+# Calculate stale work (items not updated recently)
+# Tasks and Epics are already excluded from data fetch
+$staleWorkItems = @()
+$now = Get-Date
+foreach ($item in $rawData.activeItems) {
+    $changedDateStr = $item.fields.'System.ChangedDate'
+    if ($changedDateStr) {
+        $changedDate = [DateTime]$changedDateStr
+        $daysSinceChanged = [Math]::Floor(($now - $changedDate).TotalDays)
+        
+        # Check if item is blocked (has "blocked" tag - case insensitive)
+        $tags = $item.fields.'System.Tags'
+        $isBlocked = $tags -and ($tags -like '*blocked*')
+        
+        $staleWorkItems += [PSCustomObject]@{
+            id = $item.id
+            title = $item.fields.'System.Title'
+            workItemType = $item.fields.'System.WorkItemType'
+            state = $item.fields.'System.State'
+            column = $item.fields.'System.BoardColumn'
+            daysSinceChanged = $daysSinceChanged
+            isBlocked = $isBlocked
+        }
+    }
+}
+
+# Sort by days since changed (worst first) and take top 20
+$staleWorkItems = @($staleWorkItems | Sort-Object -Property daysSinceChanged -Descending | Select-Object -First 20)
+
+# Format for chart display
+$staleWorkLabels = @()
+$staleWorkValues = @()
+$staleWorkIds = @()
+$staleWorkTitles = @()
+$staleWorkBlocked = @()
+
+foreach ($item in $staleWorkItems) {
+    $typeIcon = if ($item.workItemType -eq 'Bug') { '🐛' } else { '📋' }
+    $staleWorkLabels += "$typeIcon #$($item.id)"
+    $staleWorkValues += $item.daysSinceChanged
+    $staleWorkIds += $item.id
+    $staleWorkTitles += $item.title
+    $staleWorkBlocked += $item.isBlocked
+}
+
 # Calculate bug rate statistics for insight (using WIP percentages)
 $avgWIPBugRate = if ($bugRateWIP.Count -gt 0) { 
     [Math]::Round(($bugRateWIP | Measure-Object -Average).Average, 1) 
@@ -910,10 +955,11 @@ $dashboardData = @{
             trend = @()
         }
         staleWork = @{
-            labels = @()
-            values = @()
-            ids = @()
-            titles = @()
+            labels = $staleWorkLabels
+            values = $staleWorkValues
+            ids = $staleWorkIds
+            titles = $staleWorkTitles
+            blocked = $staleWorkBlocked
         }
         wipAgeBreakdown = @{
             labels = @()
@@ -974,7 +1020,55 @@ $dashboardData = @{
         } else {
             "WIP bug rate averaged $avgWIPBugRate%, with $avgCompletionBugRate% of completed items being bugs. Currently $($activeBugs.Count) bugs in WIP ($currentActiveBugRate%). Healthy balance between bugs and feature work."
         }
-        staleWork = "Stale work tracking"
+        staleWork = if ($staleWorkItems.Count -gt 0) {
+            $worstItem = $staleWorkItems[0]
+            $daysSinceChangedValues = @($staleWorkItems | ForEach-Object { $_.daysSinceChanged })
+            $avgStale = [Math]::Round(($daysSinceChangedValues | Measure-Object -Average).Average, 0)
+            $count = $staleWorkItems.Count
+            $blockedCount = @($staleWorkItems | Where-Object { $_.isBlocked }).Count
+            
+            # Analyze patterns in stale work
+            $columnGroups = $staleWorkItems | Group-Object -Property column | Sort-Object -Property Count -Descending
+            $typeGroups = $staleWorkItems | Group-Object -Property workItemType | Sort-Object -Property Count -Descending
+            $stateGroups = $staleWorkItems | Group-Object -Property state | Sort-Object -Property Count -Descending
+            
+            # Identify dominant patterns
+            $columnPattern = if ($columnGroups.Count -gt 0 -and $columnGroups[0].Count -ge ($count * 0.5)) {
+                "$($columnGroups[0].Count) are in '$($columnGroups[0].Name)'"
+            } elseif ($columnGroups.Count -gt 1 -and ($columnGroups[0].Count + $columnGroups[1].Count) -ge ($count * 0.7)) {
+                "$($columnGroups[0].Count) in '$($columnGroups[0].Name)', $($columnGroups[1].Count) in '$($columnGroups[1].Name)'"
+            } else {
+                "spread across $($columnGroups.Count) columns"
+            }
+            
+            $typePattern = if ($typeGroups.Count -gt 0 -and $typeGroups[0].Count -ge ($count * 0.7)) {
+                "$($typeGroups[0].Count) are $($typeGroups[0].Name)s"
+            } else {
+                "$($typeGroups[0].Count) $($typeGroups[0].Name)s, $($typeGroups[1].Count) $($typeGroups[1].Name)s"
+            }
+            
+            # Build insight with patterns
+            $baseMessage = "$count stale items (not updated recently). Worst: #$($worstItem.id) at $($worstItem.daysSinceChanged) days (avg: $avgStale). "
+            $patternMessage = "Pattern: $typePattern, $columnPattern. "
+            $blockedMessage = if ($blockedCount -gt 0) { "⚠️ $blockedCount tagged as BLOCKED. " } else { "" }
+            
+            # Action message based on actual state
+            $actionMessage = if ($blockedCount -gt 0 -and $worstItem.daysSinceChanged -gt 30) {
+                "Review blocked items and items stale >30 days - may be abandoned work."
+            } elseif ($blockedCount -gt 0) {
+                "Blocked items need attention to unblock or close."
+            } elseif ($worstItem.daysSinceChanged -gt 30) {
+                "Items stale >30 days may be abandoned - verify if still needed."
+            } elseif ($worstItem.daysSinceChanged -gt 14) {
+                "Monitor items stale >14 days to ensure progress."
+            } else {
+                "Reasonable update frequency suggests active work."
+            }
+            
+            $baseMessage + $patternMessage + $blockedMessage + $actionMessage
+        } else {
+            "No stale work data available - requires System.ChangedDate field from work items."
+        }
         netFlow = "Flow analysis"
         state = "State distribution"
         blockedItems = "Blocked items tracking"

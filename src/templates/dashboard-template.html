@@ -3203,17 +3203,47 @@
                 label: label,
                 value: dashboardData.charts.staleWork.values[index],
                 id: dashboardData.charts.staleWork.ids[index],
-                title: dashboardData.charts.staleWork.titles[index]
+                title: dashboardData.charts.staleWork.titles[index],
+                blocked: dashboardData.charts.staleWork.blocked[index]
             }));
             
             // Sort by value descending (worst first)
             staleItems.sort((a, b) => b.value - a.value);
             
-            // Extract sorted arrays
-            const sortedLabels = staleItems.map(item => item.label);
+            // Extract sorted arrays - add blocked indicator to labels
+            const sortedLabels = staleItems.map(item => item.blocked ? `🚫 #${item.id}` : `#${item.id}`);
             const sortedValues = staleItems.map(item => item.value);
             const sortedIds = staleItems.map(item => item.id);
             const sortedTitles = staleItems.map(item => item.title);
+            const sortedBlocked = staleItems.map(item => item.blocked);
+            
+            // Create color gradient based on staleness - red for worst offenders
+            const maxValue = Math.max(...sortedValues);
+            const minValue = Math.min(...sortedValues);
+            const colorScale = sortedValues.map((value, index) => {
+                // Normalize value between 0 and 1
+                const normalized = maxValue === minValue ? 1 : (value - minValue) / (maxValue - minValue);
+                
+                // If blocked, use darker/different colors
+                if (sortedBlocked[index]) {
+                    if (normalized > 0.66) {
+                        return '#991b1b'; // Dark red for blocked worst
+                    } else if (normalized > 0.33) {
+                        return '#b91c1c'; // Red for blocked middle
+                    } else {
+                        return '#dc2626'; // Regular red for blocked better
+                    }
+                }
+                
+                // Red (worst) to yellow (better) gradient for non-blocked
+                if (normalized > 0.66) {
+                    return '#dc2626'; // Red for worst 33%
+                } else if (normalized > 0.33) {
+                    return '#f97316'; // Orange for middle 33%
+                } else {
+                    return '#fb923c'; // Light orange for best 33%
+                }
+            });
             
             new Chart(document.getElementById('staleWorkChart'), {
                 type: 'bar',
@@ -3222,9 +3252,16 @@
                     datasets: [{
                         label: 'Days Since Updated',
                         data: sortedValues,
-                        backgroundColor: '#f97316',
-                        borderColor: '#ea580c',
-                        borderWidth: 1
+                        backgroundColor: colorScale,
+                        borderColor: colorScale.map(color => {
+                            // Darker border for each color
+                            if (color === '#991b1b') return '#7f1d1d';
+                            if (color === '#b91c1c') return '#991b1b';
+                            if (color === '#dc2626') return '#991b1b';
+                            if (color === '#f97316') return '#ea580c';
+                            return '#f97316';
+                        }),
+                        borderWidth: 2
                     }]
                 },
                 options: {
@@ -3261,12 +3298,16 @@
                                     const id = sortedIds[index];
                                     const title = sortedTitles[index];
                                     const days = sortedValues[index];
+                                    const blocked = sortedBlocked[index];
                                     const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${id}`;
+                                    
+                                    const blockedBadge = blocked ? '<span style="background: #991b1b; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: bold;">🚫 BLOCKED</span><br>' : '';
                                     
                                     // Build HTML
                                     tooltipEl.innerHTML = `
                                         <div class="tooltip-title">Work Item Details</div>
                                         <div class="tooltip-content">
+                                            ${blockedBadge}
                                             <strong>ID:</strong> <a href="${adoUrl}" target="_blank">#${id}</a><br>
                                             <strong>Title:</strong> ${title}<br><br>
                                             <strong style="color: #f97316;">⏰ Days Since Updated:</strong> ${days} days
