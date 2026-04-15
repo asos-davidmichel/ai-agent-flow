@@ -250,6 +250,64 @@ cd src\scripts
 
 Monitor the script output for any errors. The script will create a dated output folder: `output/analysis-YYYY-MM-DD/`
 
+### Step 6.5: Generate AI Insights
+
+After the dashboard data is generated, enhance it with AI-generated insights based on the actual metrics.
+
+**1. Read the dashboard data:**
+
+```powershell
+$dataPath = ".\output\analysis-$(Get-Date -Format 'yyyy-MM-dd')\dashboard-data.json"
+$dashboardData = Get-Content $dataPath -Raw | ConvertFrom-Json
+```
+
+**2. Extract metrics for analysis:**
+
+You need to analyze the following charts and generate brief, actionable insights (1-2 sentences each):
+
+- **throughput**: Look at `charts.throughput.weeklyCompletedCounts`, `summary.throughput`, coefficient of variation
+- **cycleTime**: Look at `charts.cycleTime.distribution`, `summary.cycleTime.median`, P50/P85/P95
+- **bugRate**: Look at `charts.bugRate.avgWIPBugRate`, `charts.bugRate.avgCompletionBugRate`, current bug count
+- **staleWork**: Look at `charts.staleWork` for item count, worst age, blocked items, patterns
+- **blockedItems**: Look at count, categories, durations, column/type distribution
+- **bugDistribution**: Look at `charts.bugDistribution` for how bugs are distributed across columns
+
+**3. Generate insights using AI:**
+
+For each chart, analyze the metrics and generate a brief insight (1-2 sentences) that:
+- Identifies the most remarkable pattern in the data
+- Uses tentative language ("suggests", "may indicate", "consider")
+- Provides actionable context when appropriate
+- Falls back to the template-based insight if you cannot generate a better one
+
+**4. Update the dashboard data:**
+
+```powershell
+# Update insights in the JSON
+$dashboardData.insights.throughput = "{AI-generated insight}"
+$dashboardData.insights.cycleTime = "{AI-generated insight}"
+$dashboardData.insights.bugRate = "{AI-generated insight}"
+$dashboardData.insights.staleWork = "{AI-generated insight}"
+$dashboardData.insights.blockedItems = "{AI-generated insight}"
+$dashboardData.insights.bugDistribution = "{AI-generated insight}"
+
+# Save updated JSON
+$json = $dashboardData | ConvertTo-Json -Depth 10
+$json = $json -replace ':\s+', ': '
+[System.IO.File]::WriteAllText($dataPath, $json, [System.Text.UTF8Encoding]::new($false))
+```
+
+**5. Regenerate the HTML with AI insights:**
+
+```powershell
+cd .\src\scripts
+.\Regenerate-Dashboard.ps1
+```
+
+This will inject the updated insights into the dashboard HTML.
+
+**If AI insight generation fails**, keep the template-based insights from the original generation.
+
 ### Step 7: Open the generated dashboard
 
 Once the script completes successfully, open the generated dashboard HTML file in the default browser:
@@ -280,8 +338,9 @@ After the dashboard is generated and opened, provide a brief summary:
 **Period:** {DD MMM YYYY - DD MMM YYYY}
 **Workflow Starts At:** {Workflow StartColumn}
 **Output:** output/analysis-{date}/dashboard.html
+**Insights:** AI-generated (powered by your current AI assistant)
 
-The dashboard has been opened in your browser with interactive charts and flow metrics. 
+The dashboard has been opened in your browser with interactive charts and AI-generated insights.
 ```
 
 ## Success Criteria

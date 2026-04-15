@@ -1295,7 +1295,7 @@ $dashboardData = @{
             # Build insight with patterns
             $baseMessage = "$count stale items (not updated recently). Worst: #$($worstItem.id) at $($worstItem.daysSinceChanged) days (avg: $avgStale). "
             $patternMessage = "Pattern: $typePattern, $columnPattern. "
-            $blockedMessage = if ($blockedCount -gt 0) { "⚠️ $blockedCount tagged as BLOCKED. " } else { "" }
+            $blockedMessage = if ($blockedCount -gt 0) { "⚠️ $blockedCount tagged as BLOCKED. " } else { "No items currently blocked or on hold. " }
             
             # Action message based on actual state
             $actionMessage = if ($blockedCount -gt 0 -and $worstItem.daysSinceChanged -gt 30) {
