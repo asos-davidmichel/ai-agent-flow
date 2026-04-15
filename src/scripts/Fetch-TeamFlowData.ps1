@@ -268,10 +268,10 @@ try {
 }
 
 Write-Host "`n=== Summary ===" -ForegroundColor Cyan
-Write-Host "📊 Total work items: $($allItems.Count)" -ForegroundColor White
-Write-Host "✅ Completed: $($completedItemsWithHistory.Count)" -ForegroundColor White
-Write-Host "🚧 Active: $($activeItemIds.Count)" -ForegroundColor White
-Write-Host "📁 Output: $OutputPath" -ForegroundColor White
+Write-Host "Total work items: $($allItems.Count)" -ForegroundColor White
+Write-Host "Completed: $($completedItemsWithHistory.Count)" -ForegroundColor White
+Write-Host "Active: $($activeItemIds.Count)" -ForegroundColor White
+Write-Host "Output: $OutputPath" -ForegroundColor White
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
 Write-Host "  1. Process this data to calculate flow metrics" -ForegroundColor Gray
