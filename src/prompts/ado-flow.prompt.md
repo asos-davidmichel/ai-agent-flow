@@ -164,6 +164,34 @@ Options:
 
 Store this as `$workflowStartColumn`
 
+### Step 5.5: Confirm lead time calculation (if NOT using configuration)
+
+**If NOT using a configuration file:**
+
+Ask the user to confirm how lead time should be calculated:
+
+"**Lead Time** measures the total time from when work is committed until it's completed.
+
+I need to confirm what 'start point' to use for lead time:
+
+**Option 1: Board Entry (Recommended)**
+- Start: When item first appears on your board (enters the New column)
+- Best for: Understanding delivery time for work you've committed to
+- Measures: Time on board → Closed
+
+**Option 2: Creation Date**
+- Start: When item was created in Azure DevOps (System.CreatedDate)
+- Best for: Understanding total time in the system
+- Measures: Total ADO time → Closed
+- Note: May include time before work was added to your board
+
+Which would you prefer?
+- Type **'1'** or **'board'** for Board Entry (recommended)
+- Type **'2'** or **'creation'** for Creation Date
+- Press Enter to use Board Entry (default)"
+
+**Store the choice** for use in the workflow. Most teams should use Board Entry as it's more accurate for measuring committed work.
+
 ### Step 6: Run the dashboard generation script
 
 Navigate to the src\scripts folder and run the Generate-FlowDashboard.ps1 script with the extracted parameters.

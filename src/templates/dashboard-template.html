@@ -452,7 +452,7 @@
             <div class="chart-card">
                 <h2>⏱️ Cycle Time by Completion Date</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;" id="cycleTimeDescription">
-                    <!-- Populated dynamically from boardConfig -->
+                    <!-- Populated dynamically -->
                 </p>
                 <div class="chart-container">
                     <canvas id="cycleTimeChart"></canvas>
@@ -463,8 +463,8 @@
             <!-- Lead Time Distribution -->
             <div class="chart-card">
                 <h2>🕐 Lead Time by Completion Date</h2>
-                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    Total time from creation (New) to completion, including all backlog and workflow time. Lead Time = Cycle Time + Backlog Time.
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;" id="leadTimeDescription">
+                    <!-- Populated dynamically -->
                 </p>
                 <div class="chart-container">
                     <canvas id="leadTimeChart"></canvas>
@@ -1106,12 +1106,39 @@
         const leadTimeMedian = dashboardData.metrics.leadTime.median;
         const leadTime85th = dashboardData.metrics.leadTime.p85;
         const backlogTime = (leadTimeAvg - cycleTimeAvg).toFixed(1);
-        const leadTimeInsight = `Lead time averages ${leadTimeAvg} days (median: ${leadTimeMedian} days, 85th percentile: ${leadTime85th} days) from creation to completion. This includes both backlog time (${getBeforeWorkflowLabel()}: ~${backlogTime} days) and cycle time (${getCycleStartColumn()} onwards: ${cycleTimeAvg} days). ${leadTimeAvg > cycleTimeAvg * 1.5 ? 'Items wait significantly in backlog before development starts.' : 'Items move relatively quickly from backlog to development.'}`;  
-        document.getElementById('leadTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${leadTimeInsight}</p>`;
         
-        // Populate dynamic chart descriptions from boardConfig
-        document.getElementById('cycleTimeDescription').innerText = `Time from "${getCycleStartColumn()}" (first active column) to completion, measured in calendar days. Cycle time excludes backlog waiting time.`;
-        document.getElementById('columnCategorizationDescription').innerHTML = `Understanding how workflow columns are classified is essential for interpreting efficiency metrics. <strong>Cycle time starts from the first ACTIVE column (${getCycleStartColumn()}).</strong>`;
+        // Populate cycle time description
+        const cycleStartColumn = dashboardData.metricDefinitions ? dashboardData.metricDefinitions.cycleTimeStartColumn : getCycleStartColumn();
+        document.getElementById('cycleTimeDescription').innerText = `Time an individual item takes from "${cycleStartColumn}" to completion (closed).`;
+        
+        // Populate lead time description
+        if (dashboardData.metricDefinitions) {
+            const leadTimeMethod = dashboardData.metricDefinitions.leadTimeMethod || 'boardEntry';
+            const leadTimeStartColumn = dashboardData.metricDefinitions.leadTimeStartColumn || 'New';
+            
+            let descriptionText = '';
+            if (leadTimeMethod === 'creation') {
+                descriptionText = `Overall time an individual item takes from creation to completion (closed).`;
+            } else if (leadTimeMethod === 'boardEntry') {
+                descriptionText = `Overall time an individual item takes from board entry ("${leadTimeStartColumn}") to completion (closed).`;
+            } else if (leadTimeMethod === 'backlogExit') {
+                descriptionText = `Overall time an individual item takes from leaving the backlog ("${leadTimeStartColumn}") to completion (closed).`;
+            }
+            
+            document.getElementById('leadTimeDescription').innerText = descriptionText;
+            
+            // Update the insight to reflect the actual method
+            const leadTimeInsight = leadTimeMethod === 'creation' 
+                ? `Lead time averages ${leadTimeAvg} days (median: ${leadTimeMedian} days, 85th percentile: ${leadTime85th} days) from creation to completion. This includes both backlog time (~${backlogTime} days) and cycle time (${cycleTimeAvg} days). ${leadTimeAvg > cycleTimeAvg * 1.5 ? 'Items wait significantly before development starts.' : 'Items move relatively quickly into development.'}`
+                : `Lead time averages ${leadTimeAvg} days (median: ${leadTimeMedian} days, 85th percentile: ${leadTime85th} days) from board entry to completion. This includes both backlog time (~${backlogTime} days) and cycle time (${cycleTimeAvg} days). ${leadTimeAvg > cycleTimeAvg * 1.5 ? 'Items wait significantly before development starts.' : 'Items move relatively quickly into development.'}`;
+            document.getElementById('leadTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${leadTimeInsight}</p>`;
+        } else {
+            // Fallback for old dashboards without metricDefinitions
+            document.getElementById('leadTimeDescription').innerText = 'Overall time an individual item takes from creation to completion (closed). [Legacy calculation]';
+            const leadTimeInsight = `Lead time averages ${leadTimeAvg} days (median: ${leadTimeMedian} days, 85th percentile: ${leadTime85th} days) from creation to completion. This includes both backlog time (${getBeforeWorkflowLabel()}: ~${backlogTime} days) and cycle time (${getCycleStartColumn()} onwards: ${cycleTimeAvg} days). ${leadTimeAvg > cycleTimeAvg * 1.5 ? 'Items wait significantly in backlog before development starts.' : 'Items move relatively quickly from backlog to development.'}`;  
+            document.getElementById('leadTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${leadTimeInsight}</p>`;
+        }
+                document.getElementById('columnCategorizationDescription').innerHTML = `Understanding how workflow columns are classified is essential for interpreting efficiency metrics. <strong>Cycle time starts from the first ACTIVE column (${getCycleStartColumn()}).</strong>`;
         document.getElementById('wseDescription').innerText = `Measures how quickly work starts after being created. Cycle time starts when items reach "${getCycleStartColumn()}" (first active column). High values (>50%) mean items leave the backlog quickly. Low values indicate long delays in the "${getBeforeWorkflowLabel()}" columns.`;
         document.getElementById('ctfeDescription').innerText = `Measures flow during cycle time (from ${getCycleStartColumn()} onwards). Active columns: ${getActiveColumnsLabel()}. Waiting columns: ${getWaitingColumnsLabel()}. High values (>80%) mean minimal waiting in Ready states.`;
         document.getElementById('ltfeDescription').innerText = `Measures overall efficiency from creation to completion. High values (>40%) mean most time is spent actively working. Low values indicate items spend most time waiting - either in backlog before starting or queued between workflow stages.`;

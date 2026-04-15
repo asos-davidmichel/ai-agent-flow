@@ -96,14 +96,27 @@ Define how metrics are calculated:
 ```
 
 **Cycle Time** - Active work duration:
-- **Start**: First entry into an "inProgress" column
-- **End**: Reaches a "done" state
+- **Start**: First entry into an "inProgress" column (e.g., "In Development")
+- **End**: Reaches a "done" state (e.g., "Closed")
+- Measures: How long active work takes (development + review + QA)
 
 **Lead Time** - Total time to delivery:
+- **Default**: `boardEntry` (recommended for most teams)
 - **startType** options:
-  - `creation`: From System.CreatedDate
-  - `boardEntry`: From entering first board column
-  - `backlogExit`: From leaving last backlog column
+  - `boardEntry`: From when item first appears on board → Closed  
+    - Most accurate for committed work
+    - Measures: Time from commitment to delivery
+    - Uses first `System.BoardColumn` entry from update history
+  - `creation`: From System.CreatedDate → Closed
+    - Total time in ADO system
+    - May include time before work was prioritized
+    - Fallback if board entry can't be determined
+  - `backlogExit`: From leaving last backlog column → Closed
+    - Similar to cycle time but from specific column
+    - Requires: `startColumn` (e.g., "In Development")
+- **Fallback**: If board entry can't be determined from update history, falls back to System.CreatedDate
+
+**Important**: Without a config file, the system defaults to `boardEntry` for lead time.
 
 ## Usage
 

@@ -20,13 +20,23 @@ param(
     [string]$OutputPath,
     
     [Parameter(Mandatory = $false)]
-    [string]$WorkflowStartColumn
+    [string]$WorkflowStartColumn,
+    
+    [Parameter(Mandatory = $false)]
+    [string]$ConfigFile = $null
 )
 
 Write-Host "Building dashboard data structure..." -ForegroundColor Yellow
 
 # Load raw data
 $rawData = Get-Content $FlowDataPath -Raw | ConvertFrom-Json
+
+# Load configuration if provided
+$config = $null
+if ($ConfigFile -and (Test-Path $ConfigFile)) {
+    $config = Get-Content $ConfigFile -Raw | ConvertFrom-Json
+    Write-Host "  Using configuration: $ConfigFile" -ForegroundColor Gray
+}
 
 # Helper: Calculate days between dates
 function Get-DaysBetween($date1, $date2) {
@@ -85,6 +95,77 @@ function Calculate-Trend($values, $higherIsBetter = $true) {
             isGood = -not $higherIsBetter
         }
     }
+}
+
+# Helper: Calculate lead time based on configuration
+function Get-LeadTime($item, $config) {
+    $closedDate = $item.fields.'Microsoft.VSTS.Common.ClosedDate'
+    if (-not $closedDate) { return 0 }
+    
+    # Determine lead time start type from config (default: boardEntry)
+    $startType = if ($config -and $config.metrics.leadTime.startType) {
+        $config.metrics.leadTime.startType
+    } else {
+        'boardEntry'
+    }
+    
+    $startDate = $null
+    
+    switch ($startType) {
+        'creation' {
+            # Use System.CreatedDate
+            $startDate = $item.fields.'System.CreatedDate'
+        }
+        'boardEntry' {
+            # Find first board column entry from updates
+            if ($item.updates -and $item.updates.Count -gt 0) {
+                $firstBoardEntry = $item.updates | Where-Object { 
+                    $_.fields.'System.BoardColumn' -and $_.fields.'System.BoardColumn'.newValue 
+                } | Select-Object -First 1
+                
+                if ($firstBoardEntry) {
+                    $startDate = $firstBoardEntry.revisedDate
+                } else {
+                    # Fallback: use CreatedDate if no board column entry found
+                    $startDate = $item.fields.'System.CreatedDate'
+                }
+            } else {
+                # Fallback: no updates available, use CreatedDate
+                $startDate = $item.fields.'System.CreatedDate'
+            }
+        }
+        'backlogExit' {
+            # Find when item left last backlog column (enters first in-progress column)
+            $targetColumn = if ($config -and $config.metrics.leadTime.column) {
+                $config.metrics.leadTime.column
+            } else {
+                'In Development'  # Default
+            }
+            
+            if ($item.updates -and $item.updates.Count -gt 0) {
+                $entryToInProgress = $item.updates | Where-Object { 
+                    $_.fields.'System.BoardColumn' -and 
+                    $_.fields.'System.BoardColumn'.newValue -eq $targetColumn
+                } | Select-Object -First 1
+                
+                if ($entryToInProgress) {
+                    $startDate = $entryToInProgress.revisedDate
+                } else {
+                    # Fallback: use CreatedDate
+                    $startDate = $item.fields.'System.CreatedDate'
+                }
+            } else {
+                # Fallback: use CreatedDate
+                $startDate = $item.fields.'System.CreatedDate'
+            }
+        }
+        default {
+            # Default to creation date
+            $startDate = $item.fields.'System.CreatedDate'
+        }
+    }
+    
+    return (Get-DaysBetween $startDate $closedDate)
 }
 
 # Helper: Calculate weekly WIP snapshots from state transitions
@@ -293,7 +374,7 @@ foreach ($item in $rawData.completedItems) {
         completedDate = $item.fields.'Microsoft.VSTS.Common.ClosedDate'
         columnTime = $columnTime
         cycleTime = $cycleTime
-        leadTime = (Get-DaysBetween $item.fields.'System.CreatedDate' $item.fields.'Microsoft.VSTS.Common.ClosedDate')
+        leadTime = (Get-LeadTime -item $item -config $config)
     }
 }
 
@@ -596,6 +677,24 @@ $dashboardData = @{
     adoOrg = $rawData.metadata.organization
     adoProject = $rawData.metadata.project
     hasBugPbiSplit = ($bugs.Count -gt 0 -and $pbis.Count -gt 0)
+    
+    # Metadata about metric calculations
+    metricDefinitions = @{
+        leadTimeMethod = if ($config -and $config.metrics.leadTime.startType) { $config.metrics.leadTime.startType } else { 'boardEntry' }
+        leadTimeStartColumn = if ($config -and $config.metrics.leadTime.startColumn) { $config.metrics.leadTime.startColumn } else { 'New' }
+        leadTimeDescription = if ($config -and $config.metrics.leadTime.startDescription) { 
+            $config.metrics.leadTime.startDescription 
+        } else { 
+            'When item first appears on the board' 
+        }
+        cycleTimeStartColumn = if ($config -and $config.metrics.cycleTime.startColumn) { 
+            $config.metrics.cycleTime.startColumn 
+        } elseif ($WorkflowStartColumn) { 
+            $WorkflowStartColumn 
+        } else { 
+            'In Development' 
+        }
+    }
     
     metrics = @{
         throughput = @{

@@ -160,6 +160,9 @@ $buildParams = @{
 if ($WorkflowStartColumn) {
     $buildParams['WorkflowStartColumn'] = $WorkflowStartColumn
 }
+if ($ConfigFile) {
+    $buildParams['ConfigFile'] = $ConfigFile
+}
 & (Join-Path $PSScriptRoot "Build-DashboardData.ps1") @buildParams
 
 # Step 4: Generate HTML
