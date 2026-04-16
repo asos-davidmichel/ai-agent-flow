@@ -1761,6 +1761,150 @@ $pbiCycleTimes = $pbis | ForEach-Object { $_.cycleTime } | Where-Object { $_ -gt
 $bugLeadTimes = $bugs | ForEach-Object { $_.leadTime } | Where-Object { $_ -gt 0 }
 $pbiLeadTimes = $pbis | ForEach-Object { $_.leadTime } | Where-Object { $_ -gt 0 }
 
+# Net Flow chart (weekly started vs finished) - full analysis timeline
+$startedByWeekMap = @{}
+foreach ($item in @($activeItems + $completedItems)) {
+    $createdDateRaw = $item.fields.'System.CreatedDate'
+    if (-not $createdDateRaw) { continue }
+
+    $weekStart = Get-WeekStartMonday ([DateTime]$createdDateRaw)
+    if ($weekStart -lt $firstWeekStart -or $weekStart -gt $lastWeekStart) { continue }
+
+    $key = $weekStart.ToString('yyyy-MM-dd')
+    if (-not $startedByWeekMap.ContainsKey($key)) {
+        $startedByWeekMap[$key] = 0
+    }
+    $startedByWeekMap[$key] += 1
+}
+
+$netFlowStarted = @()
+$netFlowFinished = @()
+$netFlowValues = @()
+
+foreach ($ws in $weekStarts) {
+    $key = $ws.ToString('yyyy-MM-dd')
+
+    $startedCount = if ($startedByWeekMap.ContainsKey($key)) { [int]$startedByWeekMap[$key] } else { 0 }
+    $finishedCount = if ($completedByWeekMap.ContainsKey($key)) { @($completedByWeekMap[$key]).Count } else { 0 }
+
+    $netFlowStarted += $startedCount
+    $netFlowFinished += $finishedCount
+    $netFlowValues += ($finishedCount - $startedCount)
+}
+
+$netFlowChart = @{
+    labels = $throughputLabels
+    values = $netFlowValues
+    started = $netFlowStarted
+    finished = $netFlowFinished
+}
+
+$netTotalStarted = ($netFlowStarted | Measure-Object -Sum).Sum
+$netTotalFinished = ($netFlowFinished | Measure-Object -Sum).Sum
+$netDelta = ($netFlowValues | Measure-Object -Sum).Sum
+
+$netWorstValue = if ($netFlowValues.Count -gt 0) { [int](($netFlowValues | Measure-Object -Minimum).Minimum) } else { 0 }
+$netBestValue = if ($netFlowValues.Count -gt 0) { [int](($netFlowValues | Measure-Object -Maximum).Maximum) } else { 0 }
+$worstIdx = if ($netFlowValues.Count -gt 0) { $netFlowValues.IndexOf($netWorstValue) } else { -1 }
+$bestIdx = if ($netFlowValues.Count -gt 0) { $netFlowValues.IndexOf($netBestValue) } else { -1 }
+
+$worstWeekLabel = if ($worstIdx -ge 0) { $throughputLabels[$worstIdx] } else { 'N/A' }
+$bestWeekLabel = if ($bestIdx -ge 0) { $throughputLabels[$bestIdx] } else { 'N/A' }
+
+$netFlowInsightText = "Across $($weekStarts.Count) weeks: started $netTotalStarted, finished $netTotalFinished. Net flow (finished - started): $netDelta. Best week: $bestWeekLabel ($netBestValue). Worst week: $worstWeekLabel ($netWorstValue)."
+
+# Time in column chart (completed items only)
+$columnTotals = @{}
+$columnCounts = @{}
+foreach ($item in $completedWithMetrics) {
+    if (-not $item.columnTime -or $item.columnTime.Count -eq 0) { continue }
+
+    foreach ($prop in $item.columnTime.PSObject.Properties) {
+        $col = $prop.Name
+        $days = [double]$prop.Value
+        if ($days -le 0) { continue }
+
+        if (-not $columnTotals.ContainsKey($col)) {
+            $columnTotals[$col] = 0.0
+            $columnCounts[$col] = 0
+        }
+
+        $columnTotals[$col] += $days
+        $columnCounts[$col] += 1
+    }
+}
+
+# Only include board columns (not states), and exclude the first + last column in the workflow
+$workflowColumnsAll = @()
+if ($config -and $config.columns) {
+    $workflowColumnsAll += @($config.columns.backlog)
+    $workflowColumnsAll += @($config.columns.inProgress)
+    $workflowColumnsAll += @($config.columns.done)
+} elseif ($rawData.boardConfig -and $rawData.boardConfig.columns) {
+    $workflowColumnsAll += @($rawData.boardConfig.columns)
+}
+
+$workflowColumnsAll = @(
+    $workflowColumnsAll |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Select-Object -Unique
+)
+
+$allowedColumns = if ($workflowColumnsAll.Count -ge 3) {
+    @($workflowColumnsAll[1..($workflowColumnsAll.Count - 2)])
+} else {
+    @()
+}
+
+$orderedColumns = @(
+    $allowedColumns |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Select-Object -Unique
+)
+
+$timeInColumnLabels = @()
+$timeInColumnValues = @()
+$timeInColumnTotals = @()
+$timeInColumnCounts = @()
+
+foreach ($col in $orderedColumns) {
+    if (-not $columnTotals.ContainsKey($col)) { continue }
+
+    $total = [Math]::Round([double]$columnTotals[$col], 1)
+    $count = [int]$columnCounts[$col]
+    $avg = if ($count -gt 0) { [Math]::Round(($total / $count), 1) } else { 0 }
+
+    $timeInColumnLabels += $col
+    $timeInColumnValues += $avg
+    $timeInColumnTotals += $total
+    $timeInColumnCounts += $count
+}
+
+$timeInColumnChart = @{
+    labels = $timeInColumnLabels
+    values = $timeInColumnValues
+    totals = $timeInColumnTotals
+    counts = $timeInColumnCounts
+}
+
+$timeInColumnInsightText = if ($timeInColumnLabels.Count -eq 0) {
+    "No columnTime data available to compute time in column."
+} else {
+    $rows = @()
+    for ($i = 0; $i -lt $timeInColumnLabels.Count; $i++) {
+        $rows += [PSCustomObject]@{
+            Column = $timeInColumnLabels[$i]
+            Avg = [double]$timeInColumnValues[$i]
+            Total = [double]$timeInColumnTotals[$i]
+            Count = [int]$timeInColumnCounts[$i]
+        }
+    }
+
+    $top = @($rows | Sort-Object -Property Avg -Descending | Select-Object -First 3)
+    $topText = ($top | ForEach-Object { "$($_.Column): $($_.Avg)d avg (across $($_.Count) items)" }) -join "; "
+    "Longest average time is in: $topText."
+}
+
 # Build transitions
 $transitions = @()
 for ($i = 0; $i -lt ($boardColumns.Count - 1); $i++) {
@@ -1993,10 +2137,7 @@ $dashboardData = @{
         cycleTimeTrend = $cycleTimeTrendChart
         leadTimeTrend = $leadTimeTrendChart
         workItemAge = $workItemAgeChart
-        timeInColumn = @{
-            labels = @()
-            values = @()
-        }
+        timeInColumn = $timeInColumnChart
         dailyWip = @{
             labels = $dailyWipLabels
             values = $dailyWipValues
@@ -2019,13 +2160,7 @@ $dashboardData = @{
             age1to7 = @($wipAge1to7)
             age0to1 = @($wipAge0to1)
         }
-        netFlow = @{
-            labels = @()
-            values = @()
-            trend = @()
-            started = @()
-            finished = @()
-        }
+        netFlow = $netFlowChart
         state = @{
             labels = @()
             values = @()
@@ -2081,7 +2216,7 @@ $dashboardData = @{
         leadTime = "Median lead time: $leadTimeMedian days"
         workItemAge = $workItemAgeInsightText
         dailyWip = $dailyWipInsightText
-        timeInColumn = "Column metrics"
+        timeInColumn = $timeInColumnInsightText
         wipAgeBreakdown = $wipAgeInsightText
         wip = $wipInsightText
         bugRate = if ($maxBugRate -gt 50) {
@@ -2140,7 +2275,7 @@ $dashboardData = @{
         } else {
             "No stale work data available - requires System.ChangedDate field from work items."
         }
-        netFlow = "Flow analysis"
+        netFlow = $netFlowInsightText
         state = "State distribution"
         blockedItems = if ($blockedItems.Count -gt 0) {
             $count = $blockedItems.Count

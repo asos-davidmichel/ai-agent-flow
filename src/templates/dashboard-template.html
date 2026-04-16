@@ -843,7 +843,7 @@
             <div class="chart-card">
                 <h2>⚖️ Sustainability (Net Flow)</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    Shows the difference between work started and work completed each day.
+                    Shows the difference between work started and work completed each week.
                 </p>
                 <div class="chart-container">
                     <canvas id="netFlowChart"></canvas>
@@ -855,7 +855,7 @@
             <div class="chart-card">
                 <h2>⏱️ Time In Board Column</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    Total amount of time (in calendar days) items spent in a given column.
+                    Average time (in calendar days) completed items spent in each board column.
                 </p>
                 <div class="chart-container">
                     <canvas id="timeInColumnChart"></canvas>
@@ -3241,8 +3241,11 @@
         
         // Time In Board Column Chart
         if (dashboardData.charts.timeInColumn) {
-            // Identify worst columns (top 2 highest values)
-            const timeValues = dashboardData.charts.timeInColumn.values;
+            // Identify worst columns (top 2 highest avg values)
+            const timeValues = dashboardData.charts.timeInColumn.values || [];
+            const timeTotals = dashboardData.charts.timeInColumn.totals || [];
+            const timeCounts = dashboardData.charts.timeInColumn.counts || [];
+
             const maxValue = Math.max(...timeValues);
             const sortedValues = [...timeValues].sort((a, b) => b - a);
             const secondMax = sortedValues[1] || maxValue;
@@ -3259,8 +3262,8 @@
                 data: {
                     labels: dashboardData.charts.timeInColumn.labels,
                     datasets: [{
-                        label: 'Time in Column (days)',
-                        data: dashboardData.charts.timeInColumn.values,
+                        label: 'Avg time in column (days)',
+                        data: timeValues,
                         backgroundColor: columnColors,
                         borderColor: columnColors.map(c => c === '#ef4444' ? '#dc2626' : '#3182ce'),
                         borderWidth: 1
@@ -3276,7 +3279,16 @@
                             padding: 12,
                             callbacks: {
                                 label: function(context) {
-                                    return `Total: ${context.parsed.y} days`;
+                                    return `Avg: ${context.parsed.y} days`;
+                                },
+                                afterLabel: function(context) {
+                                    const i = context.dataIndex;
+                                    const count = (typeof timeCounts[i] === 'number') ? timeCounts[i] : null;
+                                    const total = (typeof timeTotals[i] === 'number') ? timeTotals[i] : null;
+                                    const lines = [];
+                                    if (count !== null) lines.push(`Items: ${count}`);
+                                    if (total !== null) lines.push(`Total: ${total} days`);
+                                    return lines;
                                 }
                             }
                         }
@@ -3284,7 +3296,7 @@
                     scales: {
                         y: {
                             beginAtZero: true,
-                            title: { display: true, text: 'Time in Column (days)' },
+                            title: { display: true, text: 'Avg time in column (days)' },
                             ticks: { precision: 0 },
                             grid: { color: '#e2e8f0' }
                         },
@@ -4177,7 +4189,7 @@
                         padding: 12,
                         callbacks: {
                             title: function(context) {
-                                return 'Week Ending ' + context[0].label;
+                                return 'Week of ' + context[0].label;
                             },
                             label: function(context) {
                                 const value = context.parsed.y;
@@ -4223,7 +4235,7 @@
                         }
                     },
                     x: {
-                        title: { display: true, text: 'Week Ending' },
+                        title: { display: true, text: 'Week of' },
                         grid: { display: false }
                     }
                 }
