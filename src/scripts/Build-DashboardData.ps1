@@ -190,10 +190,21 @@ function Get-WeeklyWIPSnapshot($completedItems, $activeItems, $startDate, $endDa
     # Define active states (items being worked on)
     $activeStates = @('Active', 'In Progress')
     
-    # Create weekly buckets
+    # Helper function to get week start (Monday) - matches main chart logic
+    function Get-WeekStartMonday([DateTime]$date) {
+        $d = $date.Date
+        $daysSinceMonday = (([int]$d.DayOfWeek + 6) % 7)
+        return $d.AddDays(-$daysSinceMonday).Date
+    }
+    
+    # Round start and end dates to Monday to align with other charts
+    $firstWeekStart = Get-WeekStartMonday $startDate
+    $lastWeekStart = Get-WeekStartMonday $endDate
+    
+    # Create weekly buckets starting from Monday
     $weeks = @()
-    $currentWeekStart = $startDate
-    while ($currentWeekStart -lt $endDate) {
+    $currentWeekStart = $firstWeekStart
+    while ($currentWeekStart -le $lastWeekStart) {
         $weekEnd = $currentWeekStart.AddDays(7)
         $weeks += @{
             start = $currentWeekStart
@@ -408,13 +419,15 @@ $throughputTotal = [Math]::Round($completedWithMetrics.Count / $weeks, 1)
 $analysisStart = [DateTime]$rawData.metadata.startDate
 $analysisEnd = [DateTime]$rawData.metadata.endDate
 
-function Get-WeekStartSunday([DateTime]$date) {
+# Helper function to get week start (Monday)
+function Get-WeekStartMonday([DateTime]$date) {
     $d = $date.Date
-    return $d.AddDays(-[int]$d.DayOfWeek)
+    $daysSinceMonday = (([int]$d.DayOfWeek + 6) % 7)
+    return $d.AddDays(-$daysSinceMonday).Date
 }
 
-$firstWeekStart = Get-WeekStartSunday $analysisStart
-$lastWeekStart = Get-WeekStartSunday $analysisEnd
+$firstWeekStart = Get-WeekStartMonday $analysisStart
+$lastWeekStart = Get-WeekStartMonday $analysisEnd
 
 $weekStarts = @()
 for ($d = $firstWeekStart; $d -le $lastWeekStart; $d = $d.AddDays(7)) {
@@ -424,7 +437,7 @@ for ($d = $firstWeekStart; $d -le $lastWeekStart; $d = $d.AddDays(7)) {
 $completedByWeekMap = @{}
 foreach ($item in $completedWithMetrics) {
     if (-not $item.completedDate) { continue }
-    $weekStart = Get-WeekStartSunday ([DateTime]$item.completedDate)
+    $weekStart = Get-WeekStartMonday ([DateTime]$item.completedDate)
     $key = $weekStart.ToString('yyyy-MM-dd')
     if (-not $completedByWeekMap.ContainsKey($key)) {
         $completedByWeekMap[$key] = @()
@@ -925,13 +938,8 @@ foreach ($categoryKey in $categoryKeys) {
     $blockedTimelineSeries[$categoryKey] = @()
 }
 
-function Get-WeekStartMonday([DateTime]$date) {
-    $d = $date.Date
-    $daysSinceMonday = (([int]$d.DayOfWeek + 6) % 7)
-    return $d.AddDays(-$daysSinceMonday).Date
-}
-
 # Always show the full analysis timeline for time-based charts
+# (Get-WeekStartMonday function defined earlier in the file)
 $timelineFirstWeekStart = Get-WeekStartMonday $analysisStart
 $timelineLastWeekStart = Get-WeekStartMonday $analysisEnd
 $timelineWeekStarts = @()
@@ -968,8 +976,11 @@ if ($blockedItemDetailsAll.Count -gt 0) {
         if ($blockedStart -ge $analysisStart -and $blockedStart -le $analysisEnd) {
             $weekStart = Get-WeekStartMonday $blockedStart
             $weekKey = $weekStart.ToString('yyyy-MM-dd')
-            if ($weeklyBuckets.ContainsKey($weekKey) -and $weeklyBuckets[$weekKey].ContainsKey($detail.category)) {
-                $weeklyBuckets[$weekKey][$detail.category]++
+            # All weeks and categories are pre-initialized, so we can directly increment
+            if ($weeklyBuckets.ContainsKey($weekKey)) {
+                if ($null -ne $weeklyBuckets[$weekKey][$detail.category]) {
+                    $weeklyBuckets[$weekKey][$detail.category]++
+                }
             }
         }
 
@@ -1615,51 +1626,97 @@ $avgCompletionBugRate = if ($completionRateBugs.Count -gt 0) {
     [Math]::Round(($completionRateBugs | Measure-Object -Average).Average, 1)
 } else { 0 }
 
-# Build cycle time chart datasets (PBIs first for chronological x-axis)
+# Build cycle time chart datasets (one dataset per tracked work item type)
+function Get-TypeDatasetLabel {
+    param([Parameter(Mandatory = $true)][string]$WorkItemType)
+
+    switch ($WorkItemType) {
+        'Product Backlog Item' { return 'PBIs' }
+        'Bug' { return 'Bugs' }
+        'Spike' { return 'Spikes' }
+        'User Story' { return 'User Stories' }
+        'Story' { return 'Stories' }
+        default { return $WorkItemType }
+    }
+}
+
+$typePriority = @('Product Backlog Item', 'User Story', 'Story', 'Bug', 'Spike')
+$completedTypeGroups = @($completedWithMetrics | Group-Object -Property type)
+$completedTypeGroupsOrdered = @(
+    $completedTypeGroups | Sort-Object -Property @(
+        @{ Expression = {
+            $idx = $typePriority.IndexOf($_.Name)
+            if ($idx -ge 0) { $idx } else { 999 }
+        } },
+        @{ Expression = { $_.Name } }
+    )
+)
+
 $cycleTimeDatasets = @()
+$cycleTimeByTypeStats = [ordered]@{}
+$throughputByType = [ordered]@{}
+$cycleTimeAvgByType = [ordered]@{}
+$leadTimeAvgByType = [ordered]@{}
 
-if ($pbis.Count -gt 0) {
-    $cycleTimeDatasets += @{
-        label = "PBIs"
-        data = @($pbis | Sort-Object completedDate | ForEach-Object {
-            @{
-                x = ([DateTime]$_.completedDate).ToString('dd MMM')
-                y = $_.cycleTime
-                leadTime = $_.leadTime
-                id = $_.id
-                title = $_.title
-                completedDate = ([DateTime]$_.completedDate).ToString('dd MMM yyyy')
-                columnTime = $_.columnTime
-            }
-        })
+foreach ($g in $completedTypeGroupsOrdered) {
+    $workItemType = [string]$g.Name
+    if ([string]::IsNullOrWhiteSpace($workItemType)) { continue }
+
+    $label = Get-TypeDatasetLabel -WorkItemType $workItemType
+    $items = @($g.Group | Sort-Object completedDate)
+
+    if ($items.Count -gt 0) {
+        $cycleTimeDatasets += @{
+            label = $label
+            workItemType = $workItemType
+            data = @($items | ForEach-Object {
+                @{
+                    x = ([DateTime]$_.completedDate).ToString('dd MMM')
+                    y = $_.cycleTime
+                    leadTime = $_.leadTime
+                    id = $_.id
+                    title = $_.title
+                    completedDate = ([DateTime]$_.completedDate).ToString('dd MMM yyyy')
+                    columnTime = $_.columnTime
+                }
+            })
+        }
     }
+
+    $typeCycleTimes = @($items | ForEach-Object { $_.cycleTime } | Where-Object { $_ -gt 0 })
+    $typeLeadTimes = @($items | ForEach-Object { $_.leadTime } | Where-Object { $_ -gt 0 })
+
+    $typeCycleMedian = Get-Median $typeCycleTimes
+    $typeLeadMedian = Get-Median $typeLeadTimes
+
+    $typeCycleAvg = if ($typeCycleTimes.Count -gt 0) { [Math]::Round(($typeCycleTimes | Measure-Object -Average).Average, 1) } else { 0 }
+    $typeLeadAvg = if ($typeLeadTimes.Count -gt 0) { [Math]::Round(($typeLeadTimes | Measure-Object -Average).Average, 1) } else { 0 }
+
+    $typeCycleP85 = if ($typeCycleTimes) { ($typeCycleTimes | Sort-Object)[([Math]::Ceiling($typeCycleTimes.Count * 0.85) - 1)] } else { 0 }
+    $typeLeadP85 = if ($typeLeadTimes) { ($typeLeadTimes | Sort-Object)[([Math]::Ceiling($typeLeadTimes.Count * 0.85) - 1)] } else { 0 }
+
+    $cycleTimeByTypeStats[$label] = @{
+        average = $typeCycleAvg
+        median = $typeCycleMedian
+        percentile85 = $typeCycleP85
+        leadTimeAverage = $typeLeadAvg
+        leadTimeMedian = $typeLeadMedian
+        leadTimePercentile85 = $typeLeadP85
+    }
+
+    $throughputByType[$label] = [Math]::Round(($items.Count / $weeks), 1)
+    $cycleTimeAvgByType[$label] = $typeCycleAvg
+    $leadTimeAvgByType[$label] = $typeLeadAvg
 }
 
-if ($bugs.Count -gt 0) {
-    $cycleTimeDatasets += @{
-        label = "Bugs"
-        data = @($bugs | Sort-Object completedDate | ForEach-Object {
-            @{
-                x = ([DateTime]$_.completedDate).ToString('dd MMM')
-                y = $_.cycleTime
-                leadTime = $_.leadTime
-                id = $_.id
-                title = $_.title
-                completedDate = ([DateTime]$_.completedDate).ToString('dd MMM yyyy')
-                columnTime = $_.columnTime
-            }
-        })
-    }
-}
-
-# Calculate statistics
+# Calculate overall statistics
 $cycleTimes = $completedWithMetrics | ForEach-Object { $_.cycleTime } | Where-Object { $_ -gt 0 }
 $leadTimes = $completedWithMetrics | ForEach-Object { $_.leadTime } | Where-Object { $_ -gt 0 }
 
 $cycleTimeMedian = Get-Median $cycleTimes
 $leadTimeMedian = Get-Median $leadTimes
 
-# Per-type statistics for dynamic reference lines
+# Backwards-compat per-type arrays (used by a few existing metrics)
 $bugCycleTimes = $bugs | ForEach-Object { $_.cycleTime } | Where-Object { $_ -gt 0 }
 $pbiCycleTimes = $pbis | ForEach-Object { $_.cycleTime } | Where-Object { $_ -gt 0 }
 
@@ -1669,7 +1726,7 @@ $pbiLeadTimes = $pbis | ForEach-Object { $_.leadTime } | Where-Object { $_ -gt 0
 # Build transitions
 $transitions = @()
 for ($i = 0; $i -lt ($boardColumns.Count - 1); $i++) {
-    $transitions += "$($boardColumns[$i]) → $($boardColumns[$i + 1])"
+    $transitions += "$($boardColumns[$i]) -> $($boardColumns[$i + 1])"
 }
 
 # Precompute insights for blocker charts (so they can be AI-overridden via JSON)
@@ -1723,6 +1780,7 @@ $dashboardData = @{
     period = "$([DateTime]::Parse($rawData.metadata.startDate).ToString('dd MMM yyyy')) - $([DateTime]::Parse($rawData.metadata.endDate).ToString('dd MMM yyyy')) ($($rawData.metadata.months) months)"
     adoOrg = $rawData.metadata.organization
     adoProject = $rawData.metadata.project
+    hasTypeSplit = ($completedTypeGroups.Count -gt 1)
     hasBugPbiSplit = ($bugs.Count -gt 0 -and $pbis.Count -gt 0)
     
     # Metadata about metric calculations
@@ -1745,24 +1803,29 @@ $dashboardData = @{
     
     metrics = @{
         throughput = @{
-            bugs = [Math]::Round($bugs.Count / $weeks, 1)
-            pbis = [Math]::Round($pbis.Count / $weeks, 1)
+            avg = $throughputTotal
+            byType = $throughputByType
+            bugs = if ($throughputByType.Contains('Bugs')) { $throughputByType['Bugs'] } else { 0 }
+            pbis = if ($throughputByType.Contains('PBIs')) { $throughputByType['PBIs'] } else { 0 }
             median = $throughputTotal
             min = 0
             max = ($throughputChart.values | Measure-Object -Maximum).Maximum
             trend = Calculate-Trend -values $throughputValues -higherIsBetter $true
         }
         cycleTime = @{
-            bugs = if ($bugCycleTimes.Count -gt 0) { [Math]::Round(($bugCycleTimes | Measure-Object -Average).Average, 1) } else { 0 }
-            pbis = if ($pbiCycleTimes.Count -gt 0) { [Math]::Round(($pbiCycleTimes | Measure-Object -Average).Average, 1) } else { 0 }
+            avg = [Math]::Round(($cycleTimes | Measure-Object -Average).Average, 1)
+            byType = $cycleTimeAvgByType
+            bugs = if ($cycleTimeAvgByType.Contains('Bugs')) { $cycleTimeAvgByType['Bugs'] } else { 0 }
+            pbis = if ($cycleTimeAvgByType.Contains('PBIs')) { $cycleTimeAvgByType['PBIs'] } else { 0 }
             median = $cycleTimeMedian
             p85 = if ($cycleTimes) { ($cycleTimes | Sort-Object)[([Math]::Ceiling($cycleTimes.Count * 0.85) - 1)] } else { 0 }
             trend = Calculate-Trend -values @($cycleTimeTrendChart.values) -higherIsBetter $false
         }
         leadTime = @{
-            bugs = if ($bugLeadTimes.Count -gt 0) { [Math]::Round(($bugLeadTimes | Measure-Object -Average).Average, 1) } else { 0 }
-            pbis = if ($pbiLeadTimes.Count -gt 0) { [Math]::Round(($pbiLeadTimes | Measure-Object -Average).Average, 1) } else { 0 }
             avg = [Math]::Round(($leadTimes | Measure-Object -Average).Average, 1)
+            byType = $leadTimeAvgByType
+            bugs = if ($leadTimeAvgByType.Contains('Bugs')) { $leadTimeAvgByType['Bugs'] } else { 0 }
+            pbis = if ($leadTimeAvgByType.Contains('PBIs')) { $leadTimeAvgByType['PBIs'] } else { 0 }
             median = $leadTimeMedian
             p85 = if ($leadTimes) { ($leadTimes | Sort-Object)[([Math]::Ceiling($leadTimes.Count * 0.85) - 1)] } else { 0 }
             trend = Calculate-Trend -values @($leadTimeTrendChart.values) -higherIsBetter $false
@@ -1830,24 +1893,7 @@ $dashboardData = @{
             leadTimePercentile85 = if ($leadTimes) { ($leadTimes | Sort-Object)[([Math]::Ceiling($leadTimes.Count * 0.85) - 1)] } else { 0 }
             datasets = $cycleTimeDatasets
             # Per-type statistics for dynamic reference lines
-            byType = @{
-                "PBIs" = @{
-                    average = if ($pbiCycleTimes.Count -gt 0) { [Math]::Round(($pbiCycleTimes | Measure-Object -Average).Average, 1) } else { 0 }
-                    median = if ($pbiCycleTimes.Count -gt 0) { Get-Median $pbiCycleTimes } else { 0 }
-                    percentile85 = if ($pbiCycleTimes.Count -gt 0) { ($pbiCycleTimes | Sort-Object)[([Math]::Ceiling($pbiCycleTimes.Count * 0.85) - 1)] } else { 0 }
-                    leadTimeAverage = if ($pbiLeadTimes.Count -gt 0) { [Math]::Round(($pbiLeadTimes | Measure-Object -Average).Average, 1) } else { 0 }
-                    leadTimeMedian = if ($pbiLeadTimes.Count -gt 0) { Get-Median $pbiLeadTimes } else { 0 }
-                    leadTimePercentile85 = if ($pbiLeadTimes.Count -gt 0) { ($pbiLeadTimes | Sort-Object)[([Math]::Ceiling($pbiLeadTimes.Count * 0.85) - 1)] } else { 0 }
-                }
-                "Bugs" = @{
-                    average = if ($bugCycleTimes.Count -gt 0) { [Math]::Round(($bugCycleTimes | Measure-Object -Average).Average, 1) } else { 0 }
-                    median = if ($bugCycleTimes.Count -gt 0) { Get-Median $bugCycleTimes } else { 0 }
-                    percentile85 = if ($bugCycleTimes.Count -gt 0) { ($bugCycleTimes | Sort-Object)[([Math]::Ceiling($bugCycleTimes.Count * 0.85) - 1)] } else { 0 }
-                    leadTimeAverage = if ($bugLeadTimes.Count -gt 0) { [Math]::Round(($bugLeadTimes | Measure-Object -Average).Average, 1) } else { 0 }
-                    leadTimeMedian = if ($bugLeadTimes.Count -gt 0) { Get-Median $bugLeadTimes } else { 0 }
-                    leadTimePercentile85 = if ($bugLeadTimes.Count -gt 0) { ($bugLeadTimes | Sort-Object)[([Math]::Ceiling($bugLeadTimes.Count * 0.85) - 1)] } else { 0 }
-                }
-            }
+            byType = $cycleTimeByTypeStats
         }
         cfd = @{
             labels = @()

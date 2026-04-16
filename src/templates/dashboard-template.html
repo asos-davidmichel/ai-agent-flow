@@ -1062,71 +1062,38 @@
         const metricCardsHTML = `
             <div class="metric-card">
                 <h3>Throughput</h3>
-                ${dashboardData.hasBugPbiSplit ? `
-                    <div class="metric-value">
-                        <span>${(parseFloat(dashboardData.metrics.throughput.bugs) + parseFloat(dashboardData.metrics.throughput.pbis)).toFixed(1)}</span>
-                        ${getTrendIndicator(dashboardData.metrics.throughput.trend, null, dashboardData.metrics.throughput.trend.previousValue)}
-                    </div>
-                    <div class="metric-label">items/week average</div>
-                    <div class="metric-trend trend-neutral">
-                        Median: ${dashboardData.metrics.throughput.median} | Range: ${dashboardData.metrics.throughput.min}-${dashboardData.metrics.throughput.max}
-                    </div>
-                ` : `
-                    <div class="metric-value">
-                        <span>${dashboardData.metrics.throughput.avg}</span>
-                        ${getTrendIndicator(dashboardData.metrics.throughput.trend, dashboardData.metrics.throughput.avg, dashboardData.metrics.throughput.trend.previousValue)}
-                    </div>
-                    <div class="metric-label">items/week average</div>
-                    <div class="metric-trend trend-neutral">
-                        Median: ${dashboardData.metrics.throughput.median} | Range: ${dashboardData.metrics.throughput.min}-${dashboardData.metrics.throughput.max}
-                    </div>
-                `}
+                <div class="metric-value">
+                    <span>${dashboardData.metrics.throughput.avg}</span>
+                    ${getTrendIndicator(dashboardData.metrics.throughput.trend, dashboardData.metrics.throughput.avg, dashboardData.metrics.throughput.trend.previousValue)}
+                </div>
+                <div class="metric-label">items/week average</div>
+                <div class="metric-trend trend-neutral">
+                    Median: ${dashboardData.metrics.throughput.median} | Range: ${dashboardData.metrics.throughput.min}-${dashboardData.metrics.throughput.max}
+                </div>
             </div>
             
             <div class="metric-card">
                 <h3>Cycle Time</h3>
-                ${dashboardData.hasBugPbiSplit ? `
-                    <div class="metric-value">
-                        <span>${dashboardData.charts.cycleTime.average}</span>
-                        ${getTrendIndicator(dashboardData.metrics.cycleTime.trend, null, dashboardData.metrics.cycleTime.trend.previousValue)}
-                    </div>
-                    <div class="metric-label">days average</div>
-                    <div class="metric-trend trend-good">
-                        Median: ${dashboardData.metrics.cycleTime.median} | 85th: ${dashboardData.metrics.cycleTime.p85}
-                    </div>
-                ` : `
-                    <div class="metric-value">
-                        <span>${dashboardData.metrics.cycleTime.avg}</span>
-                        ${getTrendIndicator(dashboardData.metrics.cycleTime.trend, dashboardData.metrics.cycleTime.avg, dashboardData.metrics.cycleTime.trend.previousValue)}
-                    </div>
-                    <div class="metric-label">days average</div>
-                    <div class="metric-trend trend-good">
-                        Median: ${dashboardData.metrics.cycleTime.median} | 85th: ${dashboardData.metrics.cycleTime.p85}
-                    </div>
-                `}
+                <div class="metric-value">
+                    <span>${dashboardData.charts.cycleTime.average}</span>
+                    ${getTrendIndicator(dashboardData.metrics.cycleTime.trend, dashboardData.charts.cycleTime.average, dashboardData.metrics.cycleTime.trend.previousValue)}
+                </div>
+                <div class="metric-label">days average</div>
+                <div class="metric-trend trend-good">
+                    Median: ${dashboardData.metrics.cycleTime.median} | 85th: ${dashboardData.metrics.cycleTime.p85}
+                </div>
             </div>
             
             <div class="metric-card">
                 <h3>Lead Time</h3>
-                ${dashboardData.hasBugPbiSplit ? `
-                    <div class="metric-value">
-                        <span>${dashboardData.metrics.leadTime.avg}</span>
-                        ${getTrendIndicator(dashboardData.metrics.leadTime.trend, null, dashboardData.metrics.leadTime.trend.previousValue)}
-                    </div>
-                    <div class="metric-label">days average</div>
-                    <div class="metric-trend trend-good">
-                        Median: ${dashboardData.metrics.leadTime.median} | 85th: ${dashboardData.metrics.leadTime.p85}
-                    </div>
-                ` : `
-                    <div class="metric-value">
-                        <span>${dashboardData.metrics.leadTime.avg}</span>
-                        ${getTrendIndicator(dashboardData.metrics.leadTime.trend, dashboardData.metrics.leadTime.avg, dashboardData.metrics.leadTime.trend.previousValue)}
-                    </div>
-                    <div class="metric-label">days average</div>
-                    <div class="metric-trend trend-good">
-                        Median: ${dashboardData.metrics.leadTime.median} | 85th: ${dashboardData.metrics.leadTime.p85}
-                    </div>
-                `}
+                <div class="metric-value">
+                    <span>${dashboardData.metrics.leadTime.avg}</span>
+                    ${getTrendIndicator(dashboardData.metrics.leadTime.trend, dashboardData.metrics.leadTime.avg, dashboardData.metrics.leadTime.trend.previousValue)}
+                </div>
+                <div class="metric-label">days average</div>
+                <div class="metric-trend trend-good">
+                    Median: ${dashboardData.metrics.leadTime.median} | 85th: ${dashboardData.metrics.leadTime.p85}
+                </div>
             </div>
             
             <div class="metric-card">
@@ -1190,9 +1157,13 @@
         const cycleTimeAvg = dashboardData.charts.cycleTime.average;  // Use overall average from chart data (weighted by count)
         const cycleTimeMedian = dashboardData.metrics.cycleTime.median;
         const cycleTime85th = dashboardData.metrics.cycleTime.p85;
-        const bugsCycleTime = dashboardData.metrics.cycleTime.bugs;
-        const pbisCycleTime = dashboardData.metrics.cycleTime.pbis;
-        const cycleTimeInsight = `Cycle time (from ${getCycleStartColumn()} to completion) averages ${cycleTimeAvg} days (median: ${cycleTimeMedian} days, 85th percentile: ${cycleTime85th} days). ${dashboardData.hasBugPbiSplit ? `Bugs: ${bugsCycleTime} days, PBIs: ${pbisCycleTime} days. ` : ''}This measures time actively in workflow columns, excluding time before workflow starts (${getBeforeWorkflowLabel()}).`;
+        
+        const cycleTimeByType = dashboardData.metrics.cycleTime.byType || null;
+        const cycleTimeTypeText = (cycleTimeByType && Object.keys(cycleTimeByType).length > 0)
+            ? `By type: ${Object.entries(cycleTimeByType).map(([k, v]) => `${k}: ${v}d`).join(', ')}. `
+            : '';
+
+        const cycleTimeInsight = `Cycle time (from ${getCycleStartColumn()} to completion) averages ${cycleTimeAvg} days (median: ${cycleTimeMedian} days, 85th percentile: ${cycleTime85th} days). ${cycleTimeTypeText}This measures time actively in workflow columns, excluding time before workflow starts (${getBeforeWorkflowLabel()}).`;
         document.getElementById('cycleTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(cycleTimeInsight)}</p>`;
         
         // Generate dynamic lead time insight
@@ -1200,6 +1171,11 @@
         const leadTimeMedian = dashboardData.metrics.leadTime.median;
         const leadTime85th = dashboardData.metrics.leadTime.p85;
         const backlogTime = (leadTimeAvg - cycleTimeAvg).toFixed(1);
+
+        const leadTimeByType = dashboardData.metrics.leadTime.byType || null;
+        const leadTimeTypeText = (leadTimeByType && Object.keys(leadTimeByType).length > 0)
+            ? `By type: ${Object.entries(leadTimeByType).map(([k, v]) => `${k}: ${v}d`).join(', ')}. `
+            : '';
         
         // Populate cycle time description
         const cycleStartColumn = dashboardData.metricDefinitions ? dashboardData.metricDefinitions.cycleTimeStartColumn : getCycleStartColumn();
@@ -1223,13 +1199,13 @@
             
             // Update the insight to reflect the actual method
             const leadTimeInsight = leadTimeMethod === 'creation' 
-                ? `Lead time averages ${leadTimeAvg} days (median: ${leadTimeMedian} days, 85th percentile: ${leadTime85th} days) from creation to completion. This includes both pre-workflow time in ${getBeforeWorkflowLabel()} (~${backlogTime} days) and cycle time (${cycleTimeAvg} days). ${leadTimeAvg > cycleTimeAvg * 1.5 ? 'Items wait significantly before development starts.' : 'Items move relatively quickly into development.'}`
-                : `Lead time averages ${leadTimeAvg} days (median: ${leadTimeMedian} days, 85th percentile: ${leadTime85th} days) from board entry to completion. This includes both pre-workflow time in ${getBeforeWorkflowLabel()} (~${backlogTime} days) and cycle time (${cycleTimeAvg} days). ${leadTimeAvg > cycleTimeAvg * 1.5 ? 'Items wait significantly before development starts.' : 'Items move relatively quickly into development.'}`;
+                ? `Lead time averages ${leadTimeAvg} days (median: ${leadTimeMedian} days, 85th percentile: ${leadTime85th} days) from creation to completion. ${leadTimeTypeText}This includes both pre-workflow time in ${getBeforeWorkflowLabel()} (~${backlogTime} days) and cycle time (${cycleTimeAvg} days). ${leadTimeAvg > cycleTimeAvg * 1.5 ? 'Items wait significantly before development starts.' : 'Items move relatively quickly into development.'}`
+                : `Lead time averages ${leadTimeAvg} days (median: ${leadTimeMedian} days, 85th percentile: ${leadTime85th} days) from board entry to completion. ${leadTimeTypeText}This includes both pre-workflow time in ${getBeforeWorkflowLabel()} (~${backlogTime} days) and cycle time (${cycleTimeAvg} days). ${leadTimeAvg > cycleTimeAvg * 1.5 ? 'Items wait significantly before development starts.' : 'Items move relatively quickly into development.'}`;
             document.getElementById('leadTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(leadTimeInsight)}</p>`;
         } else {
             // Fallback for old dashboards without metricDefinitions
             document.getElementById('leadTimeDescription').innerText = 'Overall time an individual item takes from creation to completion (closed). [Legacy calculation]';
-            const leadTimeInsight = `Lead time averages ${leadTimeAvg} days (median: ${leadTimeMedian} days, 85th percentile: ${leadTime85th} days) from creation to completion. This includes both pre-workflow time in ${getBeforeWorkflowLabel()} (~${backlogTime} days) and cycle time from ${getCycleStartColumn()} onwards (${cycleTimeAvg} days). ${leadTimeAvg > cycleTimeAvg * 1.5 ? 'Items wait significantly before workflow starts.' : 'Items move relatively quickly into workflow.'}`; 
+            const leadTimeInsight = `Lead time averages ${leadTimeAvg} days (median: ${leadTimeMedian} days, 85th percentile: ${leadTime85th} days) from creation to completion. ${leadTimeTypeText}This includes both pre-workflow time in ${getBeforeWorkflowLabel()} (~${backlogTime} days) and cycle time from ${getCycleStartColumn()} onwards (${cycleTimeAvg} days). ${leadTimeAvg > cycleTimeAvg * 1.5 ? 'Items wait significantly before workflow starts.' : 'Items move relatively quickly into workflow.'}`; 
             document.getElementById('leadTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(leadTimeInsight)}</p>`;
         }
                 document.getElementById('columnCategorizationDescription').innerHTML = `Understanding how workflow columns are classified is essential for interpreting efficiency metrics. <strong>Cycle time starts from the first ACTIVE column (${getCycleStartColumn()}).</strong>`;
@@ -1547,49 +1523,43 @@
                             
                             // Update reference lines after toggle
                             setTimeout(() => {
-                                const meta0 = chart.getDatasetMeta(0); // PBIs
-                                const meta1 = chart.getDatasetMeta(1); // Bugs
-                                
-                                let stats;
+                                const visible = chart.data.datasets
+                                    .map((ds, i) => ({ ds, i, visible: chart.isDatasetVisible(i) }))
+                                    .filter(x => x.visible);
+
+                                let stats = null;
                                 let suffix = '';
-                                
-                                if (!meta0.hidden && !meta1.hidden) {
-                                    // Both visible - use overall stats
-                                    stats = {
-                                        average: dashboardData.charts.cycleTime.average,
-                                        median: dashboardData.charts.cycleTime.median,
-                                        percentile85: dashboardData.charts.cycleTime.percentile85
-                                    };
-                                } else if (!meta0.hidden && meta1.hidden) {
-                                    // Only PBIs visible
-                                    stats = dashboardData.charts.cycleTime.byType.PBIs;
-                                    suffix = ' (PBIs)';
-                                } else if (meta0.hidden && !meta1.hidden) {
-                                    // Only Bugs visible
-                                    stats = dashboardData.charts.cycleTime.byType.Bugs;
-                                    suffix = ' (Bugs)';
-                                } else {
-                                    // Both hidden - use overall
+
+                                if (visible.length === 1) {
+                                    const label = visible[0].ds.label;
+                                    const typeStats = dashboardData.charts.cycleTime.byType ? dashboardData.charts.cycleTime.byType[label] : null;
+                                    if (typeStats) {
+                                        stats = typeStats;
+                                        suffix = ` (${label})`;
+                                    }
+                                }
+
+                                if (!stats) {
                                     stats = {
                                         average: dashboardData.charts.cycleTime.average,
                                         median: dashboardData.charts.cycleTime.median,
                                         percentile85: dashboardData.charts.cycleTime.percentile85
                                     };
                                 }
-                                
+
                                 // Update annotations
                                 chart.options.plugins.annotation.annotations.avgLine.yMin = stats.average;
                                 chart.options.plugins.annotation.annotations.avgLine.yMax = stats.average;
                                 chart.options.plugins.annotation.annotations.avgLine.label.content = `Avg: ${stats.average} days${suffix}`;
-                                
+
                                 chart.options.plugins.annotation.annotations.medianLine.yMin = stats.median;
                                 chart.options.plugins.annotation.annotations.medianLine.yMax = stats.median;
                                 chart.options.plugins.annotation.annotations.medianLine.label.content = `Median: ${stats.median} days${suffix}`;
-                                
+
                                 chart.options.plugins.annotation.annotations.percentile85Line.yMin = stats.percentile85;
                                 chart.options.plugins.annotation.annotations.percentile85Line.yMax = stats.percentile85;
                                 chart.options.plugins.annotation.annotations.percentile85Line.label.content = `85th: ${stats.percentile85} days${suffix}`;
-                                
+
                                 chart.update();
                             }, 100);
                         }
@@ -1847,57 +1817,47 @@
                             
                             // Update reference lines after toggle
                             setTimeout(() => {
-                                const meta0 = chart.getDatasetMeta(0); // PBIs
-                                const meta1 = chart.getDatasetMeta(1); // Bugs
-                                
-                                let stats;
+                                const visible = chart.data.datasets
+                                    .map((ds, i) => ({ ds, i, visible: chart.isDatasetVisible(i) }))
+                                    .filter(x => x.visible);
+
+                                let stats = null;
                                 let suffix = '';
-                                
-                                if (!meta0.hidden && !meta1.hidden) {
-                                    // Both visible - use overall stats
-                                    stats = {
-                                        average: dashboardData.charts.cycleTime.leadTimeAverage,
-                                        median: dashboardData.charts.cycleTime.leadTimeMedian,
-                                        percentile85: dashboardData.charts.cycleTime.leadTimePercentile85
-                                    };
-                                } else if (!meta0.hidden && meta1.hidden) {
-                                    // Only PBIs visible
-                                    stats = {
-                                        average: dashboardData.charts.cycleTime.byType.PBIs.leadTimeAverage,
-                                        median: dashboardData.charts.cycleTime.byType.PBIs.leadTimeMedian,
-                                        percentile85: dashboardData.charts.cycleTime.byType.PBIs.leadTimePercentile85
-                                    };
-                                    suffix = ' (PBIs)';
-                                } else if (meta0.hidden && !meta1.hidden) {
-                                    // Only Bugs visible
-                                    stats = {
-                                        average: dashboardData.charts.cycleTime.byType.Bugs.leadTimeAverage,
-                                        median: dashboardData.charts.cycleTime.byType.Bugs.leadTimeMedian,
-                                        percentile85: dashboardData.charts.cycleTime.byType.Bugs.leadTimePercentile85
-                                    };
-                                    suffix = ' (Bugs)';
-                                } else {
-                                    // Both hidden - use overall
+
+                                if (visible.length === 1) {
+                                    const label = visible[0].ds.label;
+                                    const typeStats = dashboardData.charts.cycleTime.byType ? dashboardData.charts.cycleTime.byType[label] : null;
+                                    if (typeStats) {
+                                        stats = {
+                                            average: typeStats.leadTimeAverage,
+                                            median: typeStats.leadTimeMedian,
+                                            percentile85: typeStats.leadTimePercentile85
+                                        };
+                                        suffix = ` (${label})`;
+                                    }
+                                }
+
+                                if (!stats) {
                                     stats = {
                                         average: dashboardData.charts.cycleTime.leadTimeAverage,
                                         median: dashboardData.charts.cycleTime.leadTimeMedian,
                                         percentile85: dashboardData.charts.cycleTime.leadTimePercentile85
                                     };
                                 }
-                                
+
                                 // Update annotations
                                 chart.options.plugins.annotation.annotations.avgLine.yMin = stats.average;
                                 chart.options.plugins.annotation.annotations.avgLine.yMax = stats.average;
                                 chart.options.plugins.annotation.annotations.avgLine.label.content = `Avg: ${stats.average} days${suffix}`;
-                                
+
                                 chart.options.plugins.annotation.annotations.medianLine.yMin = stats.median;
                                 chart.options.plugins.annotation.annotations.medianLine.yMax = stats.median;
                                 chart.options.plugins.annotation.annotations.medianLine.label.content = `Median: ${stats.median} days${suffix}`;
-                                
+
                                 chart.options.plugins.annotation.annotations.percentile85Line.yMin = stats.percentile85;
                                 chart.options.plugins.annotation.annotations.percentile85Line.yMax = stats.percentile85;
                                 chart.options.plugins.annotation.annotations.percentile85Line.label.content = `85th: ${stats.percentile85} days${suffix}`;
-                                
+
                                 chart.update();
                             }, 100);
                         }
