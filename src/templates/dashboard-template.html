@@ -56,14 +56,40 @@
             background: white;
             padding: 25px;
             border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.07);
-            border-left: 4px solid #667eea;
+            box-shadow: 0 4px 10px rgba(148, 163, 184, 0.20);
+            border-left: 4px solid #94a3b8;
             transition: transform 0.2s, box-shadow 0.2s;
         }
-        
+
+        .metric-card.trend-card-good {
+            border-left-color: #22c55e;
+            box-shadow: 0 6px 14px rgba(34, 197, 94, 0.18);
+        }
+
+        .metric-card.trend-card-bad {
+            border-left-color: #ef4444;
+            box-shadow: 0 6px 14px rgba(239, 68, 68, 0.20);
+        }
+
+        .metric-card.trend-card-stable {
+            border-left-color: #94a3b8;
+            box-shadow: 0 6px 14px rgba(148, 163, 184, 0.22);
+        }
+
         .metric-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 12px 24px rgba(0,0,0,0.1);
+        }
+
+        .metric-card.trend-card-good:hover {
+            box-shadow: 0 12px 24px rgba(34, 197, 94, 0.22);
+        }
+
+        .metric-card.trend-card-bad:hover {
+            box-shadow: 0 12px 24px rgba(239, 68, 68, 0.24);
+        }
+
+        .metric-card.trend-card-stable:hover {
+            box-shadow: 0 12px 24px rgba(148, 163, 184, 0.26);
         }
         
         .metric-card h3 {
@@ -426,6 +452,7 @@
                 <button class="tab-button" onclick="switchTab(event, 'flow-system')">🔄 Flow</button>
                 <button class="tab-button" onclick="switchTab(event, 'efficiency')">⚡ Efficiency</button>
                 <button class="tab-button" onclick="switchTab(event, 'blocked-items')">⚠️ Blockers & Issues</button>
+                <button class="tab-button" onclick="switchTab(event, 'configuration')">⚙️ Configuration</button>
             </div>
 
             <!-- Tab 0: Overview (Key Metric Cards) -->
@@ -539,33 +566,90 @@
         </div>
             </div>
 
-            <!-- Tab 2: Efficiency (Work Start, Cycle Time Flow, Lead Time Flow) -->
-            <div id="efficiency" class="tab-content">
-                <!-- Column Categorization Legend -->
+            <!-- Tab 2: Configuration -->
+            <div id="configuration" class="tab-content">
+                <!-- Board & scope -->
                 <div style="background: #f7fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 25px; margin-bottom: 30px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);">
-                    <h2 style="margin: 0 0 15px 0; font-size: 20px; font-weight: 700; color: #2d3748;">📋 Column Categorization for Flow Efficiency</h2>
+                    <h2 style="margin: 0 0 15px 0; font-size: 20px; font-weight: 700; color: #2d3748;">🏁 Board & scope</h2>
+                    <p style="margin: 0 0 20px 0; font-size: 14px; color: #4a5568;">Summary of the board configuration and the analysis window used for this dashboard.</p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
+                            <div style="font-weight: 700; font-size: 15px; margin-bottom: 10px; color: #2d3748;">Board</div>
+                            <div style="font-size: 13px; line-height: 1.6; color: #4a5568;" id="boardScopeBoardSummary"><!-- populated dynamically --></div>
+                        </div>
+                        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
+                            <div style="font-weight: 700; font-size: 15px; margin-bottom: 10px; color: #2d3748;">Analysis window</div>
+                            <div style="font-size: 13px; line-height: 1.6; color: #4a5568;" id="boardScopeAnalysisSummary"><!-- populated dynamically --></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- State mapping (to columns) -->
+                <div style="background: #f7fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 25px; margin-bottom: 30px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);">
+                    <h2 style="margin: 0 0 15px 0; font-size: 20px; font-weight: 700; color: #2d3748;">🧭 States & columns</h2>
+                    <p style="margin: 0 0 20px 0; font-size: 14px; color: #4a5568;">How the board groups columns.</p>
+
+                    <div style="display: grid; grid-template-columns: 1fr; gap: 20px;">
+                        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
+                            <div style="font-weight: 700; font-size: 15px; margin-bottom: 10px; color: #2d3748;">Column groups</div>
+                            <div style="font-size: 13px; line-height: 1.6; color: #4a5568;">
+                                <div style="margin-bottom: 10px;"><strong>Backlog:</strong><br><span id="configBacklogColumnsList"><!-- populated --></span></div>
+                                <div style="margin-bottom: 10px;"><strong>In progress:</strong><br><span id="configInProgressColumnsList"><!-- populated --></span></div>
+                                <div><strong>Done:</strong><br><span id="configDoneColumnsList"><!-- populated --></span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Blocker detection rules -->
+                <div style="background: #f7fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 25px; margin-bottom: 30px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);">
+                    <h2 style="margin: 0 0 15px 0; font-size: 20px; font-weight: 700; color: #2d3748;">🧱 Blocker detection rules</h2>
+                    <p style="margin: 0 0 20px 0; font-size: 14px; color: #4a5568;">How this dashboard decides an item is blocked/on hold (and how it categorises blocker types).</p>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
+                            <div style="font-weight: 700; font-size: 15px; margin-bottom: 10px; color: #2d3748;">Tags / columns</div>
+                            <div style="font-size: 13px; line-height: 1.6; color: #4a5568;">
+                                <div style="margin-bottom: 10px;"><strong>Tags:</strong><br><span id="blockerDetectionTagsList"><!-- populated --></span></div>
+                                <div><strong>Columns:</strong><br><span id="blockerDetectionColumnsList"><!-- populated --></span></div>
+                            </div>
+                        </div>
+
+                        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
+                            <div style="font-weight: 700; font-size: 15px; margin-bottom: 10px; color: #2d3748;">Category mapping (tags)</div>
+                            <div style="font-size: 13px; line-height: 1.6; color: #4a5568;" id="blockerDetectionCategoryTags"><!-- populated --></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Column Categorisation -->
+                <div style="background: #f7fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 25px; margin-bottom: 30px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);">
+                    <h2 style="margin: 0 0 15px 0; font-size: 20px; font-weight: 700; color: #2d3748;">📋 Column categorisation</h2>
                     <p style="margin: 0 0 20px 0; font-size: 14px; color: #4a5568;" id="columnCategorizationDescription">
                         <!-- Populated dynamically from boardConfig -->
                     </p>
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">
                         <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
                             <div style="font-weight: 700; font-size: 15px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; color: #2d3748;">
                                 <span style="background: #10b981; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; color: white;">✓</span>
-                                ACTIVE (Work Happening)
+                                ACTIVE (Work happening)
                             </div>
                             <div style="font-size: 13px; line-height: 1.6; color: #4a5568;" id="activeColumnsList">
                                 <!-- Populated dynamically from boardConfig -->
                             </div>
                         </div>
+
                         <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
                             <div style="font-weight: 700; font-size: 15px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; color: #2d3748;">
                                 <span style="background: #f59e0b; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; color: white;">⏸</span>
-                                WAITING (Within Workflow)
+                                WAITING (Within workflow)
                             </div>
                             <div style="font-size: 13px; line-height: 1.6; color: #4a5568;" id="waitingColumnsList">
                                 <!-- Populated dynamically from boardConfig -->
                             </div>
                         </div>
+
                         <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
                             <div style="font-weight: 700; font-size: 15px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; color: #2d3748;">
                                 <span style="background: #718096; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; color: white;">⊗</span>
@@ -575,9 +659,56 @@
                                 <!-- Populated dynamically from boardConfig -->
                             </div>
                         </div>
+
+                        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
+                            <div style="font-weight: 700; font-size: 15px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; color: #2d3748;">
+                                <span style="background: #64748b; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; color: white;">✔</span>
+                                AFTER WORKFLOW
+                            </div>
+                            <div style="font-size: 13px; line-height: 1.6; color: #4a5568;" id="afterWorkflowColumnsList">
+                                <!-- Populated dynamically from boardConfig -->
+                            </div>
+                        </div>
                     </div>
                 </div>
 
+                <!-- Item types -->
+                <div style="background: #f7fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 25px; margin-bottom: 30px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);">
+                    <h2 style="margin: 0 0 15px 0; font-size: 20px; font-weight: 700; color: #2d3748;">🏷️ Item types</h2>
+                    <p style="margin: 0 0 20px 0; font-size: 14px; color: #4a5568;">
+                        Which work item types are included in the analysis (and which are ignored to avoid double-counting or higher-level roll-ups).
+                    </p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
+                            <div style="font-weight: 700; font-size: 15px; margin-bottom: 10px; color: #2d3748;">Included</div>
+                            <div style="font-size: 13px; line-height: 1.6; color: #4a5568;" id="includedItemTypesList">
+                                <!-- Populated dynamically from analysis scope -->
+                            </div>
+                        </div>
+
+                        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
+                            <div style="font-weight: 700; font-size: 15px; margin-bottom: 10px; color: #2d3748;">Ignored</div>
+                            <div style="font-size: 13px; line-height: 1.6; color: #4a5568;" id="ignoredItemTypesList">
+                                <!-- Populated dynamically from analysis scope -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Board colour rules -->
+                <div style="background: #f7fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 25px; margin-bottom: 30px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);">
+                    <h2 style="margin: 0 0 15px 0; font-size: 20px; font-weight: 700; color: #2d3748;">🎨 Board colour rules</h2>
+                    <p style="margin: 0 0 20px 0; font-size: 14px; color: #4a5568;">
+                        Intended to mirror Azure DevOps board card styling (e.g. "red when blocked"). This dashboard uses blocker categories (tags) to apply the same concepts.
+                    </p>
+                    <div style="font-size: 13px; line-height: 1.6; color: #4a5568;" id="boardColourRulesLegend">
+                        <!-- Populated dynamically from blocker categories -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 2: Efficiency (Work Start, Cycle Time Flow, Lead Time Flow) -->
+            <div id="efficiency" class="tab-content">
                 <div class="charts-grid">
             <!-- Work Start Efficiency - FULL WIDTH -->
             <div class="chart-card" style="grid-column: 1 / -1;">
@@ -1061,10 +1192,16 @@
             
             return `<span class="trend-indicator ${className}">${arrow}</span>${explanation}`;
         }
+
+        function getTrendCardClass(trend) {
+            if (!trend || !trend.direction) return 'trend-card-stable';
+            if (trend.direction === 'stable') return 'trend-card-stable';
+            return trend.isGood ? 'trend-card-good' : 'trend-card-bad';
+        }
         
         // Render metric cards
         const metricCardsHTML = `
-            <div class="metric-card">
+            <div class="metric-card ${getTrendCardClass(dashboardData.metrics.throughput.trend)}">
                 <h3>Throughput</h3>
                 <div class="metric-value">
                     <span>${dashboardData.metrics.throughput.avg}</span>
@@ -1076,7 +1213,7 @@
                 </div>
             </div>
             
-            <div class="metric-card">
+            <div class="metric-card ${getTrendCardClass(dashboardData.metrics.cycleTime.trend)}">
                 <h3>Cycle Time</h3>
                 <div class="metric-value">
                     <span>${dashboardData.charts.cycleTime.average}</span>
@@ -1088,7 +1225,7 @@
                 </div>
             </div>
             
-            <div class="metric-card">
+            <div class="metric-card ${getTrendCardClass(dashboardData.metrics.leadTime.trend)}">
                 <h3>Lead Time</h3>
                 <div class="metric-value">
                     <span>${dashboardData.metrics.leadTime.avg}</span>
@@ -1100,7 +1237,7 @@
                 </div>
             </div>
             
-            <div class="metric-card">
+            <div class="metric-card ${getTrendCardClass(dashboardData.metrics.bugRate.trend)}">
                 <h3>Bug Rate</h3>
                 <div class="metric-value">
                     <span>${dashboardData.metrics.bugRate.percentage}%</span>
@@ -1110,7 +1247,7 @@
                 <div class="metric-trend ${dashboardData.metrics.bugRate.class}">${dashboardData.metrics.bugRate.count} of ${dashboardData.metrics.bugRate.total} completed items</div>
             </div>
             
-            <div class="metric-card">
+            <div class="metric-card ${getTrendCardClass(dashboardData.metrics.leadTimeFlowEfficiency.trend)}" id="overallLtfeCard">
                 <h3>⚡ Lead Flow Efficiency</h3>
                 <div class="metric-value">
                     <span id="overallLtfeValue">-</span>
@@ -1120,7 +1257,7 @@
                 <div class="metric-trend trend-neutral">Active work / Total lifetime</div>
             </div>
             
-            <div class="metric-card" id="systemStabilityCard">
+            <div class="metric-card ${getTrendCardClass(dashboardData.metrics.systemStability.trend)}" id="systemStabilityCard">
                 <h3>Backlog Growth</h3>
                 <div class="metric-value">
                     <span id="systemStabilityRatio">${dashboardData.metrics.systemStability.ratio}</span>
@@ -1130,7 +1267,7 @@
                 <div class="metric-trend ${dashboardData.metrics.systemStability.class}" id="systemStabilityText">${dashboardData.metrics.systemStability.text}</div>
             </div>
             
-            <div class="metric-card">
+            <div class="metric-card ${getTrendCardClass(dashboardData.metrics.wip.trend)}">
                 <h3>Work In Progress</h3>
                 <div class="metric-value">
                     <span>${dashboardData.metrics.wip.count}</span>
@@ -1142,7 +1279,7 @@
                 </div>
             </div>
             
-            <div class="metric-card">
+            <div class="metric-card ${getTrendCardClass(dashboardData.metrics.blocked.trend)}">
                 <h3>Blocked Items</h3>
                 <div class="metric-value">
                     <span>${dashboardData.metrics.blocked.count}</span>
@@ -1212,15 +1349,123 @@
             const leadTimeInsight = `Lead time averages ${leadTimeAvg} days (median: ${leadTimeMedian} days, 85th percentile: ${leadTime85th} days) from creation to completion. ${leadTimeTypeText}This includes both pre-workflow time in ${getBeforeWorkflowLabel()} (~${backlogTime} days) and cycle time from ${getCycleStartColumn()} onwards (${cycleTimeAvg} days). ${leadTimeAvg > cycleTimeAvg * 1.5 ? 'Items wait significantly before workflow starts.' : 'Items move relatively quickly into workflow.'}`; 
             document.getElementById('leadTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(leadTimeInsight)}</p>`;
         }
-                document.getElementById('columnCategorizationDescription').innerHTML = `Understanding how workflow columns are classified is essential for interpreting efficiency metrics. <strong>Cycle time starts from the first ACTIVE column (${getCycleStartColumn()}).</strong>`;
+        const configSummary = dashboardData.configuration || null;
+
+        // Board & scope
+        const boardSummary = configSummary && configSummary.board ? configSummary.board : null;
+        const boardLines = [];
+        if (boardSummary && boardSummary.boardName) boardLines.push(`<strong>${escapeHtml(boardSummary.boardName)}</strong>`);
+        if (boardSummary && (boardSummary.organization || boardSummary.project || boardSummary.team)) {
+            const parts = [boardSummary.organization, boardSummary.project, boardSummary.team].filter(Boolean).map(escapeHtml);
+            boardLines.push(parts.join(' / '));
+        }
+        if (boardSummary && boardSummary.configuredDate) boardLines.push(`Configured: ${escapeHtml(boardSummary.configuredDate)}`);
+        if (boardSummary && boardSummary.configFile) boardLines.push(`Config: <code>${escapeHtml(boardSummary.configFile)}</code>`);
+        document.getElementById('boardScopeBoardSummary').innerHTML = boardLines.length > 0 ? boardLines.join('<br>') : '<span style="color: #718096;">(not provided)</span>';
+
+        const analysisLines = [];
+        analysisLines.push(`<strong>Period:</strong> ${escapeHtml(dashboardData.period)}`);
+        document.getElementById('boardScopeAnalysisSummary').innerHTML = analysisLines.join('<br>');
+
+        // States & columns (from config)
+        const cfgColumns = configSummary && configSummary.columns ? configSummary.columns : null;
+        const backlogCols = cfgColumns && Array.isArray(cfgColumns.backlog) ? cfgColumns.backlog : [];
+        const inProgressCols = cfgColumns && Array.isArray(cfgColumns.inProgress) ? cfgColumns.inProgress : [];
+        const doneCols = cfgColumns && Array.isArray(cfgColumns.done) ? cfgColumns.done : [];
+
+        document.getElementById('configBacklogColumnsList').innerHTML = backlogCols.length > 0
+            ? backlogCols.map(c => `• ${escapeHtml(c)}`).join('<br>')
+            : '<span style="color: #718096;">(not provided)</span>';
+        document.getElementById('configInProgressColumnsList').innerHTML = inProgressCols.length > 0
+            ? inProgressCols.map(c => `• ${escapeHtml(c)}`).join('<br>')
+            : '<span style="color: #718096;">(not provided)</span>';
+        document.getElementById('configDoneColumnsList').innerHTML = doneCols.length > 0
+            ? doneCols.map(c => `• ${escapeHtml(c)}`).join('<br>')
+            : '<span style="color: #718096;">(not provided)</span>';
+
+        // Blocker detection rules (from config)
+        const cfgBlockers = configSummary && configSummary.blockers ? configSummary.blockers : null;
+        const blockerTags = cfgBlockers && Array.isArray(cfgBlockers.tags) ? cfgBlockers.tags : [];
+        const blockerColumns = cfgBlockers && Array.isArray(cfgBlockers.columns) ? cfgBlockers.columns : [];
+        const blockerCategoriesForRules = cfgBlockers && cfgBlockers.categories && typeof cfgBlockers.categories === 'object' ? cfgBlockers.categories : null;
+
+        document.getElementById('blockerDetectionTagsList').innerHTML = blockerTags.length > 0
+            ? blockerTags.map(t => `<code>${escapeHtml(t)}</code>`).join(' ')
+            : '<span style="color: #718096;">(none)</span>';
+
+        document.getElementById('blockerDetectionColumnsList').innerHTML = blockerColumns.length > 0
+            ? blockerColumns.map(c => `• ${escapeHtml(c)}`).join('<br>')
+            : '<span style="color: #718096;">(none)</span>';
+
+        if (blockerCategoriesForRules && Object.keys(blockerCategoriesForRules).length > 0) {
+            document.getElementById('blockerDetectionCategoryTags').innerHTML = Object.entries(blockerCategoriesForRules)
+                .map(([key, cat]) => {
+                    const label = (cat && cat.label) ? cat.label : key;
+                    const tags = (cat && Array.isArray(cat.tags)) ? cat.tags : [];
+                    const tagsHtml = tags.length > 0 ? tags.map(t => `<code>${escapeHtml(t)}</code>`).join(' ') : '<span style="color: #718096;">(no tags)</span>';
+                    return `<div style="margin-bottom: 10px;"><strong>${escapeHtml(label)}:</strong> ${tagsHtml}</div>`;
+                })
+                .join('');
+        } else {
+            document.getElementById('blockerDetectionCategoryTags').innerHTML = '<span style="color: #718096;">(not provided)</span>';
+        }
+
+        // Column categorisation (local boardConfig used by efficiency charts)
+        document.getElementById('columnCategorizationDescription').innerHTML = `Columns are classified for flow-efficiency calculations. <strong>Cycle time starts from the first ACTIVE column (${escapeHtml(getCycleStartColumn())}).</strong>`;
         document.getElementById('wseDescription').innerText = `Measures how quickly work starts after being created. Cycle time starts when items reach "${getCycleStartColumn()}" (first active column). High values (>50%) mean items leave pre-workflow columns quickly. Low values indicate long delays in the "${getBeforeWorkflowLabel()}" columns.`;
         document.getElementById('ctfeDescription').innerText = `Measures flow during cycle time (from ${getCycleStartColumn()} onwards). Active columns: ${getActiveColumnsLabel()}. Waiting columns: ${getWaitingColumnsLabel()}. High values (>80%) mean minimal waiting in Ready states.`;
         document.getElementById('ltfeDescription').innerText = `Measures overall efficiency from creation to completion. High values (>40%) mean most time is spent actively working. Low values indicate items spend most time waiting - either in backlog before starting or queued between workflow stages.`;
-        
+
         // Populate column categorization legend lists
-        document.getElementById('activeColumnsList').innerHTML = boardConfig.activeColumns.map(col => `• ${col}`).join('<br>');
-        document.getElementById('waitingColumnsList').innerHTML = boardConfig.waitingColumns.map(col => `• ${col}`).join('<br>');
-        document.getElementById('beforeWorkflowColumnsList').innerHTML = boardConfig.beforeWorkflowColumns.map(col => `• ${col}`).join('<br>');
+        document.getElementById('activeColumnsList').innerHTML = boardConfig.activeColumns.map(col => `• ${escapeHtml(col)}`).join('<br>');
+        document.getElementById('waitingColumnsList').innerHTML = boardConfig.waitingColumns.map(col => `• ${escapeHtml(col)}`).join('<br>');
+        document.getElementById('beforeWorkflowColumnsList').innerHTML = boardConfig.beforeWorkflowColumns.map(col => `• ${escapeHtml(col)}`).join('<br>');
+        document.getElementById('afterWorkflowColumnsList').innerHTML = boardConfig.afterWorkflowColumns.map(col => `• ${escapeHtml(col)}`).join('<br>');
+
+        const analysisScope = dashboardData.analysisScope || null;
+        const includedTypes = (analysisScope && analysisScope.workItemTypes && analysisScope.workItemTypes.included) ? analysisScope.workItemTypes.included : [];
+        const ignoredConfigured = (analysisScope && analysisScope.workItemTypes && analysisScope.workItemTypes.excludedConfigured) ? analysisScope.workItemTypes.excludedConfigured : [];
+        const ignoredObserved = (analysisScope && analysisScope.workItemTypes && analysisScope.workItemTypes.ignoredObserved) ? analysisScope.workItemTypes.ignoredObserved : [];
+        const ignoredAll = Array.from(new Set([...(ignoredConfigured || []), ...(ignoredObserved || [])])).sort();
+
+        document.getElementById('includedItemTypesList').innerHTML = includedTypes.length > 0
+            ? includedTypes.map(t => `• ${escapeHtml(t)}`).join('<br>')
+            : '<span style="color: #718096;">(not provided)</span>';
+
+        document.getElementById('ignoredItemTypesList').innerHTML = ignoredAll.length > 0
+            ? ignoredAll.map(t => `• ${escapeHtml(t)}`).join('<br>')
+            : '<span style="color: #718096;">(none)</span>';
+
+        const blockerCategories = dashboardData.charts && dashboardData.charts.blockedItems && dashboardData.charts.blockedItems.current
+            ? dashboardData.charts.blockedItems.current.categories
+            : null;
+
+        if (blockerCategories && typeof blockerCategories === 'object' && Object.keys(blockerCategories).length > 0) {
+            const categoryEntries = Object.entries(blockerCategories);
+            document.getElementById('boardColourRulesLegend').innerHTML = `
+                <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+                    ${categoryEntries.map(([key, cat]) => {
+                        const label = (cat && cat.label) ? cat.label : key;
+                        const rawColor = (cat && cat.color) ? String(cat.color) : '';
+                        const color = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(rawColor) ? rawColor : '#94a3b8';
+                        const tags = (cat && Array.isArray(cat.tags)) ? cat.tags : [];
+                        const tagsHtml = tags.length > 0 ? tags.map(t => `<code>${escapeHtml(t)}</code>`).join(' ') : '<span style="color: #718096;">(no tags)</span>';
+
+                        return `
+                            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                    <span style="width: 12px; height: 12px; border-radius: 3px; background: ${color}; border: 1px solid #cbd5e0;"></span>
+                                    <span style="font-weight: 700; color: #2d3748;">${escapeHtml(label)}</span>
+                                </div>
+                                <div style="font-size: 12px; color: #4a5568;">Tags: ${tagsHtml}</div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        } else {
+            document.getElementById('boardColourRulesLegend').innerHTML = '<span style="color: #718096;">(no board colour rules configured)</span>';
+        }
         
         // Note: Efficiency insights (WSE, CTFE, LTFE) are generated dynamically from real data
         document.getElementById('cfdInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(dashboardData.insights.cfd)}</p>`;
@@ -1364,34 +1609,43 @@
             const slope = calculateSlope(values);
             const avgValue = values.reduce((a, b) => a + b, 0) / values.length;
             const relativeSlope = avgValue !== 0 ? Math.abs(slope / avgValue) : 0;
-            
-            // Determine if trend is significant
-            let arrow, color;
+
+            /** @type {{direction: 'up'|'down'|'stable', isGood: boolean}} */
+            let computedTrend;
             if (relativeSlope < threshold) {
-                // Stable trend
-                arrow = '→';
-                color = '#6b7280'; // gray
+                computedTrend = { direction: 'stable', isGood: true };
             } else if (slope > 0) {
                 // Increasing trend
-                arrow = '↑';
-                color = lowerIsBetter ? '#ef4444' : '#22c55e'; // red if lower is better, green otherwise
+                computedTrend = { direction: 'up', isGood: !lowerIsBetter };
             } else {
                 // Decreasing trend
-                arrow = '↓';
-                color = lowerIsBetter ? '#22c55e' : '#ef4444'; // green if lower is better, red otherwise
+                computedTrend = { direction: 'down', isGood: lowerIsBetter };
             }
-            
-            // Find the metric card and update the trend indicator
+
+            // Find the metric card and update both the arrow AND the card styling
             const metricCards = document.querySelectorAll('.metric-card');
             metricCards.forEach(card => {
                 const heading = card.querySelector('h3');
-                if (heading && heading.textContent.trim() === metricName) {
-                    const trendIndicator = card.querySelector('.trend-indicator');
-                    if (trendIndicator) {
-                        trendIndicator.textContent = arrow;
-                        trendIndicator.style.color = color;
-                    }
+                if (!heading || heading.textContent.trim() !== metricName) return;
+
+                // Update arrow (use the same CSS classes as getTrendIndicator)
+                const trendIndicator = card.querySelector('.trend-indicator');
+                if (trendIndicator) {
+                    const arrow = computedTrend.direction === 'up' ? '↑' : (computedTrend.direction === 'down' ? '↓' : '→');
+                    const arrowClass = computedTrend.direction === 'stable'
+                        ? 'trend-stable'
+                        : (computedTrend.direction === 'up'
+                            ? (computedTrend.isGood ? 'trend-up-good' : 'trend-up-bad')
+                            : (computedTrend.isGood ? 'trend-down-good' : 'trend-down-bad'));
+
+                    trendIndicator.textContent = arrow;
+                    trendIndicator.className = `trend-indicator ${arrowClass}`;
+                    trendIndicator.style.color = '';
                 }
+
+                // Update card shadow/border class to match the arrow rule
+                card.classList.remove('trend-card-good', 'trend-card-bad', 'trend-card-stable');
+                card.classList.add(getTrendCardClass(computedTrend));
             });
         }
 
@@ -2511,10 +2765,16 @@
             
             // Update trend indicator for lead flow efficiency
             const ltfeTrendEl = document.getElementById('overallLtfeTrend');
+            const ltfeCardEl = document.getElementById('overallLtfeCard');
             if (ltfeTrendEl && dashboardData.metrics.leadTimeFlowEfficiency.trend) {
                 const trend = dashboardData.metrics.leadTimeFlowEfficiency.trend;
                 const trendHtml = getTrendIndicator(trend, ltfeAvg + '%', trend.previousValue);
                 ltfeTrendEl.innerHTML = trendHtml;
+
+                if (ltfeCardEl) {
+                    ltfeCardEl.classList.remove('trend-card-good', 'trend-card-bad', 'trend-card-stable');
+                    ltfeCardEl.classList.add(getTrendCardClass(trend));
+                }
             }
             
             // Generate dynamic insight for Lead Time Flow Efficiency
@@ -2861,18 +3121,32 @@
                 if (ratioEl) ratioEl.textContent = gapFormatted;
                 
                 // Update trend indicator with previousValue
+                const stabilityCardEl = document.getElementById('systemStabilityCard');
                 if (trendEl && dashboardData.metrics.systemStability.trend) {
                     const trend = dashboardData.metrics.systemStability.trend;
                     const trendHtml = getTrendIndicator(trend, gapFormatted, trend.previousValue);
                     trendEl.innerHTML = trendHtml;
+
+                    if (stabilityCardEl) {
+                        stabilityCardEl.classList.remove('trend-card-good', 'trend-card-bad', 'trend-card-stable');
+                        stabilityCardEl.classList.add(getTrendCardClass(trend));
+                    }
                 } else if (trendEl) {
                     // Fallback if no trend data
-                    if (parseFloat(arrivalRate) > parseFloat(departureRate) * 1.1) {
+                    const isGrowing = parseFloat(arrivalRate) > parseFloat(departureRate) * 1.1;
+                    const isShrinking = parseFloat(departureRate) > parseFloat(arrivalRate) * 1.1;
+
+                    if (isGrowing) {
                         trendEl.innerHTML = '<span class="trend-indicator trend-up-bad">↑</span>';
-                    } else if (parseFloat(departureRate) > parseFloat(arrivalRate) * 1.1) {
+                    } else if (isShrinking) {
                         trendEl.innerHTML = '<span class="trend-indicator trend-down-good">↓</span>';
                     } else {
                         trendEl.innerHTML = '<span class="trend-indicator trend-stable">→</span>';
+                    }
+
+                    if (stabilityCardEl) {
+                        stabilityCardEl.classList.remove('trend-card-good', 'trend-card-bad', 'trend-card-stable');
+                        stabilityCardEl.classList.add(isGrowing ? 'trend-card-bad' : (isShrinking ? 'trend-card-good' : 'trend-card-stable'));
                     }
                 }
                 

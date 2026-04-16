@@ -33,8 +33,10 @@ $rawData = Get-Content $FlowDataPath -Raw | ConvertFrom-Json
 
 # Load configuration if provided
 $config = $null
+$configFileLeaf = $null
 if ($ConfigFile -and (Test-Path $ConfigFile)) {
     $config = Get-Content $ConfigFile -Raw | ConvertFrom-Json
+    $configFileLeaf = Split-Path $ConfigFile -Leaf
     Write-Host "  Using configuration: $ConfigFile" -ForegroundColor Gray
 }
 
@@ -54,6 +56,33 @@ function Test-IsTrackedWorkItemType {
 
 $activeItems = @($rawData.activeItems | Where-Object { Test-IsTrackedWorkItemType $_.fields.'System.WorkItemType' })
 $completedItems = @($rawData.completedItems | Where-Object { Test-IsTrackedWorkItemType $_.fields.'System.WorkItemType' })
+
+# Analysis scope (for the dashboard "Configuration" tab)
+$allTypesInRaw = @()
+$allTypesInRaw += @($rawData.activeItems | ForEach-Object { $_.fields.'System.WorkItemType' })
+$allTypesInRaw += @($rawData.completedItems | ForEach-Object { $_.fields.'System.WorkItemType' })
+$allTypesInRaw = @(
+    $allTypesInRaw |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Sort-Object -Unique
+)
+
+$ignoredObservedWorkItemTypes = @(
+    $allTypesInRaw |
+        Where-Object { $trackedWorkItemTypes -notcontains $_ } |
+        Sort-Object -Unique
+)
+
+$excludedConfiguredWorkItemTypes = if ($config -and $config.workItemTypes -and $config.workItemTypes.excluded) {
+    @($config.workItemTypes.excluded)
+} else {
+    @()
+}
+$excludedConfiguredWorkItemTypes = @(
+    $excludedConfiguredWorkItemTypes |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Sort-Object -Unique
+)
 
 # Helper: Calculate days between dates
 function Get-DaysBetween($date1, $date2) {
@@ -453,8 +482,13 @@ foreach ($ws in $weekStarts) {
     $key = $ws.ToString('yyyy-MM-dd')
     $weekItems = if ($completedByWeekMap.ContainsKey($key)) { @($completedByWeekMap[$key]) } else { @() }
 
-    $throughputValues += $weekItems.Count
-    $throughputItems += ,@($weekItems | ForEach-Object { @{ id = $_.id; title = $_.title } })
+    # Build items list for this week first
+    $weekItemsList = @($weekItems | ForEach-Object { @{ id = $_.id; title = $_.title } })
+    
+    # Count based on the built list to ensure consistency
+    $count = $weekItemsList.Count
+    $throughputValues += $count
+    $throughputItems += ,@($weekItemsList)
 }
 
 $throughputChart = @{
@@ -1151,7 +1185,8 @@ function Get-LinearRegressionLine {
     return $line
 }
 
-$analysisStartDate = $analysisStart.Date
+# Align daily charts to start on Monday for consistency with weekly charts
+$analysisStartDate = (Get-WeekStartMonday $analysisStart).Date
 $analysisEndDate = $analysisEnd.Date
 $dayStarts = @()
 for ($d = $analysisStartDate; $d -le $analysisEndDate; $d = $d.AddDays(1)) {
@@ -1670,13 +1705,16 @@ foreach ($g in $completedTypeGroupsOrdered) {
             label = $label
             workItemType = $workItemType
             data = @($items | ForEach-Object {
+                # Use Monday of the week for x-axis to align with other charts
+                $completedDate = [DateTime]$_.completedDate
+                $weekStart = Get-WeekStartMonday $completedDate
                 @{
-                    x = ([DateTime]$_.completedDate).ToString('dd MMM')
+                    x = $weekStart.ToString('dd MMM')
                     y = $_.cycleTime
                     leadTime = $_.leadTime
                     id = $_.id
                     title = $_.title
-                    completedDate = ([DateTime]$_.completedDate).ToString('dd MMM yyyy')
+                    completedDate = $completedDate.ToString('dd MMM yyyy')
                     columnTime = $_.columnTime
                 }
             })
@@ -1798,6 +1836,32 @@ $dashboardData = @{
             $WorkflowStartColumn 
         } else { 
             'In Development' 
+        }
+    }
+
+    analysisScope = @{
+        workItemTypes = @{
+            included = $trackedWorkItemTypes
+            excludedConfigured = $excludedConfiguredWorkItemTypes
+            ignoredObserved = $ignoredObservedWorkItemTypes
+        }
+    }
+
+    configuration = @{
+        board = @{
+            boardName = if ($config -and $config.boardName) { $config.boardName } else { $null }
+            organization = if ($config -and $config.organization) { $config.organization } else { $rawData.metadata.organization }
+            project = if ($config -and $config.project) { $config.project } else { $rawData.metadata.project }
+            team = if ($config -and $config.team) { $config.team } else { $rawData.metadata.team }
+            configuredDate = if ($config -and $config.configuredDate) { $config.configuredDate } else { $null }
+            configFile = $configFileLeaf
+        }
+        columns = if ($config -and $config.columns) { $config.columns } else { $null }
+        states = if ($config -and $config.states) { $config.states } else { $null }
+        blockers = @{
+            tags = if ($config -and $config.blockers -and $config.blockers.tags) { @($config.blockers.tags) } else { @() }
+            columns = if ($config -and $config.blockers -and $config.blockers.columns) { @($config.blockers.columns) } else { @() }
+            categories = $blockerCategories
         }
     }
     
