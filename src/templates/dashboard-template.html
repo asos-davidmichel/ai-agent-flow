@@ -3246,11 +3246,15 @@
             const timeTotals = dashboardData.charts.timeInColumn.totals || [];
             const timeCounts = dashboardData.charts.timeInColumn.counts || [];
 
-            const maxValue = Math.max(...timeValues);
-            const sortedValues = [...timeValues].sort((a, b) => b - a);
-            const secondMax = sortedValues[1] || maxValue;
+            const positiveValues = timeValues.filter(v => typeof v === 'number' && v > 0);
+            const sortedPositives = [...positiveValues].sort((a, b) => b - a);
+            const maxValue = sortedPositives[0] ?? 0;
+            const secondMax = sortedPositives[1] ?? maxValue;
             
             const columnColors = timeValues.map(val => {
+                if (!(typeof val === 'number') || val <= 0) {
+                    return '#d1d5db'; // Gray when no data
+                }
                 if (val === maxValue || val === secondMax) {
                     return '#ef4444'; // Red for worst columns
                 }
@@ -3265,7 +3269,7 @@
                         label: 'Avg time in column (days)',
                         data: timeValues,
                         backgroundColor: columnColors,
-                        borderColor: columnColors.map(c => c === '#ef4444' ? '#dc2626' : '#3182ce'),
+                        borderColor: columnColors.map(c => c === '#ef4444' ? '#dc2626' : (c === '#d1d5db' ? '#9ca3af' : '#3182ce')),
                         borderWidth: 1
                     }]
                 },
@@ -3322,6 +3326,7 @@
             new Chart(document.getElementById('workItemAgeChart'), {
                 type: 'scatter',
                 data: {
+                    labels: dashboardData.charts.workItemAge.labels || [],
                     datasets: dashboardData.charts.workItemAge.states.map((state, index) => {
                         const colors = ['#4338ca', '#0891b2', '#059669', '#d97706', '#dc2626', '#be185d'];
                         return {
@@ -3440,6 +3445,7 @@
                     },
                         x: {
                             type: 'category',
+                            labels: dashboardData.charts.workItemAge.labels || [],
                             title: { display: false },
                             grid: { display: false }
                         }

@@ -1479,6 +1479,29 @@ $wipInsightText = if ($wipAgingItems.Count -eq 0) {
     }
 }
 
+# Work Item Age: only show in-progress board columns (active work), in board order
+$workItemAgeAllowedColumns = @()
+
+if ($config -and $config.columns -and $config.columns.inProgress) {
+    $workItemAgeAllowedColumns = @(
+        @($config.columns.inProgress) |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            Select-Object -Unique
+    )
+} elseif ($rawData.boardConfig -and $rawData.boardConfig.columns) {
+    # Fallback: use board order, excluding first+last columns
+    $workflowColumnsAll = @(
+        @($rawData.boardConfig.columns) |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    )
+
+    $workItemAgeAllowedColumns = if ($workflowColumnsAll.Count -ge 3) {
+        @($workflowColumnsAll[1..($workflowColumnsAll.Count - 2)])
+    } else {
+        @()
+    }
+}
+
 $workItemAgeItems = @()
 foreach ($wi in $activeItems) {
     $fields = $wi.fields
@@ -1489,8 +1512,8 @@ foreach ($wi in $activeItems) {
     if ($ageDays -lt 0) { $ageDays = 0 }
 
     $column = $fields.'System.BoardColumn'
-    if ([string]::IsNullOrWhiteSpace($column)) { $column = $fields.'System.State' }
-    if ([string]::IsNullOrWhiteSpace($column)) { $column = 'Unknown' }
+    if ([string]::IsNullOrWhiteSpace($column)) { continue }
+    if ($workItemAgeAllowedColumns -notcontains $column) { continue }
 
     $workItemAgeItems += [PSCustomObject]@{
         id = $wi.id
@@ -1500,16 +1523,18 @@ foreach ($wi in $activeItems) {
     }
 }
 
+# Build chart series in board column order, including empty columns
 $workItemAgeStates = @()
-$workItemAgeGroups = @($workItemAgeItems | Group-Object -Property column | Sort-Object -Property Name)
-foreach ($g in $workItemAgeGroups) {
+foreach ($col in $workItemAgeAllowedColumns) {
     $columnItems = @()
-    foreach ($it in ($g.Group | Sort-Object -Property age -Descending)) {
+    $itemsInCol = @($workItemAgeItems | Where-Object { $_.column -eq $col } | Sort-Object -Property age -Descending)
+
+    foreach ($it in $itemsInCol) {
         $columnItems += @{ id = $it.id; title = $it.title; age = [int]$it.age }
     }
 
     $workItemAgeStates += @{
-        name = $g.Name
+        name = $col
         items = $columnItems
     }
 }
@@ -1525,7 +1550,7 @@ $workItemAgeP85 = if ($workItemAgeAges.Count -gt 0) {
 } else { 0 }
 
 $workItemAgeChart = @{
-    labels = @()
+    labels = @($workItemAgeAllowedColumns)
     states = $workItemAgeStates
     average = $workItemAgeAvg
     median = $workItemAgeMedian
@@ -1550,8 +1575,8 @@ $workItemAgeInsightText = if ($workItemAgeItems.Count -eq 0) {
         }
     }
 
-    $worstColumn = @($columnStats | Sort-Object -Property median -Descending | Select-Object -First 1)
-    $oldest = @($workItemAgeItems | Sort-Object -Property age -Descending | Select-Object -First 1)
+    $worstColumn = $columnStats | Sort-Object -Property median -Descending | Select-Object -First 1
+    $oldest = $workItemAgeItems | Sort-Object -Property age -Descending | Select-Object -First 1
 
     $hotspotText = if ($worstColumn) {
         $over14Text = if ($worstColumn.over14 -gt 0) { "$($worstColumn.over14) >14d" } else { 'no >14d items' }
@@ -1868,10 +1893,8 @@ $timeInColumnTotals = @()
 $timeInColumnCounts = @()
 
 foreach ($col in $orderedColumns) {
-    if (-not $columnTotals.ContainsKey($col)) { continue }
-
-    $total = [Math]::Round([double]$columnTotals[$col], 1)
-    $count = [int]$columnCounts[$col]
+    $total = if ($columnTotals.ContainsKey($col)) { [Math]::Round([double]$columnTotals[$col], 1) } else { 0 }
+    $count = if ($columnCounts.ContainsKey($col)) { [int]$columnCounts[$col] } else { 0 }
     $avg = if ($count -gt 0) { [Math]::Round(($total / $count), 1) } else { 0 }
 
     $timeInColumnLabels += $col
@@ -1900,9 +1923,14 @@ $timeInColumnInsightText = if ($timeInColumnLabels.Count -eq 0) {
         }
     }
 
-    $top = @($rows | Sort-Object -Property Avg -Descending | Select-Object -First 3)
-    $topText = ($top | ForEach-Object { "$($_.Column): $($_.Avg)d avg (across $($_.Count) items)" }) -join "; "
-    "Longest average time is in: $topText."
+    $rowsWithData = @($rows | Where-Object { $_.Count -gt 0 })
+    if ($rowsWithData.Count -eq 0) {
+        "No columnTime data available to compute time in column."
+    } else {
+        $top = @($rowsWithData | Sort-Object -Property Avg -Descending | Select-Object -First 3)
+        $topText = ($top | ForEach-Object { "$($_.Column): $($_.Avg)d avg (across $($_.Count) items)" }) -join "; "
+        "Longest average time is in: $topText."
+    }
 }
 
 # Build transitions
