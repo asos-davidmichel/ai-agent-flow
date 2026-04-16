@@ -38,6 +38,23 @@ if ($ConfigFile -and (Test-Path $ConfigFile)) {
     Write-Host "  Using configuration: $ConfigFile" -ForegroundColor Gray
 }
 
+# Limit analysis to tracked work item types (PBI/Story/Bug level)
+$trackedWorkItemTypes = if ($config -and $config.workItemTypes -and $config.workItemTypes.tracked) {
+    @($config.workItemTypes.tracked)
+} else {
+    @('Product Backlog Item', 'User Story', 'Story', 'Bug')
+}
+
+function Test-IsTrackedWorkItemType {
+    param([string]$WorkItemType)
+
+    if ([string]::IsNullOrWhiteSpace($WorkItemType)) { return $false }
+    return ($trackedWorkItemTypes -contains $WorkItemType)
+}
+
+$activeItems = @($rawData.activeItems | Where-Object { Test-IsTrackedWorkItemType $_.fields.'System.WorkItemType' })
+$completedItems = @($rawData.completedItems | Where-Object { Test-IsTrackedWorkItemType $_.fields.'System.WorkItemType' })
+
 # Helper: Calculate days between dates
 function Get-DaysBetween($date1, $date2) {
     if (-not $date1 -or -not $date2) { return 0 }
@@ -345,7 +362,7 @@ function Get-CycleTimeFromUpdates($item) {
 
 # Build completed items with metrics calculated from state transitions
 $completedWithMetrics = @()
-foreach ($item in $rawData.completedItems) {
+foreach ($item in $completedItems) {
     # Try to use provided columnTime data if available
     $columnTime = ($ColumnTimeData | Where-Object { $_.WorkItemId -eq $item.id }).ColumnTime
     if (-not $columnTime) { $columnTime = @{} }
@@ -478,8 +495,8 @@ $throughputStdDev = if ($throughputValues.Count -gt 0) {
 } else { 0 }
 $throughputCV = if ($throughputMean -gt 0) { $throughputStdDev / $throughputMean } else { 0 }
 
-# Calculate weekly WIP snapshots for historical bug rate (FIXED: now includes active items)
-$wipSnapshots = Get-WeeklyWIPSnapshot -completedItems $rawData.completedItems -activeItems $rawData.activeItems -startDate $analysisStart -endDate $analysisEnd
+# Calculate weekly WIP snapshots for historical bug rate (tracked types only)
+$wipSnapshots = Get-WeeklyWIPSnapshot -completedItems $completedItems -activeItems $activeItems -startDate $analysisStart -endDate $analysisEnd
 
 # Build bug rate chart (weekly WIP bug percentage) with full tooltip data
 $bugRateLabels = @()
@@ -501,9 +518,9 @@ foreach ($week in $wipSnapshots) {
     
     foreach ($bugId in $week.bugIds) {
         # First try completed items, then active items
-        $bugItem = $rawData.completedItems | Where-Object { $_.id -eq $bugId } | Select-Object -First 1
+        $bugItem = $completedItems | Where-Object { $_.id -eq $bugId } | Select-Object -First 1
         if (-not $bugItem) {
-            $bugItem = $rawData.activeItems | Where-Object { $_.id -eq $bugId } | Select-Object -First 1
+            $bugItem = $activeItems | Where-Object { $_.id -eq $bugId } | Select-Object -First 1
         }
         if ($bugItem) {
             $wipBugItems += @{
@@ -515,9 +532,9 @@ foreach ($week in $wipSnapshots) {
     
     foreach ($featureId in $week.featureIds) {
         # First try completed items, then active items
-        $featureItem = $rawData.completedItems | Where-Object { $_.id -eq $featureId } | Select-Object -First 1
+        $featureItem = $completedItems | Where-Object { $_.id -eq $featureId } | Select-Object -First 1
         if (-not $featureItem) {
-            $featureItem = $rawData.activeItems | Where-Object { $_.id -eq $featureId } | Select-Object -First 1
+            $featureItem = $activeItems | Where-Object { $_.id -eq $featureId } | Select-Object -First 1
         }
         if ($featureItem) {
             $wipFeatureItems += @{
@@ -536,10 +553,10 @@ foreach ($week in $wipSnapshots) {
 }
 
 # Calculate current active items for bug rate display
-$activeBugs = @($rawData.activeItems | Where-Object { $_.fields.'System.WorkItemType' -eq 'Bug' })
-$activeFeatures = @($rawData.activeItems | Where-Object { $_.fields.'System.WorkItemType' -eq 'Product Backlog Item' })
-$currentActiveBugRate = if ($rawData.activeItems.Count -gt 0) { 
-    [Math]::Round(($activeBugs.Count / $rawData.activeItems.Count) * 100, 1) 
+$activeBugs = @($activeItems | Where-Object { $_.fields.'System.WorkItemType' -eq 'Bug' })
+$activeFeatures = @($activeItems | Where-Object { $_.fields.'System.WorkItemType' -eq 'Product Backlog Item' })
+$currentActiveBugRate = if ($activeItems.Count -gt 0) { 
+    [Math]::Round(($activeBugs.Count / $activeItems.Count) * 100, 1) 
 } else { 0 }
 
 # Current bug breakdown by board column (for pie chart)
@@ -665,10 +682,9 @@ function Get-BlockerCategory {
 }
 
 # Calculate stale work (items not updated recently)
-# Tasks and Epics are already excluded from data fetch
 $staleWorkItems = @()
 $now = Get-Date
-foreach ($item in $rawData.activeItems) {
+foreach ($item in $activeItems) {
     $changedDateStr = $item.fields.'System.ChangedDate'
     if ($changedDateStr) {
         $changedDate = [DateTime]$changedDateStr
@@ -707,8 +723,8 @@ $staleWorkBlockerLabels = @()
 $staleWorkBlockerColors = @()
 
 foreach ($item in $staleWorkItems) {
-    $typeIcon = if ($item.workItemType -eq 'Bug') { '🐛' } else { '📋' }
-    $staleWorkLabels += "$typeIcon #$($item.id)"
+    $typeLabel = if ($item.workItemType -eq 'Bug') { 'Bug' } elseif ($item.workItemType -eq 'Product Backlog Item') { 'PBI' } else { $item.workItemType }
+    $staleWorkLabels += "$typeLabel #$($item.id)"
     $staleWorkValues += $item.daysSinceChanged
     $staleWorkIds += $item.id
     $staleWorkTitles += $item.title
@@ -775,7 +791,7 @@ function Get-BlockerCategory {
 
 # Identify blocked items
 $blockedItems = @()
-foreach ($item in $rawData.activeItems) {
+foreach ($item in $activeItems) {
     $tags = $item.fields.'System.Tags'
     $category = Get-BlockerCategory -tags $tags -categories $blockerCategories
     
@@ -1035,7 +1051,7 @@ function Get-BlockerEventsFromUpdates {
 $blockerEvents = @()
 
 # Completed items: derive block/unblock events from update history
-foreach ($wi in $rawData.completedItems) {
+foreach ($wi in $completedItems) {
     $blockerEvents += Get-BlockerEventsFromUpdates -WorkItem $wi -Categories $blockerCategories
 }
 
@@ -1188,7 +1204,7 @@ function Add-WipPeriod {
 }
 
 # Completed items contribute WIP between ActivatedDate and ClosedDate
-foreach ($wi in $rawData.completedItems) {
+foreach ($wi in $completedItems) {
     $fields = $wi.fields
     $activated = $fields.'Microsoft.VSTS.Common.ActivatedDate'
     $closed = $fields.'Microsoft.VSTS.Common.ClosedDate'
@@ -1199,7 +1215,7 @@ foreach ($wi in $rawData.completedItems) {
 }
 
 # Current active items contribute WIP only if currently in an active state
-foreach ($wi in $rawData.activeItems) {
+foreach ($wi in $activeItems) {
     $fields = $wi.fields
     $state = $fields.'System.State'
     if ($wipActiveStates -notcontains $state) { continue }
@@ -1228,7 +1244,37 @@ $dailyWipStartValue = if ($dailyWipValues.Count -gt 0) { $dailyWipValues[0] } el
 $dailyWipEndValue = if ($dailyWipValues.Count -gt 0) { $dailyWipValues[-1] } else { 0 }
 $dailyWipTrendObj = Calculate-Trend -values @($dailyWipValues) -higherIsBetter $false
 $dailyWipTrendText = if ($dailyWipTrendObj.direction -eq 'up') { 'increasing' } elseif ($dailyWipTrendObj.direction -eq 'down') { 'decreasing' } else { 'stable' }
-$dailyWipInsightText = "Daily WIP averaged $dailyWipAvg items/day (range: $dailyWipMin-$dailyWipMax). Trend is $dailyWipTrendText; latest day is $dailyWipEndValue (start was $dailyWipStartValue)."
+
+# Peak and biggest single-day change (anomaly signals)
+$dailyWipPeakIdx = -1
+for ($i = 0; $i -lt $dailyWipValues.Count; $i++) {
+    if ([int]$dailyWipValues[$i] -eq [int]$dailyWipMax) { $dailyWipPeakIdx = $i; break }
+}
+$dailyWipPeakLabel = if ($dailyWipPeakIdx -ge 0 -and $dailyWipPeakIdx -lt $dailyWipLabels.Count) { $dailyWipLabels[$dailyWipPeakIdx] } else { 'N/A' }
+
+$maxDelta = 0
+$maxDeltaIdx = -1
+for ($i = 1; $i -lt $dailyWipValues.Count; $i++) {
+    $delta = [int]$dailyWipValues[$i] - [int]$dailyWipValues[$i - 1]
+    if ([Math]::Abs($delta) -gt [Math]::Abs($maxDelta)) {
+        $maxDelta = $delta
+        $maxDeltaIdx = $i
+    }
+}
+$maxDeltaLabel = if ($maxDeltaIdx -ge 0 -and $maxDeltaIdx -lt $dailyWipLabels.Count) { $dailyWipLabels[$maxDeltaIdx] } else { 'N/A' }
+$maxDeltaText = if ($maxDeltaIdx -ge 0) { "$(if ($maxDelta -ge 0) { '+' } else { '' })$maxDelta on $maxDeltaLabel" } else { 'N/A' }
+
+$dailyWipStdDev = if ($dailyWipValues.Count -gt 0) {
+    $mean = [double]$dailyWipAvg
+    [Math]::Sqrt((($dailyWipValues | ForEach-Object { [Math]::Pow(([double]$_ - $mean), 2) } | Measure-Object -Sum).Sum) / $dailyWipValues.Count)
+} else { 0 }
+$dailyWipCV = if ($dailyWipAvg -gt 0) { [Math]::Round(($dailyWipStdDev / [double]$dailyWipAvg), 2) } else { 0 }
+$dailyWipVolatility = if ($dailyWipCV -gt 0.5) { 'high' } elseif ($dailyWipCV -gt 0.25) { 'moderate' } else { 'low' }
+
+$spikeThreshold = [Math]::Round(($dailyWipAvg + $dailyWipStdDev), 1)
+$spikeDays = if ($dailyWipValues.Count -gt 0) { @($dailyWipValues | Where-Object { $_ -gt $spikeThreshold }).Count } else { 0 }
+
+$dailyWipInsightText = "Avg $dailyWipAvg (range $dailyWipMin-$dailyWipMax; volatility $dailyWipVolatility; $spikeDays spike day$(if ($spikeDays -ne 1) { 's' } else { '' }) >$spikeThreshold). Peak $dailyWipMax on $dailyWipPeakLabel; biggest 1-day change $maxDeltaText. Trend is $dailyWipTrendText (start $dailyWipStartValue -> end $dailyWipEndValue)."
 
 # Insights: WIP age breakdown
 $wipAgeInsightText = 'No WIP age breakdown available.'
@@ -1256,7 +1302,225 @@ if ($dayCount -gt 0) {
     $age14TrendObj = Calculate-Trend -values @($wipAge14Plus) -higherIsBetter $false
     $age14TrendText = if ($age14TrendObj.direction -eq 'up') { 'increasing' } elseif ($age14TrendObj.direction -eq 'down') { 'decreasing' } else { 'stable' }
 
-    $wipAgeInsightText = "Latest day WIP was $lastTotal, with $last14Plus ($lastPct14Plus%) aged >14 days. Peak >14-day WIP was $peak14Plus on $peak14PlusLabel. The >14-day segment is $age14TrendText."
+    # Longest consecutive streak where there is at least one >14-day item
+    $longestStreak = 0
+    $currentStreak = 0
+    $currentStart = 0
+    $bestStart = -1
+    $bestEnd = -1
+
+    for ($i = 0; $i -lt $wipAge14Plus.Count; $i++) {
+        if ([int]$wipAge14Plus[$i] -gt 0) {
+            if ($currentStreak -eq 0) { $currentStart = $i }
+            $currentStreak++
+            if ($currentStreak -gt $longestStreak) {
+                $longestStreak = $currentStreak
+                $bestStart = $currentStart
+                $bestEnd = $i
+            }
+        } else {
+            $currentStreak = 0
+        }
+    }
+
+    $streakText = if ($longestStreak -gt 0 -and $bestStart -ge 0 -and $bestEnd -ge 0) {
+        $startLabel = if ($bestStart -lt $dailyWipLabels.Count) { $dailyWipLabels[$bestStart] } else { 'N/A' }
+        $endLabel = if ($bestEnd -lt $dailyWipLabels.Count) { $dailyWipLabels[$bestEnd] } else { 'N/A' }
+        "Longest stretch with >=1 item aged >14d: $longestStreak days ($startLabel -> $endLabel)."
+    } else {
+        'No days with items aged >14d.'
+    }
+
+    $tailText = if ($lastPct14Plus -ge 50) {
+        'Old work dominates WIP.'
+    } elseif ($lastPct14Plus -ge 25) {
+        'A material tail of old work is present.'
+    } else {
+        'Old-work tail is small.'
+    }
+
+    $wipAgeInsightText = "Latest day WIP $lastTotal with $last14Plus ($lastPct14Plus%) aged >14d. Peak >14d was $peak14Plus on $peak14PlusLabel; the >14d segment is $age14TrendText. $streakText $tailText"
+}
+
+# Build Aging WIP (current) and Work Item Age (current)
+$wipAgingItems = @()
+foreach ($wi in $activeItems) {
+    $fields = $wi.fields
+    $state = $fields.'System.State'
+    if ($wipActiveStates -notcontains $state) { continue }
+
+    $activated = $fields.'Microsoft.VSTS.Common.ActivatedDate'
+    $created = $fields.'System.CreatedDate'
+
+    $start = if ($activated) { [DateTime]$activated } elseif ($created) { [DateTime]$created } else { $analysisStartDate }
+    $ageDays = [int][Math]::Floor(($analysisEndDate - $start.Date).TotalDays)
+    if ($ageDays -lt 0) { $ageDays = 0 }
+
+    $column = $fields.'System.BoardColumn'
+    if ([string]::IsNullOrWhiteSpace($column)) { $column = $state }
+    if ([string]::IsNullOrWhiteSpace($column)) { $column = 'Unknown' }
+
+    $wipAgingItems += [PSCustomObject]@{
+        id = $wi.id
+        title = $fields.'System.Title'
+        workItemType = $fields.'System.WorkItemType'
+        column = $column
+        age = $ageDays
+    }
+}
+
+$wipAgingItemsSorted = @($wipAgingItems | Sort-Object -Property age -Descending | Select-Object -First 20)
+
+$wipAgingLabels = @()
+$wipAgingValues = @()
+$wipAgingIds = @()
+$wipAgingTitles = @()
+$wipAgingColors = @()
+
+foreach ($item in $wipAgingItemsSorted) {
+    $typeLabel = if ($item.workItemType -eq 'Bug') { 'Bug' } elseif ($item.workItemType -eq 'Product Backlog Item') { 'PBI' } else { $item.workItemType }
+    $wipAgingLabels += "$typeLabel #$($item.id)"
+    $wipAgingValues += [int]$item.age
+    $wipAgingIds += $item.id
+    $wipAgingTitles += $item.title
+
+    $wipAgingColors += if ($item.age -gt 14) {
+        '#ef4444'
+    } elseif ($item.age -gt 7) {
+        '#f59e0b'
+    } else {
+        '#22c55e'
+    }
+}
+
+$wipAgingChart = @{
+    labels = $wipAgingLabels
+    values = $wipAgingValues
+    ids = $wipAgingIds
+    titles = $wipAgingTitles
+    colors = $wipAgingColors
+}
+
+$wipInsightText = if ($wipAgingItems.Count -eq 0) {
+    'No items currently in an active WIP state.'
+} else {
+    $total = $wipAgingItems.Count
+
+    $over14Items = @($wipAgingItems | Where-Object { $_.age -gt 14 })
+    $over14 = $over14Items.Count
+    $over30 = @($wipAgingItems | Where-Object { $_.age -gt 30 }).Count
+
+    $oldest = @($wipAgingItems | Sort-Object -Property age -Descending | Select-Object -First 1)
+
+    $columnText = ''
+    if ($over14 -gt 0) {
+        $byColumn = @($over14Items | Group-Object -Property column | Sort-Object -Property Count -Descending)
+        if ($byColumn.Count -gt 0) {
+            $top = $byColumn[0]
+            $pct = [Math]::Round(($top.Count / $over14) * 100, 0)
+            if ($pct -ge 60) {
+                $columnText = "Most >14d items are in '$($top.Name)' ($($top.Count) of $over14, $pct%). "
+            } else {
+                $columnText = "Old items are spread across columns (largest: '$($top.Name)' at $pct%). "
+            }
+        }
+    }
+
+    if ($oldest) {
+        "$total active WIP items; $over14 aged >14 days ($over30 aged >30 days). $columnText Oldest is #$($oldest.id) at $($oldest.age) days."
+    } else {
+        "$total active WIP items; $over14 aged >14 days ($over30 aged >30 days). $columnText"
+    }
+}
+
+$workItemAgeItems = @()
+foreach ($wi in $activeItems) {
+    $fields = $wi.fields
+    $activated = $fields.'Microsoft.VSTS.Common.ActivatedDate'
+    if (-not $activated) { continue }
+
+    $ageDays = [int][Math]::Floor(($analysisEndDate - ([DateTime]$activated).Date).TotalDays)
+    if ($ageDays -lt 0) { $ageDays = 0 }
+
+    $column = $fields.'System.BoardColumn'
+    if ([string]::IsNullOrWhiteSpace($column)) { $column = $fields.'System.State' }
+    if ([string]::IsNullOrWhiteSpace($column)) { $column = 'Unknown' }
+
+    $workItemAgeItems += [PSCustomObject]@{
+        id = $wi.id
+        title = $fields.'System.Title'
+        column = $column
+        age = $ageDays
+    }
+}
+
+$workItemAgeStates = @()
+$workItemAgeGroups = @($workItemAgeItems | Group-Object -Property column | Sort-Object -Property Name)
+foreach ($g in $workItemAgeGroups) {
+    $columnItems = @()
+    foreach ($it in ($g.Group | Sort-Object -Property age -Descending)) {
+        $columnItems += @{ id = $it.id; title = $it.title; age = [int]$it.age }
+    }
+
+    $workItemAgeStates += @{
+        name = $g.Name
+        items = $columnItems
+    }
+}
+
+$workItemAgeAges = @($workItemAgeItems | ForEach-Object { [int]$_.age })
+$workItemAgeAvg = if ($workItemAgeAges.Count -gt 0) { [Math]::Round((($workItemAgeAges | Measure-Object -Average).Average), 1) } else { 0 }
+$workItemAgeMedian = if ($workItemAgeAges.Count -gt 0) { Get-Median $workItemAgeAges } else { 0 }
+$workItemAgeP85 = if ($workItemAgeAges.Count -gt 0) {
+    $sorted = @($workItemAgeAges | Sort-Object)
+    $idx = [Math]::Ceiling($sorted.Count * 0.85) - 1
+    if ($idx -lt 0) { $idx = 0 }
+    $sorted[$idx]
+} else { 0 }
+
+$workItemAgeChart = @{
+    labels = @()
+    states = $workItemAgeStates
+    average = $workItemAgeAvg
+    median = $workItemAgeMedian
+    p85 = $workItemAgeP85
+}
+
+$workItemAgeInsightText = if ($workItemAgeItems.Count -eq 0) {
+    'No started (activated) work items found in the current backlog.'
+} else {
+    $count = $workItemAgeItems.Count
+
+    $columnGroups = @($workItemAgeItems | Group-Object -Property column)
+    $columnStats = @()
+    foreach ($g in $columnGroups) {
+        $ages = @($g.Group | ForEach-Object { [int]$_.age })
+        $columnStats += [PSCustomObject]@{
+            column = $g.Name
+            count = $g.Count
+            avg = if ($ages.Count -gt 0) { [Math]::Round((($ages | Measure-Object -Average).Average), 1) } else { 0 }
+            median = if ($ages.Count -gt 0) { Get-Median $ages } else { 0 }
+            over14 = @($ages | Where-Object { $_ -gt 14 }).Count
+        }
+    }
+
+    $worstColumn = @($columnStats | Sort-Object -Property median -Descending | Select-Object -First 1)
+    $oldest = @($workItemAgeItems | Sort-Object -Property age -Descending | Select-Object -First 1)
+
+    $hotspotText = if ($worstColumn) {
+        $over14Text = if ($worstColumn.over14 -gt 0) { "$($worstColumn.over14) >14d" } else { 'no >14d items' }
+        "Hotspot: '$($worstColumn.column)' has the oldest started work (median $($worstColumn.median)d across $($worstColumn.count) items; $over14Text)."
+    } else {
+        'No clear aging hotspot by column.'
+    }
+
+    $oldestText = if ($oldest) {
+        "Oldest is #$($oldest.id) at $($oldest.age)d in '$($oldest.column)'."
+    } else {
+        ''
+    }
+
+    "$count started items: avg $workItemAgeAvg days (median $workItemAgeMedian, 85th $workItemAgeP85). $hotspotText $oldestText"
 }
 
 # Calculate bug rate statistics for insight (using WIP percentages)
@@ -1286,7 +1550,7 @@ $completionRateFeatureDetails = @()
 
 # Group completed items by week
 $completedByWeek = @{}
-foreach ($item in $rawData.completedItems) {
+foreach ($item in $completedItems) {
     $closedDate = [DateTime]$item.fields.'Microsoft.VSTS.Common.ClosedDate'
     # Find which week this item was completed in
     $weekLabel = $null
@@ -1432,7 +1696,7 @@ $netText = if ($netBlocked -gt 0) { "Net +$netBlocked blocked (more blocking tha
 $blockerRatesInsightText = "Blocked events: $totalBlockedEvents, unblocked events: $totalUnblockedEvents across $weeksInAnalysis week$($(if ($weeksInAnalysis -ne 1) { 's' } else { '' })). Average per week: $avgBlockedPerWeek blocked, $avgUnblockedPerWeek unblocked. $netText Note: The dashed line shows the trend of weekly net flow (blocked - unblocked), not the cumulative blocked count."
 
 # Current blocked metric (card)
-$backlogSize = $rawData.activeItems.Count
+$backlogSize = $activeItems.Count
 $blockedCount = $blockedItems.Count
 $blockedPercentage = if ($backlogSize -gt 0) { [Math]::Round(($blockedCount / $backlogSize) * 100, 1) } else { 0 }
 $blockedClass = if ($blockedPercentage -gt 10) {
@@ -1593,13 +1857,7 @@ $dashboardData = @{
             departureTrend = @()
             states = @()
         }
-        wip = @{
-            labels = @()
-            values = @()
-            ids = @()
-            titles = @()
-            colors = @()
-        }
+        wip = $wipAgingChart
         bugRate = @{
             labels = $bugRateLabels
             # WIP Bug Rate (% of items in progress that are bugs)
@@ -1624,13 +1882,7 @@ $dashboardData = @{
         currentBugsByState = $currentBugsByState
         cycleTimeTrend = $cycleTimeTrendChart
         leadTimeTrend = $leadTimeTrendChart
-        workItemAge = @{
-            labels = @()
-            states = @()
-            average = 0
-            median = 0
-            p85 = 0
-        }
+        workItemAge = $workItemAgeChart
         timeInColumn = @{
             labels = @()
             values = @()
@@ -1705,7 +1957,7 @@ $dashboardData = @{
     }
     
     insights = @{
-        cfd = "$($completedWithMetrics.Count) items completed, $($rawData.activeItems.Count) in progress"
+        cfd = "$($completedWithMetrics.Count) items completed, $($activeItems.Count) in progress"
         throughput = if ($throughputCV -gt 0.5) {
             $maxWeek = ($throughputValues | Measure-Object -Maximum).Maximum
             $minWeek = ($throughputValues | Measure-Object -Minimum).Minimum
@@ -1717,11 +1969,11 @@ $dashboardData = @{
         }
         cycleTime = "Median cycle time: $cycleTimeMedian days"
         leadTime = "Median lead time: $leadTimeMedian days"
-        workItemAge = "$($rawData.activeItems.Count) items in progress"
+        workItemAge = $workItemAgeInsightText
         dailyWip = $dailyWipInsightText
         timeInColumn = "Column metrics"
         wipAgeBreakdown = $wipAgeInsightText
-        wip = "$($rawData.activeItems.Count) items in WIP"
+        wip = $wipInsightText
         bugRate = if ($maxBugRate -gt 50) {
             "WIP bug rate averaged $avgWIPBugRate% (peak: $maxBugRate% at $maxBugRateWeek). Completion bug rate averaged $avgCompletionBugRate%. Currently $($activeBugs.Count) bugs in WIP ($currentActiveBugRate%). High WIP bug rates may indicate quality issues - consider root cause analysis."
         } elseif ($maxBugRate -gt 30) {

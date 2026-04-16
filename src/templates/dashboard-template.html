@@ -429,7 +429,6 @@
                 <button class="tab-button" onclick="switchTab(event, 'efficiency')">⚡ Efficiency</button>
                 <button class="tab-button" onclick="switchTab(event, 'flow-system')">🔄 Flow</button>
                 <button class="tab-button" onclick="switchTab(event, 'wip-tracking')">📊 Work in Progress</button>
-                <button class="tab-button" onclick="switchTab(event, 'aging-analysis')">📈 Aging Analysis</button>
                 <button class="tab-button" onclick="switchTab(event, 'blocked-items')">⚠️ Blockers & Issues</button>
             </div>
 
@@ -733,7 +732,7 @@
         </div>
             </div>
 
-            <!-- Tab 3: WIP Tracking (Daily WIP, Daily WIP x Work Item Age) -->
+            <!-- Tab 3: Work in Progress (Daily WIP, Age Breakdown, Aging WIP, Work Item Age) -->
             <div id="wip-tracking" class="tab-content">
                 <div class="charts-grid">
 
@@ -761,13 +760,8 @@
                 </div>
                 <div class="insight-box" id="wipAgeBreakdownInsight"></div>
             </div>
-        </div>
-            </div>
 
-            <!-- Tab 4: Aging Analysis (Aging WIP, Work Item Age) -->
-            <div id="aging-analysis" class="tab-content">
-                <div class="charts-grid">
-            <!-- WIP Aging -->
+            <!-- Aging Work In Progress -->
             <div class="chart-card">
                 <h2>🔧 Aging Work In Progress</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
@@ -938,6 +932,15 @@
 
             const toHex = (v) => v.toString(16).padStart(2, '0');
             return `#${toHex(rr)}${toHex(gg)}${toHex(bb)}`;
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
         }
 
         // ===== BOARD CONFIGURATION =====
@@ -1181,7 +1184,7 @@
         document.getElementById('metricCards').innerHTML = metricCardsHTML;
 
         // Render insights (static insights from JSON - efficiency insights are generated dynamically below)
-        document.getElementById('throughputInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.throughput}</p>`;
+        document.getElementById('throughputInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(dashboardData.insights.throughput)}</p>`;
         
         // Generate dynamic cycle time insight
         const cycleTimeAvg = dashboardData.charts.cycleTime.average;  // Use overall average from chart data (weighted by count)
@@ -1190,7 +1193,7 @@
         const bugsCycleTime = dashboardData.metrics.cycleTime.bugs;
         const pbisCycleTime = dashboardData.metrics.cycleTime.pbis;
         const cycleTimeInsight = `Cycle time (from ${getCycleStartColumn()} to completion) averages ${cycleTimeAvg} days (median: ${cycleTimeMedian} days, 85th percentile: ${cycleTime85th} days). ${dashboardData.hasBugPbiSplit ? `Bugs: ${bugsCycleTime} days, PBIs: ${pbisCycleTime} days. ` : ''}This measures time actively in workflow columns, excluding time before workflow starts (${getBeforeWorkflowLabel()}).`;
-        document.getElementById('cycleTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${cycleTimeInsight}</p>`;
+        document.getElementById('cycleTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(cycleTimeInsight)}</p>`;
         
         // Generate dynamic lead time insight
         const leadTimeAvg = dashboardData.metrics.leadTime.avg;
@@ -1222,12 +1225,12 @@
             const leadTimeInsight = leadTimeMethod === 'creation' 
                 ? `Lead time averages ${leadTimeAvg} days (median: ${leadTimeMedian} days, 85th percentile: ${leadTime85th} days) from creation to completion. This includes both pre-workflow time in ${getBeforeWorkflowLabel()} (~${backlogTime} days) and cycle time (${cycleTimeAvg} days). ${leadTimeAvg > cycleTimeAvg * 1.5 ? 'Items wait significantly before development starts.' : 'Items move relatively quickly into development.'}`
                 : `Lead time averages ${leadTimeAvg} days (median: ${leadTimeMedian} days, 85th percentile: ${leadTime85th} days) from board entry to completion. This includes both pre-workflow time in ${getBeforeWorkflowLabel()} (~${backlogTime} days) and cycle time (${cycleTimeAvg} days). ${leadTimeAvg > cycleTimeAvg * 1.5 ? 'Items wait significantly before development starts.' : 'Items move relatively quickly into development.'}`;
-            document.getElementById('leadTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${leadTimeInsight}</p>`;
+            document.getElementById('leadTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(leadTimeInsight)}</p>`;
         } else {
             // Fallback for old dashboards without metricDefinitions
             document.getElementById('leadTimeDescription').innerText = 'Overall time an individual item takes from creation to completion (closed). [Legacy calculation]';
             const leadTimeInsight = `Lead time averages ${leadTimeAvg} days (median: ${leadTimeMedian} days, 85th percentile: ${leadTime85th} days) from creation to completion. This includes both pre-workflow time in ${getBeforeWorkflowLabel()} (~${backlogTime} days) and cycle time from ${getCycleStartColumn()} onwards (${cycleTimeAvg} days). ${leadTimeAvg > cycleTimeAvg * 1.5 ? 'Items wait significantly before workflow starts.' : 'Items move relatively quickly into workflow.'}`; 
-            document.getElementById('leadTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${leadTimeInsight}</p>`;
+            document.getElementById('leadTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(leadTimeInsight)}</p>`;
         }
                 document.getElementById('columnCategorizationDescription').innerHTML = `Understanding how workflow columns are classified is essential for interpreting efficiency metrics. <strong>Cycle time starts from the first ACTIVE column (${getCycleStartColumn()}).</strong>`;
         document.getElementById('wseDescription').innerText = `Measures how quickly work starts after being created. Cycle time starts when items reach "${getCycleStartColumn()}" (first active column). High values (>50%) mean items leave pre-workflow columns quickly. Low values indicate long delays in the "${getBeforeWorkflowLabel()}" columns.`;
@@ -1240,40 +1243,40 @@
         document.getElementById('beforeWorkflowColumnsList').innerHTML = boardConfig.beforeWorkflowColumns.map(col => `• ${col}`).join('<br>');
         
         // Note: Efficiency insights (WSE, CTFE, LTFE) are generated dynamically from real data
-        document.getElementById('cfdInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.cfd}</p>`;
+        document.getElementById('cfdInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(dashboardData.insights.cfd)}</p>`;
         if (dashboardData.insights.timeInColumn) {
-            document.getElementById('timeInColumnInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.timeInColumn}</p>`;
+            document.getElementById('timeInColumnInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(dashboardData.insights.timeInColumn)}</p>`;
         }
         if (dashboardData.insights.workItemAge) {
-            document.getElementById('workItemAgeInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.workItemAge}</p>`;
+            document.getElementById('workItemAgeInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(dashboardData.insights.workItemAge)}</p>`;
         }
         if (dashboardData.insights.dailyWip) {
-            document.getElementById('dailyWipInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.dailyWip}</p>`;
+            document.getElementById('dailyWipInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(dashboardData.insights.dailyWip)}</p>`;
         }
         if (dashboardData.insights.staleWork) {
-            document.getElementById('staleWorkInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.staleWork}</p>`;
+            document.getElementById('staleWorkInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(dashboardData.insights.staleWork)}</p>`;
         }
         if (dashboardData.insights.bugDistribution) {
-            document.getElementById('bugDistributionInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.bugDistribution}</p>`;
+            document.getElementById('bugDistributionInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(dashboardData.insights.bugDistribution)}</p>`;
         }
         if (dashboardData.insights.wipAgeBreakdown) {
-            document.getElementById('wipAgeBreakdownInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.wipAgeBreakdown}</p>`;
+            document.getElementById('wipAgeBreakdownInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(dashboardData.insights.wipAgeBreakdown)}</p>`;
         }
-        document.getElementById('wipInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.wip}</p>`;
+        document.getElementById('wipInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(dashboardData.insights.wip)}</p>`;
         // Bug Rate Insight
-        document.getElementById('bugRateInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.bugRate}</p>`;
-        document.getElementById('netFlowInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.netFlow}</p>`;
+        document.getElementById('bugRateInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(dashboardData.insights.bugRate)}</p>`;
+        document.getElementById('netFlowInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(dashboardData.insights.netFlow)}</p>`;
         
         // Render insights for new charts
         if (dashboardData.insights.blockedItems) {
-            document.getElementById('blockedItemsInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.blockedItems}</p>`;
+            document.getElementById('blockedItemsInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(dashboardData.insights.blockedItems)}</p>`;
         }
         if (dashboardData.insights.transitionRates) {
-            document.getElementById('transitionRatesInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.transitionRates}</p>`;
+            document.getElementById('transitionRatesInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(dashboardData.insights.transitionRates)}</p>`;
         }
 
         // Render footer
-        document.getElementById('footer').innerHTML = `<p>${dashboardData.footer}</p>`;
+        document.getElementById('footer').innerHTML = `<p>${escapeHtml(dashboardData.footer)}</p>`;
 
         // Modal functionality
         const modal = document.getElementById('itemModal');
@@ -3117,8 +3120,8 @@
                                         <div class="tooltip-title">Work Item Details</div>
                                         <div class="tooltip-content">
                                             <strong>ID:</strong> <a href="${adoUrl}" target="_blank">#${item.id}</a><br>
-                                            <strong>Title:</strong> ${item.title}<br>
-                                            <strong>State:</strong> ${item.x}<br><br>
+                                            <strong>Title:</strong> ${escapeHtml(item.title)}<br>
+                                            <strong>Column:</strong> ${escapeHtml(item.x)}<br><br>
                                             <strong style="color: #f59e0b;">📅 Age:</strong> ${item.y} days
                                         </div>
                                         <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
@@ -3473,86 +3476,88 @@
         }
 
         // WIP Chart (ordered by age, descending, only concerning items)
-        new Chart(document.getElementById('wipChart'), {
-            type: 'bar',
-            data: {
-                labels: dashboardData.charts.wip.labels,
-                datasets: [{
-                    label: 'WIP Age (days)',
-                    data: dashboardData.charts.wip.values,
-                    backgroundColor: dashboardData.charts.wip.colors,
-                    borderColor: '#fff',
-                    borderWidth: 2
-                }]
-            },
-            options: {
-                indexAxis: 'y',
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        enabled: false,
-                        external: function(context) {
-                            // Tooltip Element
-                            const tooltipEl = document.getElementById('customTooltip');
-                            
-                            // Hide if no tooltip
-                            const tooltipModel = context.tooltip;
-                            if (tooltipModel.opacity === 0) {
-                                if (!isTooltipHovered) {
-                                    hideTooltipWithDelay();
-                                }
-                                return;
-                            }
-
-                            // Clear any pending hide timeout
-                            if (tooltipHideTimeout) {
-                                clearTimeout(tooltipHideTimeout);
-                                tooltipHideTimeout = null;
-                            }
-
-                            // Get data point
-                            if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
-                                const dataPoint = tooltipModel.dataPoints[0];
-                                const index = dataPoint.dataIndex;
-                                const workItemId = dashboardData.charts.wip.ids[index];
-                                const title = dashboardData.charts.wip.titles[index];
-                                const age = dataPoint.parsed.x;
-                                const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${workItemId}`;
+        if (dashboardData.charts.wip) {
+            new Chart(document.getElementById('wipChart'), {
+                type: 'bar',
+                data: {
+                    labels: dashboardData.charts.wip.labels,
+                    datasets: [{
+                        label: 'WIP Age (days)',
+                        data: dashboardData.charts.wip.values,
+                        backgroundColor: dashboardData.charts.wip.colors,
+                        borderColor: '#fff',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            enabled: false,
+                            external: function(context) {
+                                // Tooltip Element
+                                const tooltipEl = document.getElementById('customTooltip');
                                 
-                                // Build HTML
-                                tooltipEl.innerHTML = `
-                                    <div class="tooltip-title">WIP Item</div>
-                                    <div class="tooltip-content">
-                                        <strong>ID:</strong> <a href="${adoUrl}" target="_blank">#${workItemId}</a><br>
-                                        <strong>Title:</strong> ${title}<br>
-                                        <strong>Age:</strong> ${age} days
-                                    </div>
-                                    <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
-                                `;
-                            }
+                                // Hide if no tooltip
+                                const tooltipModel = context.tooltip;
+                                if (tooltipModel.opacity === 0) {
+                                    if (!isTooltipHovered) {
+                                        hideTooltipWithDelay();
+                                    }
+                                    return;
+                                }
 
-                            // Display tooltip
-                            const position = context.chart.canvas.getBoundingClientRect();
-                            tooltipEl.classList.add('visible');
-                            tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
-                            tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
+                                // Clear any pending hide timeout
+                                if (tooltipHideTimeout) {
+                                    clearTimeout(tooltipHideTimeout);
+                                    tooltipHideTimeout = null;
+                                }
+
+                                // Get data point
+                                if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
+                                    const dataPoint = tooltipModel.dataPoints[0];
+                                    const index = dataPoint.dataIndex;
+                                    const workItemId = dashboardData.charts.wip.ids[index];
+                                    const title = dashboardData.charts.wip.titles[index];
+                                    const age = dataPoint.parsed.x;
+                                    const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${workItemId}`;
+                                    
+                                    // Build HTML
+                                    tooltipEl.innerHTML = `
+                                        <div class="tooltip-title">WIP Item</div>
+                                        <div class="tooltip-content">
+                                            <strong>ID:</strong> <a href="${adoUrl}" target="_blank">#${workItemId}</a><br>
+                                            <strong>Title:</strong> ${escapeHtml(title)}<br>
+                                            <strong>Age:</strong> ${age} days
+                                        </div>
+                                        <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
+                                    `;
+                                }
+
+                                // Display tooltip
+                                const position = context.chart.canvas.getBoundingClientRect();
+                                tooltipEl.classList.add('visible');
+                                tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
+                                tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Age (days)' },
+                            grid: { color: '#e2e8f0' }
+                        },
+                        y: {
+                            grid: { display: false }
                         }
                     }
-                },
-                scales: {
-                    x: {
-                        beginAtZero: true,
-                        title: { display: true, text: 'Age (days)' },
-                        grid: { color: '#e2e8f0' }
-                    },
-                    y: {
-                        grid: { display: false }
-                    }
                 }
-            }
-        });
+            });
+        }
 
         // Bug Rate Trend Chart (WIP + Completion)
         new Chart(document.getElementById('bugRateChart'), {
@@ -4362,14 +4367,14 @@
             });
 
             const insightText = (dashboardData.insights && dashboardData.insights.blockerRates) ? dashboardData.insights.blockerRates : 'Blocker flow is not available.';
-            document.getElementById('blockerRatesInsight').innerHTML = `<p><strong>Insight:</strong> ${insightText}</p>`;
+            document.getElementById('blockerRatesInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(insightText)}</p>`;
         } else {
             const insightText = (dashboardData.insights && dashboardData.insights.blockerRates) ? dashboardData.insights.blockerRates : 'No blocker flow data available.';
-            document.getElementById('blockerRatesInsight').innerHTML = `<p><strong>Insight:</strong> ${insightText}</p>`;
+            document.getElementById('blockerRatesInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(insightText)}</p>`;
         }
         
         // Set blocked items insight
-        document.getElementById('blockedItemsInsight').innerHTML = `<p><strong>Insight:</strong> ${dashboardData.insights.blockedItems}</p>`;
+        document.getElementById('blockedItemsInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(dashboardData.insights.blockedItems)}</p>`;
         
         // Set current blocked items insight if any blocked items exist
         if (dashboardData.charts.blockedItems.current && dashboardData.charts.blockedItems.current.count > 0) {
