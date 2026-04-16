@@ -417,23 +417,26 @@
             <p id="headerInfo"></p>
         </div>
 
-        <!-- Key Metrics Cards -->
-        <div class="metric-cards" id="metricCards">
-            <!-- Dynamically populated -->
-        </div>
-
         <!-- Tabs -->
         <div class="tabs">
             <div class="tab-nav">
-                <button class="tab-button active" onclick="switchTab(event, 'time-metrics')">⏱️ Delivery Metrics</button>
+                <button class="tab-button active" onclick="switchTab(event, 'overview')">🏠 Overview</button>
+                <button class="tab-button" onclick="switchTab(event, 'time-metrics')">⏱️ Delivery Metrics</button>
                 <button class="tab-button" onclick="switchTab(event, 'efficiency')">⚡ Efficiency</button>
                 <button class="tab-button" onclick="switchTab(event, 'flow-system')">🔄 Flow</button>
                 <button class="tab-button" onclick="switchTab(event, 'wip-tracking')">📊 Work in Progress</button>
                 <button class="tab-button" onclick="switchTab(event, 'blocked-items')">⚠️ Blockers & Issues</button>
             </div>
 
+            <!-- Tab 0: Overview (Key Metric Cards) -->
+            <div id="overview" class="tab-content active">
+                <div class="metric-cards" id="metricCards">
+                    <!-- Dynamically populated -->
+                </div>
+            </div>
+
             <!-- Tab 1: Time Metrics (Throughput, Cycle & Lead Time, Efficiency) -->
-            <div id="time-metrics" class="tab-content active">
+            <div id="time-metrics" class="tab-content">
                 <div class="charts-grid">
             <!-- Throughput Trend (Full Width) -->
             <div class="chart-card chart-card-full">
@@ -812,6 +815,7 @@
                 <div class="chart-container">
                     <canvas id="currentBlockedItemsChart"></canvas>
                 </div>
+                <div id="currentBlockedItemsLegend" style="display:flex; flex-wrap:wrap; gap:10px; margin-top:10px;"></div>
                 <div class="insight-box" id="currentBlockedItemsInsight"></div>
             </div>
 
@@ -3225,14 +3229,14 @@
             // Sort by value descending (worst first)
             staleItems.sort((a, b) => b.value - a.value);
             
-            // Extract sorted arrays - add blocker category indicator to labels
+            // Extract sorted arrays - include item type in labels; add blocker category indicator when present
             const sortedLabels = staleItems.map(item => {
                 if (item.blocked && dashboardData.charts.staleWork.blockerLabels) {
                     const idx = dashboardData.charts.staleWork.ids.indexOf(item.id);
-                    const label = dashboardData.charts.staleWork.blockerLabels[idx];
-                    return label ? `[${label}] #${item.id}` : `#${item.id}`;
+                    const blockerLabel = dashboardData.charts.staleWork.blockerLabels[idx];
+                    return blockerLabel ? `[${blockerLabel}] ${item.label}` : item.label;
                 }
-                return `#${item.id}`;
+                return item.label;
             });
             const sortedValues = staleItems.map(item => item.value);
             const sortedIds = staleItems.map(item => item.id);
@@ -4076,10 +4080,35 @@
         // 2. Current Blocked Items (horizontal bar chart showing each item with days blocked, color-coded by category)
         if (dashboardData.charts.blockedItems.current && dashboardData.charts.blockedItems.current.count > 0) {
             const details = dashboardData.charts.blockedItems.current.details;
-            const labels = details.map(item => `#${item.id}`);
+
+            const shortType = (t) => {
+                if (!t) return 'Item';
+                if (t === 'Product Backlog Item') return 'PBI';
+                if (t === 'User Story') return 'Story';
+                return t;
+            };
+
+            const labels = details.map(item => `${shortType(item.workItemType)} #${item.id}`);
             const daysBlocked = details.map(item => item.daysSinceChanged);
             const barColors = details.map(item => item.categoryColor || '#3b82f6');
             const borderColors = details.map(item => item.categoryColor || '#2563eb');
+
+            // Build a legend showing blocker category colours
+            const legendEl = document.getElementById('currentBlockedItemsLegend');
+            if (legendEl) {
+                const categoryConfig = (dashboardData.charts.blockedItems.current.categories || {});
+                const presentKeys = new Set(details.map(d => d.category).filter(Boolean));
+                const items = [];
+
+                for (const [key, cfg] of Object.entries(categoryConfig)) {
+                    if (presentKeys.size > 0 && !presentKeys.has(key)) continue;
+                    const label = cfg.label || key;
+                    const color = cfg.color || '#3b82f6';
+                    items.push(`<span style="display:inline-flex; align-items:center; gap:6px; margin-right:8px;"><span style="width:10px; height:10px; border-radius:9999px; background:${color}; border:1px solid ${darkenHexColor(color, 0.18)};"></span><span style="color:#4b5563; font-size:12px;">${escapeHtml(label)}</span></span>`);
+                }
+
+                legendEl.innerHTML = items.length ? items.join('') : '';
+            }
             
             new Chart(document.getElementById('currentBlockedItemsChart'), {
                 type: 'bar',
@@ -4121,14 +4150,14 @@
                                     const dataPoint = tooltipModel.dataPoints[0];
                                     const item = details[dataPoint.dataIndex];
                                     const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
-                                    const categoryBadge = item.categoryLabel ? `<span style="color: ${item.categoryColor}; font-weight: bold;">${item.categoryLabel}</span>` : '';
+                                    const categoryBadge = item.categoryLabel ? `<span style="color: ${item.categoryColor}; font-weight: bold;">${escapeHtml(item.categoryLabel)}</span>` : '';
                                     
                                     let html = `<div class="tooltip-title">Blocked Item ${categoryBadge}</div>`;
                                     html += `<div class="tooltip-content">`;
                                     html += `<strong>ID:</strong> <a href="${adoUrl}" target="_blank" style="color: #60a5fa;">#${item.id}</a><br>`;
-                                    html += `<strong>Title:</strong> ${item.title}<br>`;
-                                    html += `<strong>Column:</strong> ${item.column}<br>`;
-                                    html += `<strong>Type:</strong> ${item.workItemType}<br><br>`;
+                                    html += `<strong>Title:</strong> ${escapeHtml(item.title)}<br>`;
+                                    html += `<strong>Column:</strong> ${escapeHtml(item.column)}<br>`;
+                                    html += `<strong>Type:</strong> ${escapeHtml(item.workItemType)}<br><br>`;
                                     html += `<strong style="color: ${item.categoryColor || '#3b82f6'};">⏰ Days Blocked:</strong> ${item.daysSinceChanged} days`;
                                     html += `</div><div class="close-hint">Hover to keep open • Click elsewhere to close</div>`;
                                     
@@ -4207,10 +4236,10 @@
 
             const computedInsight = `${total} items became blocked/on-hold across ${labels.length} week${labels.length !== 1 ? 's' : ''}. Peak week: ${peakLabel} (${peakValue}).`;
             const insightText = (dashboardData.insights && dashboardData.insights.blockedTimeline) ? dashboardData.insights.blockedTimeline : computedInsight;
-            document.getElementById('blockedTimelineInsight').innerHTML = `<p><strong>Insight:</strong> ${insightText}</p>`;
+            document.getElementById('blockedTimelineInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(insightText)}</p>`;
         } else {
             const insightText = (dashboardData.insights && dashboardData.insights.blockedTimeline) ? dashboardData.insights.blockedTimeline : 'No blocker timeline data available.';
-            document.getElementById('blockedTimelineInsight').innerHTML = `<p><strong>Insight:</strong> ${insightText}</p>`;
+            document.getElementById('blockedTimelineInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(insightText)}</p>`;
         }
 
         // 4. Blocker flow (blocked up, unblocked down)
@@ -4225,7 +4254,7 @@
                 ? rates.netValues
                 : blockedTotals.map((b, i) => (b || 0) - (unblockedTotals[i] || 0));
 
-            const blockedColor = '#f43f5e'; // rose
+            const blockedColor = '#f59e0b'; // amber
             const unblockedColor = '#14b8a6'; // teal
 
             const datasets = [
@@ -4341,9 +4370,10 @@
             const blockedDetails = dashboardData.charts.blockedItems.current.details;
             const avgDays = Math.round(blockedDetails.reduce((sum, item) => sum + item.daysSinceChanged, 0) / blockedDetails.length);
             const longest = blockedDetails[0];
-            document.getElementById('currentBlockedItemsInsight').innerHTML = `<p><strong>Insight:</strong> ${blockedDetails.length} blocked items. Average blocked duration: ${avgDays} days. Longest: #${longest.id} at ${longest.daysSinceChanged} days.</p>`;
+            const summaryText = `${blockedDetails.length} blocked items. Average blocked duration: ${avgDays} days. Longest: #${longest.id} at ${longest.daysSinceChanged} days.`;
+            document.getElementById('currentBlockedItemsInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(summaryText)}</p>`;
         } else {
-            document.getElementById('currentBlockedItemsInsight').innerHTML = `<p><strong>Insight:</strong> No blocked items.</p>`;
+            document.getElementById('currentBlockedItemsInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml('No blocked items.')}</p>`;
         }
 
         // Transition Rate Ratios Chart
