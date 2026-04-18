@@ -164,33 +164,47 @@ Options:
 
 Store this as `$workflowStartColumn`
 
-### Step 5.5: Confirm lead time calculation (if NOT using configuration)
+### Step 5.5: Confirm lead time + CFD arrival start point
 
-**If NOT using a configuration file:**
+Ask the user to confirm what we consider an item "arriving" (the start point).
 
-Ask the user to confirm how lead time should be calculated:
+This choice is used consistently for:
+- Lead time start point
+- CFD "Arrivals" line (and the Backlog Growth metric)
 
-"**Lead Time** measures the total time from when work is committed until it's completed.
+Ask:
 
-I need to confirm what 'start point' to use for lead time:
+"I need to confirm what counts as the *start* of an item for this dashboard.
 
-**Option 1: Board Entry (Recommended)**
-- Start: When item first appears on your board (enters the New column)
-- Best for: Understanding delivery time for work you've committed to
-- Measures: Time on board → Closed
+Choose one:
 
-**Option 2: Creation Date**
-- Start: When item was created in Azure DevOps (System.CreatedDate)
-- Best for: Understanding total time in the system
-- Measures: Total ADO time → Closed
-- Note: May include time before work was added to your board
+**Option 1: Created date**
+- Start: When the item was created in Azure DevOps (`System.CreatedDate`)
 
-Which would you prefer?
-- Type **'1'** or **'board'** for Board Entry (recommended)
-- Type **'2'** or **'creation'** for Creation Date
-- Press Enter to use Board Entry (default)"
+**Option 2: Entered the board (recommended)**
+- Start: When the item first appears on the board (first `System.BoardColumn` change)
 
-**Store the choice** for use in the workflow. Most teams should use Board Entry as it's more accurate for measuring committed work.
+**Option 3: Entered a specific column**
+- Start: When the item first enters a specific board column (first `System.BoardColumn == <column>`)
+
+Reply with:
+- `1` / `created`
+- `2` / `board`
+- `3` / `column`"
+
+Handle the response:
+- If Option 1: set `$leadTimeStartType = 'creation'`
+- If Option 2 (or blank): set `$leadTimeStartType = 'boardEntry'`
+- If Option 3: ask "Which column name should be treated as the start?" then set:
+  - `$leadTimeStartType = 'column'`
+  - `$leadTimeStartColumn = '<exact column name>'`
+
+If a configuration file exists, you may also show the current configured value to the user as a suggested default:
+
+```powershell
+$cfg = Get-Content "{configPath}" -Raw | ConvertFrom-Json
+$cfg.metrics.leadTime
+```
 
 ### Step 6: Run the dashboard generation script
 
@@ -204,7 +218,11 @@ cd src\scripts
   -Project "{project}" `
   -Team "{team}" `
   -Months {months} `
-  -ConfigFile "{configPath}"
+  -ConfigFile "{configPath}" `
+  -LeadTimeStartType "{leadTimeStartType}"
+
+# If (and only if) LeadTimeStartType is 'column', also pass:
+#   -LeadTimeStartColumn "{leadTimeStartColumn}"
 ```
 
 **Example with configuration:**
@@ -226,7 +244,11 @@ cd src\scripts
   -Project "{project}" `
   -Team "{team}" `
   -Months {months} `
-  -WorkflowStartColumn "{workflowStartColumn}"
+  -WorkflowStartColumn "{workflowStartColumn}" `
+  -LeadTimeStartType "{leadTimeStartType}"
+
+# If (and only if) LeadTimeStartType is 'column', also pass:
+#   -LeadTimeStartColumn "{leadTimeStartColumn}"
 ```
 
 **Example with defaults:**
@@ -265,6 +287,7 @@ $dashboardData = Get-Content $dataPath -Raw | ConvertFrom-Json
 
 You need to analyze the following charts and generate brief, actionable insights (1-2 sentences each):
 
+- **cfd**: Use `metricDefinitions.leadTimeMethod` (+ `metricDefinitions.leadTimeStartColumn` when relevant) to state what counts as an arrival. Use `charts.cfd.arrivals` and `charts.cfd.departures` to estimate average arrivals/week and departures/week over the analysis period, and explain what that implies (growing / shrinking / stable) *and why*.
 - **throughput**: Look at `charts.throughput.weeklyCompletedCounts`, `summary.throughput`, coefficient of variation
 - **cycleTime**: Look at `charts.cycleTime.distribution`, `summary.cycleTime.median`, P50/P85/P95
 - **bugRate**: Look at `charts.bugRate.avgWIPBugRate`, `charts.bugRate.avgCompletionBugRate`, current bug count
@@ -287,6 +310,7 @@ For each chart, analyze the metrics and generate a brief insight (1-2 sentences)
 ```powershell
 # Update insights in the JSON
 $dashboardData.insights.throughput = "{AI-generated insight}"
+$dashboardData.insights.cfd = "{AI-generated insight}"
 $dashboardData.insights.cycleTime = "{AI-generated insight}"
 $dashboardData.insights.bugRate = "{AI-generated insight}"
 $dashboardData.insights.staleWork = "{AI-generated insight}"
@@ -372,6 +396,24 @@ The workflow is complete when:
 ## Insight Generation Guidelines
 
 When generating or modifying insight text for dashboard charts, follow these principles:
+
+### Workflow rule (insight text changes)
+When the user asks to change how an insight is worded or what it must include, implement the change by updating the AI insight-generation instructions in this prompt (Step 6.5 + rules below) so future dashboards generate the improved insight automatically.
+
+Do not “fix” insight wording only by changing hardcoded strings in the HTML template.
+- If the template has a fallback/default insight, you may update it too, but only in addition to updating this prompt.
+
+### Plain language (no jargon)
+- Use plain, everyday language.
+- Avoid jargon and acronyms (e.g. CFD, WIP, throughput, regression).
+- If you must use a technical term, add a short explanation in the same sentence.
+
+### CFD insight must explain "why"
+When writing the CFD insight:
+- Always say what we treat as an "arrival" (Created date / Entered the board / Entered a specific column).
+- Always compare the two rates (arrivals/week vs departures/week) and state the net difference per week.
+- Always explain the conclusion in plain language (e.g. "backlog is growing because more work is starting than finishing").
+- Avoid saying "started" unless the chosen arrival basis is explicitly a "start work" column. In most cases, use "arrived", "entered", or "added" (based on the selected arrival definition).
 
 ### What to Notice
 

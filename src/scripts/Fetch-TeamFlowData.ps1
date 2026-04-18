@@ -53,7 +53,10 @@ param(
     [string]$OutputPath = (Join-Path $PSScriptRoot "flow-data-$(Get-Date -Format 'yyyy-MM-dd').json"),
     
     [Parameter(Mandatory = $false)]
-    [string]$ConfigFile = $null
+    [string]$ConfigFile = $null,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$IncludeActiveHistory
 )
 
 # Load configuration if provided
@@ -226,6 +229,41 @@ foreach ($item in ($allItems | Where-Object { $completedItemIds -contains $_.id 
 
 Write-Host "  [OK] Retrieved history for $($completedItemsWithHistory.Count) completed items" -ForegroundColor Green
 
+# Step 6b: Optionally fetch state/column transition history for active items
+$activeItemsWithHistory = $null
+if ($IncludeActiveHistory) {
+    Write-Host "`nStep 6b: Fetching state transition history for active items..." -ForegroundColor Yellow
+    Write-Host "  (This may take a while; active items: $($activeItemIds.Count))" -ForegroundColor Gray
+
+    $activeItemsWithHistory = @()
+    $activeItemsRaw = @($allItems | Where-Object { $activeItemIds -contains $_.id })
+
+    foreach ($item in $activeItemsRaw) {
+        $itemId = $item.id
+        $updatesUrl = "$baseUrl/_apis/wit/workitems/$itemId/updates?api-version=7.0"
+
+        try {
+            $updates = Invoke-RestMethod -Uri $updatesUrl -Headers $headers -Method Get
+
+            $itemWithHistory = @{
+                id = $item.id
+                fields = $item.fields
+                updates = $updates.value
+            }
+
+            $activeItemsWithHistory += $itemWithHistory
+
+            if ($activeItemsWithHistory.Count % 20 -eq 0) {
+                Write-Host "  Progress: $($activeItemsWithHistory.Count) / $($activeItemIds.Count) histories retrieved" -ForegroundColor Gray
+            }
+        } catch {
+            Write-Warning "Failed to get history for active item ${itemId}: $($_.Exception.Message)"
+        }
+    }
+
+    Write-Host "  [OK] Retrieved history for $($activeItemsWithHistory.Count) active items" -ForegroundColor Green
+}
+
 # Step 7: Structure the output data
 Write-Host "`nStep 7: Structuring output data..." -ForegroundColor Yellow
 
@@ -249,7 +287,7 @@ $outputData = @{
         activeItems = $activeItemIds.Count
     }
     completedItems = $completedItemsWithHistory
-    activeItems = ($allItems | Where-Object { $activeItemIds -contains $_.id })
+    activeItems = if ($IncludeActiveHistory -and $activeItemsWithHistory) { $activeItemsWithHistory } else { ($allItems | Where-Object { $activeItemIds -contains $_.id }) }
 }
 
 # Step 8: Save to JSON file

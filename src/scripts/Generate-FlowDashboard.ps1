@@ -64,6 +64,18 @@ param(
     
     [Parameter(Mandatory = $false)]
     [string]$ConfigFile = $null
+
+    ,
+    [Parameter(Mandatory = $false)]
+    [switch]$IncludeActiveHistory
+
+    ,
+    [Parameter(Mandatory = $false)]
+    [ValidateSet('creation','boardEntry','column')]
+    [string]$LeadTimeStartType,
+
+    [Parameter(Mandatory = $false)]
+    [string]$LeadTimeStartColumn
 )
 
 $ErrorActionPreference = "Stop"
@@ -109,6 +121,10 @@ if (-not $SkipFetch) {
     
     if ($ConfigFile) {
         $fetchParams['ConfigFile'] = $ConfigFile
+    }
+
+    if ($IncludeActiveHistory) {
+        $fetchParams['IncludeActiveHistory'] = $true
     }
     
     & (Join-Path $PSScriptRoot "Fetch-TeamFlowData.ps1") @fetchParams
@@ -162,6 +178,13 @@ if ($WorkflowStartColumn) {
 }
 if ($ConfigFile) {
     $buildParams['ConfigFile'] = $ConfigFile
+}
+
+if ($LeadTimeStartType) {
+    $buildParams['LeadTimeStartType'] = $LeadTimeStartType
+}
+if ($LeadTimeStartColumn) {
+    $buildParams['LeadTimeStartColumn'] = $LeadTimeStartColumn
 }
 & (Join-Path $PSScriptRoot "Build-DashboardData.ps1") @buildParams
 

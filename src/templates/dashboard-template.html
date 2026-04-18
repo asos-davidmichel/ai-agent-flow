@@ -584,6 +584,16 @@
                     </div>
                 </div>
 
+                <!-- Data quality -->
+                <div style="background: #f7fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 25px; margin-bottom: 30px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);">
+                    <h2 style="margin: 0 0 15px 0; font-size: 20px; font-weight: 700; color: #2d3748;">⚠️ Data quality</h2>
+                    <p style="margin: 0 0 20px 0; font-size: 14px; color: #4a5568;">Items are excluded when required data is missing. No guessing.</p>
+                    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
+                        <div style="font-weight: 700; font-size: 15px; margin-bottom: 10px; color: #2d3748;">Exclusions</div>
+                        <div style="font-size: 13px; line-height: 1.6; color: #4a5568;" id="dataQualitySummary"><!-- populated dynamically --></div>
+                    </div>
+                </div>
+
                 <!-- State mapping (to columns) -->
                 <div style="background: #f7fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 25px; margin-bottom: 30px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);">
                     <h2 style="margin: 0 0 15px 0; font-size: 20px; font-weight: 700; color: #2d3748;">🧭 States & columns</h2>
@@ -815,7 +825,7 @@
             <div class="chart-card">
                 <h2>🔄 Cumulative Flow Diagram</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    Shows arrival vs departure as cumulative lines with trend lines to visualize system stability. Toggle states on/off to analyze specific workflow stages.
+                    Shows cumulative arrivals vs departures for the whole board to visualize whether backlog is growing, shrinking, or stable.
                 </p>
                 <div id="cfdRates" style="background: #f7fafc; padding: 10px; margin-bottom: 10px; border-radius: 6px; font-size: 14px; color: #4a5568;">
                     <strong>Arrival Rate:</strong> <span id="arrivalRate">-</span> items/week | 
@@ -1291,6 +1301,16 @@
         `;
         document.getElementById('metricCards').innerHTML = metricCardsHTML;
 
+        // Initialize Backlog Growth card trend arrow from global metrics (do not let CFD toggles override)
+        const systemStabilityTrendEl = document.getElementById('systemStabilityTrend');
+        if (systemStabilityTrendEl && dashboardData.metrics.systemStability && dashboardData.metrics.systemStability.trend) {
+            systemStabilityTrendEl.innerHTML = getTrendIndicator(
+                dashboardData.metrics.systemStability.trend,
+                dashboardData.metrics.systemStability.ratio,
+                dashboardData.metrics.systemStability.trend.previousValue
+            );
+        }
+
         // Render insights (static insights from JSON - efficiency insights are generated dynamically below)
         document.getElementById('throughputInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(dashboardData.insights.throughput)}</p>`;
         
@@ -1366,6 +1386,38 @@
         const analysisLines = [];
         analysisLines.push(`<strong>Period:</strong> ${escapeHtml(dashboardData.period)}`);
         document.getElementById('boardScopeAnalysisSummary').innerHTML = analysisLines.join('<br>');
+
+        // Data quality (from generator)
+        const dq = configSummary && configSummary.dataQuality ? configSummary.dataQuality : null;
+        const dqEl = document.getElementById('dataQualitySummary');
+        if (dqEl) {
+            const threshold = (dq && typeof dq.warningThresholdPercent === 'number') ? dq.warningThresholdPercent : 10;
+            const charts = (dq && dq.charts && typeof dq.charts === 'object') ? dq.charts : null;
+
+            if (!charts || Object.keys(charts).length === 0) {
+                dqEl.innerHTML = '<span style="color: #718096;">(no data)</span>';
+            } else {
+                const lines = Object.entries(charts).map(([key, v]) => {
+                    const name = (v && v.name) ? v.name : key;
+                    const candidates = (v && typeof v.candidates === 'number') ? v.candidates : 0;
+                    const excluded = (v && typeof v.excluded === 'number') ? v.excluded : 0;
+                    const pct = (v && typeof v.excludedPercent === 'number') ? v.excludedPercent : 0;
+                    const isWarn = pct >= threshold;
+
+                    const badge = isWarn
+                        ? '<span style="display:inline-block; padding: 2px 8px; border-radius: 999px; border: 1px solid #e2e8f0; background: #fff; color: #b45309; font-weight: 700; font-size: 12px; margin-left: 8px;">High</span>'
+                        : '';
+
+                    return `<div style="margin-bottom: 8px;">` +
+                        `<strong>${escapeHtml(name)}:</strong> ` +
+                        `${excluded} excluded out of ${candidates} (${pct.toFixed(1)}%)` +
+                        `${badge}` +
+                        `</div>`;
+                });
+
+                dqEl.innerHTML = lines.join('');
+            }
+        }
 
         // States & columns (from config)
         const cfgColumns = configSummary && configSummary.columns ? configSummary.columns : null;
@@ -2920,108 +2972,71 @@
             }
         });
 
-        // Cumulative Flow Diagram with state-based layers
-        const cfdDatasets = [];
-        
-        // Add state-based layers if available (converted to cumulative)
-        if (dashboardData.charts.cfd.states) {
-            const stateColors = [
-                { border: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.2)' },  // Purple
-                { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.2)' },  // Blue
-                { border: '#10b981', bg: 'rgba(16, 185, 129, 0.2)' },  // Green
-                { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.2)' },  // Orange
-                { border: '#ef4444', bg: 'rgba(239, 68, 68, 0.2)' },   // Red
-                { border: '#ec4899', bg: 'rgba(236, 72, 153, 0.2)' },  // Pink
-                { border: '#6366f1', bg: 'rgba(99, 102, 241, 0.2)' },  // Indigo
-            ];
-            
-            // Convert state WIP counts to cumulative flow
-            // For a proper CFD, we need to show cumulative items that reached each state
-            // We'll calculate this by taking cumulative arrivals and subtracting items still in previous states
-            
-            dashboardData.charts.cfd.states.forEach((state, index) => {
-                const color = stateColors[index % stateColors.length];
-                
-                // Calculate cumulative values for this state
-                // This represents "how many items have reached this state or beyond"
-                const cumulativeValues = state.values.map((wipCount, timeIndex) => {
-                    // Start with total arrivals up to this point
-                    let cumulative = dashboardData.charts.cfd.arrivals[timeIndex];
-                    
-                    // Subtract items still in states before this one
-                    for (let prevStateIndex = 0; prevStateIndex < index; prevStateIndex++) {
-                        cumulative -= dashboardData.charts.cfd.states[prevStateIndex].values[timeIndex];
-                    }
-                    
-                    // Ensure no negative values
-                    return Math.max(0, cumulative);
-                });
-                
-                cfdDatasets.push({
-                    label: state.name,
-                    data: cumulativeValues,
-                    borderColor: color.border,
-                    backgroundColor: color.bg,
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0,
-                    pointRadius: 2,
-                    pointHoverRadius: 4,
-                    hidden: false,  // Visible by default
-                    order: 2,
-                    isState: true
-                });
-            });
-            
-            // Add final done state as cumulative departures
-            // Extract final column name from last transition (e.g., "Ready for Release → Closed")
-            const lastTransition = dashboardData.charts.transitionRates.transitions.length > 0 
-                ? dashboardData.charts.transitionRates.transitions[dashboardData.charts.transitionRates.transitions.length - 1]
-                : null;
-            const finalColumnName = lastTransition ? lastTransition.split(' → ')[1] : 'Completed';
-            
-            cfdDatasets.push({
-                label: finalColumnName,
-                data: dashboardData.charts.cfd.departures,
-                borderColor: '#059669',
-                backgroundColor: 'rgba(5, 150, 105, 0.2)',
+        // Cumulative Flow Diagram (whole board): cumulative arrivals vs departures
+        const cfdLabels = (dashboardData.charts.cfd && dashboardData.charts.cfd.labels) ? dashboardData.charts.cfd.labels : [];
+        const cfdArrivals = (dashboardData.charts.cfd && dashboardData.charts.cfd.arrivals) ? dashboardData.charts.cfd.arrivals : [];
+        const cfdDepartures = (dashboardData.charts.cfd && dashboardData.charts.cfd.departures) ? dashboardData.charts.cfd.departures : [];
+
+        function getArrivalBasisLabel() {
+            const defs = dashboardData.metricDefinitions || null;
+            const method = defs && defs.leadTimeMethod ? defs.leadTimeMethod : 'boardEntry';
+            const startCol = defs && defs.leadTimeStartColumn ? defs.leadTimeStartColumn : '';
+
+            if (method === 'creation') return 'Created date';
+            if (method === 'boardEntry') return 'Entered the board';
+            if (method === 'column') return startCol ? `Entered "${startCol}"` : 'Entered specific column';
+            if (method === 'backlogExit') return startCol ? `Entered "${startCol}"` : 'Entered specific column';
+            return method;
+        }
+
+        const arrivalBasisLabel = getArrivalBasisLabel();
+
+        const cfdDatasets = [
+            {
+                label: `Arrivals (${arrivalBasisLabel})`,
+                data: cfdArrivals,
+                borderColor: '#3b82f6',
+                backgroundColor: 'rgba(59, 130, 246, 0.15)',
                 borderWidth: 2,
                 fill: true,
                 tension: 0,
                 pointRadius: 2,
-                pointHoverRadius: 4,
-                hidden: false,  // Visible by default
-                order: 2,
-                isState: true
-            });
-        }
-        
-        // Add placeholder trend lines (will be populated by updateTrendLines)
-        cfdDatasets.push({
-            label: 'Arrival Trend',
-            data: [],
-            borderColor: '#6b7280',
-            backgroundColor: 'transparent',
-            borderWidth: 2,
-            borderDash: [10, 5],
-            pointRadius: 0,
-            fill: false,
-            order: 0,
-            isTrend: true
-        });
-        
-        cfdDatasets.push({
-            label: 'Departure Trend',
-            data: [],
-            borderColor: '#9ca3af',
-            backgroundColor: 'transparent',
-            borderWidth: 2,
-            borderDash: [10, 5],
-            pointRadius: 0,
-            fill: false,
-            order: 0,
-            isTrend: true
-        });
+                pointHoverRadius: 4
+            },
+            {
+                label: 'Departures (Closed)',
+                data: cfdDepartures,
+                borderColor: '#059669',
+                backgroundColor: 'rgba(5, 150, 105, 0.12)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0,
+                pointRadius: 2,
+                pointHoverRadius: 4
+            },
+            {
+                label: 'Arrivals trend',
+                data: [],
+                borderColor: '#2563eb',
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+                borderDash: [8, 6],
+                pointRadius: 0,
+                fill: false,
+                tension: 0
+            },
+            {
+                label: 'Departures trend',
+                data: [],
+                borderColor: '#047857',
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+                borderDash: [8, 6],
+                pointRadius: 0,
+                fill: false,
+                tension: 0
+            }
+        ];
         
         // Function to calculate trend line from data points
         function calculateTrendLine(data) {
@@ -3037,181 +3052,88 @@
             return data.map((_, i) => firstValue + slope * i);
         }
         
-        // Function to update trend lines and rates based on visible states
+        // Update arrival/departure rates, trend lines, and insight (whole board)
         function updateTrendLines(chart) {
-            // Get all state datasets that are currently visible
-            const visibleStates = [];
-            chart.data.datasets.forEach((dataset, index) => {
-                if (dataset.isState) {
-                    let isVisible = false;
-                    
-                    // Try to get visibility from meta first (after toggles)
-                    try {
-                        const meta = chart.getDatasetMeta(index);
-                        if (meta && meta.hidden !== undefined && meta.hidden !== null) {
-                            isVisible = !meta.hidden;
-                        } else {
-                            // Fall back to dataset property (initial load)
-                            isVisible = !dataset.hidden;
-                        }
-                    } catch (e) {
-                        // If meta not available, use dataset property
-                        isVisible = !dataset.hidden;
-                    }
-                    
-                    if (isVisible) {
-                        visibleStates.push({ index, data: dataset.data, label: dataset.label });
-                    }
-                }
-            });
-            
-            if (visibleStates.length === 0) {
-                // No states visible, hide trends
-                const arrivalTrendIndex = chart.data.datasets.findIndex(d => d.label === 'Arrival Trend');
-                const departureTrendIndex = chart.data.datasets.findIndex(d => d.label === 'Departure Trend');
-                if (arrivalTrendIndex >= 0) chart.data.datasets[arrivalTrendIndex].data = [];
-                if (departureTrendIndex >= 0) chart.data.datasets[departureTrendIndex].data = [];
+            const arrivalData = cfdArrivals;
+            const departureData = cfdDepartures;
+            const numPoints = Math.min(arrivalData.length, departureData.length);
+
+            if (numPoints < 2) {
                 document.getElementById('arrivalRate').textContent = '-';
                 document.getElementById('departureRate').textContent = '-';
+                if (chart) {
+                    const aTrendIdx = chart.data.datasets.findIndex(d => d.label.startsWith('Arrivals trend'));
+                    const dTrendIdx = chart.data.datasets.findIndex(d => d.label.startsWith('Departures trend'));
+                    if (aTrendIdx >= 0) chart.data.datasets[aTrendIdx].data = [];
+                    if (dTrendIdx >= 0) chart.data.datasets[dTrendIdx].data = [];
+                }
                 return;
             }
-            
-            // First visible state = arrivals
-            const arrivalData = visibleStates[0].data;
-            
-            // Last visible state = departures
-            const departureData = visibleStates[visibleStates.length - 1].data;
-            
-            // Calculate trend lines
-            const arrivalTrend = calculateTrendLine(arrivalData);
-            const departureTrend = calculateTrendLine(departureData);
-            
-            // Update trend datasets
-            const arrivalTrendIndex = chart.data.datasets.findIndex(d => d.label === 'Arrival Trend');
-            const departureTrendIndex = chart.data.datasets.findIndex(d => d.label === 'Departure Trend');
-            
-            if (arrivalTrendIndex >= 0) {
-                chart.data.datasets[arrivalTrendIndex].data = arrivalTrend;
+
+            // Update dotted trend lines
+            if (chart) {
+                const arrivalTrend = calculateTrendLine(arrivalData.slice(0, numPoints));
+                const departureTrend = calculateTrendLine(departureData.slice(0, numPoints));
+                const aTrendIdx = chart.data.datasets.findIndex(d => d.label.startsWith('Arrivals trend'));
+                const dTrendIdx = chart.data.datasets.findIndex(d => d.label.startsWith('Departures trend'));
+                if (aTrendIdx >= 0) chart.data.datasets[aTrendIdx].data = arrivalTrend;
+                if (dTrendIdx >= 0) chart.data.datasets[dTrendIdx].data = departureTrend;
             }
-            if (departureTrendIndex >= 0) {
-                chart.data.datasets[departureTrendIndex].data = departureTrend;
-            }
-            
-            // Calculate and display rates
-            const numPoints = arrivalData.length;
-            if (numPoints >= 2) {
-                const arrivalStart = arrivalData[0] || 0;
-                const arrivalEnd = arrivalData[numPoints - 1] || 0;
-                const departureStart = departureData[0] || 0;
-                const departureEnd = departureData[numPoints - 1] || 0;
-                
-                const arrivalRate = ((arrivalEnd - arrivalStart) / (numPoints - 1)).toFixed(2);
-                const departureRate = ((departureEnd - departureStart) / (numPoints - 1)).toFixed(2);
-                
-                document.getElementById('arrivalRate').textContent = arrivalRate;
-                document.getElementById('departureRate').textContent = departureRate;
-                
-                // Update system stability card
+
+            const arrivalStart = arrivalData[0] || 0;
+            const arrivalEnd = arrivalData[numPoints - 1] || 0;
+            const departureStart = departureData[0] || 0;
+            const departureEnd = departureData[numPoints - 1] || 0;
+
+            const arrivalRate = ((arrivalEnd - arrivalStart) / (numPoints - 1)).toFixed(2);
+            const departureRate = ((departureEnd - departureStart) / (numPoints - 1)).toFixed(2);
+
+            document.getElementById('arrivalRate').textContent = arrivalRate;
+            document.getElementById('departureRate').textContent = departureRate;
+
+            const cfdInsightEl = document.getElementById('cfdInsight');
+            if (cfdInsightEl) {
                 const gap = (parseFloat(arrivalRate) - parseFloat(departureRate)).toFixed(1);
-                const gapFormatted = gap >= 0 ? `+${gap}` : gap;
-                const ratioEl = document.getElementById('systemStabilityRatio');
-                const textEl = document.getElementById('systemStabilityText');
-                const trendEl = document.getElementById('systemStabilityTrend');
-                
-                if (ratioEl) ratioEl.textContent = gapFormatted;
-                
-                // Update trend indicator with previousValue
-                const stabilityCardEl = document.getElementById('systemStabilityCard');
-                if (trendEl && dashboardData.metrics.systemStability.trend) {
-                    const trend = dashboardData.metrics.systemStability.trend;
-                    const trendHtml = getTrendIndicator(trend, gapFormatted, trend.previousValue);
-                    trendEl.innerHTML = trendHtml;
+                const a = parseFloat(arrivalRate);
+                const d = parseFloat(departureRate);
+                let insightText = '';
 
-                    if (stabilityCardEl) {
-                        stabilityCardEl.classList.remove('trend-card-good', 'trend-card-bad', 'trend-card-stable');
-                        stabilityCardEl.classList.add(getTrendCardClass(trend));
-                    }
-                } else if (trendEl) {
-                    // Fallback if no trend data
-                    const isGrowing = parseFloat(arrivalRate) > parseFloat(departureRate) * 1.1;
-                    const isShrinking = parseFloat(departureRate) > parseFloat(arrivalRate) * 1.1;
+                if (a > d * 1.1) {
+                    insightText = `Unstable (growing) because arrivals are higher than departures. ` +
+                        `Arrivals: ${arrivalRate} items/week (${arrivalBasisLabel}). ` +
+                        `Departures: ${departureRate} items/week (Closed). ` +
+                        `Net: +${gap} items/week (more arriving than closing).`;
+                } else if (d > a * 1.1) {
+                    insightText = `Stable (catching up) because departures are higher than arrivals. ` +
+                        `Arrivals: ${arrivalRate} items/week (${arrivalBasisLabel}). ` +
+                        `Departures: ${departureRate} items/week (Closed). ` +
+                        `Net: ${gap} items/week (more closing than arriving).`;
+                } else {
+                    insightText = `Stable because arrivals and departures are similar. ` +
+                        `Arrivals: ${arrivalRate} items/week (${arrivalBasisLabel}). ` +
+                        `Departures: ${departureRate} items/week (Closed).`;
+                }
 
-                    if (isGrowing) {
-                        trendEl.innerHTML = '<span class="trend-indicator trend-up-bad">↑</span>';
-                    } else if (isShrinking) {
-                        trendEl.innerHTML = '<span class="trend-indicator trend-down-good">↓</span>';
-                    } else {
-                        trendEl.innerHTML = '<span class="trend-indicator trend-stable">→</span>';
-                    }
+                const excluded = dashboardData.charts.cfd.excluded;
+                if (excluded && typeof excluded.count === 'number' && excluded.count > 0) {
+                    insightText += ` Excluded ${excluded.count} item(s) due to missing or invalid dates.`;
+                }
 
-                    if (stabilityCardEl) {
-                        stabilityCardEl.classList.remove('trend-card-good', 'trend-card-bad', 'trend-card-stable');
-                        stabilityCardEl.classList.add(isGrowing ? 'trend-card-bad' : (isShrinking ? 'trend-card-good' : 'trend-card-stable'));
-                    }
-                }
-                
-                if (textEl) {
-                    if (parseFloat(arrivalRate) > parseFloat(departureRate) * 1.1) {
-                        textEl.textContent = '⚠️ GROWING';
-                        textEl.className = 'metric-trend trend-warning';
-                    } else if (parseFloat(departureRate) > parseFloat(arrivalRate) * 1.1) {
-                        textEl.textContent = '✅ SHRINKING';
-                        textEl.className = 'metric-trend trend-good';
-                    } else {
-                        textEl.textContent = '➡️ STABLE';
-                        textEl.className = 'metric-trend trend-neutral';
-                    }
-                }
-                
-                // Update CFD insight
-                const cfdInsightEl = document.getElementById('cfdInsight');
-                if (cfdInsightEl) {
-                    const gap = (parseFloat(arrivalRate) - parseFloat(departureRate)).toFixed(1);
-                    let insightText = '';
-                    if (parseFloat(arrivalRate) > parseFloat(departureRate) * 1.1) {
-                        insightText = `System is unstable. Arrival rate (${arrivalRate}/week) exceeds departure rate (${departureRate}/week), causing backlog to grow by ~${gap} items/week. The gap between cumulative arrivals and departures is widening. Focus on increasing throughput.`;
-                    } else if (parseFloat(departureRate) > parseFloat(arrivalRate) * 1.1) {
-                        insightText = `System is healthy. Departure rate (${departureRate}/week) exceeds arrival rate (${arrivalRate}/week), reducing backlog by ~${Math.abs(gap)} items/week. Continue current pace to clear accumulated work.`;
-                    } else {
-                        insightText = `System is balanced. Arrival rate (${arrivalRate}/week) and departure rate (${departureRate}/week) are roughly equal. Work is flowing steadily through the system.`;
-                    }
-                    cfdInsightEl.innerHTML = `<p><strong>Insight:</strong> ${insightText}</p>`;
-                }
+                cfdInsightEl.innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(insightText)}</p>`;
             }
         }
         
         const cfdChart = new Chart(document.getElementById('cfdChart'), {
             type: 'line',
             data: {
-                labels: dashboardData.charts.cfd.labels,
+                labels: cfdLabels,
                 datasets: cfdDatasets
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { 
-                        display: true, 
-                        position: 'top',
-                        onClick: function(e, legendItem, legend) {
-                            const index = legendItem.datasetIndex;
-                            const ci = legend.chart;
-                            const meta = ci.getDatasetMeta(index);
-                            
-                            // Don't allow toggling trend lines
-                            if (ci.data.datasets[index].isTrend) {
-                                return;
-                            }
-                            
-                            // Toggle visibility
-                            meta.hidden = meta.hidden === null ? !ci.data.datasets[index].hidden : null;
-                            ci.update();
-                            
-                            // Recalculate trend lines and rates based on visible states
-                            updateTrendLines(ci);
-                            ci.update();
-                        }
-                    },
+                    legend: { display: true, position: 'top' },
                     tooltip: {
                         backgroundColor: 'rgba(0,0,0,0.8)',
                         padding: 12

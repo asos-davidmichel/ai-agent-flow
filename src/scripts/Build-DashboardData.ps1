@@ -23,7 +23,14 @@ param(
     [string]$WorkflowStartColumn,
     
     [Parameter(Mandatory = $false)]
-    [string]$ConfigFile = $null
+    [string]$ConfigFile = $null,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateSet('creation','boardEntry','column')]
+    [string]$LeadTimeStartType,
+
+    [Parameter(Mandatory = $false)]
+    [string]$LeadTimeStartColumn
 )
 
 Write-Host "Building dashboard data structure..." -ForegroundColor Yellow
@@ -90,6 +97,100 @@ function Get-DaysBetween($date1, $date2) {
     return [Math]::Round((([DateTime]$date2) - ([DateTime]$date1)).TotalDays, 1)
 }
 
+function Get-EffectiveLeadTimeConfig {
+    param(
+        $Config,
+        [string]$StartTypeOverride,
+        [string]$StartColumnOverride
+    )
+
+    $cfgStartType = if ($Config -and $Config.metrics -and $Config.metrics.leadTime -and $Config.metrics.leadTime.startType) {
+        [string]$Config.metrics.leadTime.startType
+    } else {
+        'boardEntry'
+    }
+
+    # Backwards compat: older configs used backlogExit for "specific column"
+    if ($cfgStartType -eq 'backlogExit') { $cfgStartType = 'column' }
+
+    $startType = if (-not [string]::IsNullOrWhiteSpace($StartTypeOverride)) {
+        $StartTypeOverride
+    } else {
+        $cfgStartType
+    }
+
+    $cfgStartColumn = if ($Config -and $Config.metrics -and $Config.metrics.leadTime) {
+        if ($Config.metrics.leadTime.startColumn) { [string]$Config.metrics.leadTime.startColumn }
+        elseif ($Config.metrics.leadTime.column) { [string]$Config.metrics.leadTime.column }
+        else { $null }
+    } else {
+        $null
+    }
+
+    $startColumn = if (-not [string]::IsNullOrWhiteSpace($StartColumnOverride)) {
+        $StartColumnOverride
+    } else {
+        $cfgStartColumn
+    }
+
+    if ($startType -eq 'column' -and [string]::IsNullOrWhiteSpace($startColumn)) {
+        $startColumn = 'In Development'
+    }
+
+    return @{ startType = $startType; startColumn = $startColumn }
+}
+
+function Get-ItemStartDateStrict {
+    param(
+        $Item,
+        [string]$StartType,
+        [string]$StartColumn
+    )
+
+    switch ($StartType) {
+        'creation' {
+            $raw = $Item.fields.'System.CreatedDate'
+            if (-not $raw) { return $null }
+            try { return [DateTime]$raw } catch { return $null }
+        }
+        'boardEntry' {
+            if (-not $Item.updates -or $Item.updates.Count -eq 0) { return $null }
+
+            $first = $Item.updates |
+                Where-Object { $_.fields.'System.BoardColumn' -and $_.fields.'System.BoardColumn'.newValue } |
+                Sort-Object {
+                    $d = [DateTime]$_.revisedDate
+                    if ($d.Year -ge 9999) { [DateTime]::MaxValue } else { $d }
+                } |
+                Select-Object -First 1
+
+            if (-not $first) { return $null }
+            try { return [DateTime]$first.revisedDate } catch { return $null }
+        }
+        'column' {
+            if (-not $Item.updates -or $Item.updates.Count -eq 0) { return $null }
+            if ([string]::IsNullOrWhiteSpace($StartColumn)) { return $null }
+
+            $first = $Item.updates |
+                Where-Object {
+                    $_.fields.'System.BoardColumn' -and
+                    $_.fields.'System.BoardColumn'.newValue -eq $StartColumn
+                } |
+                Sort-Object {
+                    $d = [DateTime]$_.revisedDate
+                    if ($d.Year -ge 9999) { [DateTime]::MaxValue } else { $d }
+                } |
+                Select-Object -First 1
+
+            if (-not $first) { return $null }
+            try { return [DateTime]$first.revisedDate } catch { return $null }
+        }
+        default {
+            return $null
+        }
+    }
+}
+
 # Helper: Get-Median
 function Get-Median($values) {
     if (-not $values -or $values.Count -eq 0) { return 0 }
@@ -147,71 +248,23 @@ function Calculate-Trend($values, $higherIsBetter = $true) {
 function Get-LeadTime($item, $config) {
     $closedDate = $item.fields.'Microsoft.VSTS.Common.ClosedDate'
     if (-not $closedDate) { return 0 }
-    
-    # Determine lead time start type from config (default: boardEntry)
-    $startType = if ($config -and $config.metrics.leadTime.startType) {
-        $config.metrics.leadTime.startType
-    } else {
-        'boardEntry'
-    }
-    
-    $startDate = $null
-    
-    switch ($startType) {
-        'creation' {
-            # Use System.CreatedDate
-            $startDate = $item.fields.'System.CreatedDate'
-        }
-        'boardEntry' {
-            # Find first board column entry from updates
-            if ($item.updates -and $item.updates.Count -gt 0) {
-                $firstBoardEntry = $item.updates | Where-Object { 
-                    $_.fields.'System.BoardColumn' -and $_.fields.'System.BoardColumn'.newValue 
-                } | Select-Object -First 1
-                
-                if ($firstBoardEntry) {
-                    $startDate = $firstBoardEntry.revisedDate
-                } else {
-                    # Fallback: use CreatedDate if no board column entry found
-                    $startDate = $item.fields.'System.CreatedDate'
-                }
-            } else {
-                # Fallback: no updates available, use CreatedDate
-                $startDate = $item.fields.'System.CreatedDate'
-            }
-        }
-        'backlogExit' {
-            # Find when item left last backlog column (enters first in-progress column)
-            $targetColumn = if ($config -and $config.metrics.leadTime.column) {
-                $config.metrics.leadTime.column
-            } else {
-                'In Development'  # Default
-            }
-            
-            if ($item.updates -and $item.updates.Count -gt 0) {
-                $entryToInProgress = $item.updates | Where-Object { 
-                    $_.fields.'System.BoardColumn' -and 
-                    $_.fields.'System.BoardColumn'.newValue -eq $targetColumn
-                } | Select-Object -First 1
-                
-                if ($entryToInProgress) {
-                    $startDate = $entryToInProgress.revisedDate
-                } else {
-                    # Fallback: use CreatedDate
-                    $startDate = $item.fields.'System.CreatedDate'
-                }
-            } else {
-                # Fallback: use CreatedDate
-                $startDate = $item.fields.'System.CreatedDate'
-            }
-        }
-        default {
-            # Default to creation date
-            $startDate = $item.fields.'System.CreatedDate'
+
+    $effective = Get-EffectiveLeadTimeConfig -Config $config -StartTypeOverride $LeadTimeStartType -StartColumnOverride $LeadTimeStartColumn
+    $startType = [string]$effective.startType
+    $startColumn = [string]$effective.startColumn
+
+    $startDateObj = Get-ItemStartDateStrict -Item $item -StartType $startType -StartColumn $startColumn
+
+    # Backwards-compatible fallback for lead time only
+    if (-not $startDateObj) {
+        $createdRaw = $item.fields.'System.CreatedDate'
+        if ($createdRaw) {
+            try { $startDateObj = [DateTime]$createdRaw } catch { $startDateObj = $null }
         }
     }
-    
-    return (Get-DaysBetween $startDate $closedDate)
+
+    if (-not $startDateObj) { return 0 }
+    return (Get-DaysBetween $startDateObj $closedDate)
 }
 
 # Helper: Calculate weekly WIP snapshots from state transitions
@@ -1984,6 +2037,176 @@ $blockedTrend = if ($netBlocked -gt 0) {
     @{ direction = 'stable'; isGood = $true }
 }
 
+# Cumulative Flow Diagram (whole board): arrivals vs departures over time
+# Arrivals uses the same start-point choice as lead time (creation / board entry / specific column)
+# Departures = ClosedDate
+$effectiveLt = Get-EffectiveLeadTimeConfig -Config $config -StartTypeOverride $LeadTimeStartType -StartColumnOverride $LeadTimeStartColumn
+$cfdArrivalStartType = [string]$effectiveLt.startType
+$cfdArrivalStartColumn = [string]$effectiveLt.startColumn
+
+$cfdLabels = @($blockedTimelineLabels)
+$cfdWeekCount = $timelineWeekKeys.Count
+$cfdWeeklyArrivals = @(0) * $cfdWeekCount
+$cfdWeeklyDepartures = @(0) * $cfdWeekCount
+
+$cfdCandidates = [int]($activeItems.Count + $completedItems.Count)
+$cfdExcludedCount = 0
+$cfdExclusionReasons = @{}
+$cfdExclusionIds = @{}
+
+function Add-CfdExclusion {
+    param(
+        [string]$Reason,
+        [int]$Id
+    )
+
+    if (-not $cfdExclusionReasons.ContainsKey($Reason)) { $cfdExclusionReasons[$Reason] = 0 }
+    $cfdExclusionReasons[$Reason]++
+    $cfdExcludedCount++
+
+    if (-not $cfdExclusionIds.ContainsKey($Reason)) { $cfdExclusionIds[$Reason] = @() }
+    if ($cfdExclusionIds[$Reason].Count -lt 50) {
+        $cfdExclusionIds[$Reason] += $Id
+    }
+}
+
+$allCfdItems = @($activeItems + $completedItems)
+foreach ($item in $allCfdItems) {
+    $startDate = Get-ItemStartDateStrict -Item $item -StartType $cfdArrivalStartType -StartColumn $cfdArrivalStartColumn
+    if (-not $startDate) {
+        $reason = if ($cfdArrivalStartType -eq 'creation') {
+            'missingCreatedDate'
+        } elseif ($cfdArrivalStartType -eq 'boardEntry') {
+            'missingBoardEntryDate'
+        } else {
+            'missingColumnEntryDate'
+        }
+
+        Add-CfdExclusion -Reason $reason -Id ([int]$item.id)
+        continue
+    }
+
+    if ($startDate -ge $analysisStart -and $startDate -le $analysisEnd) {
+        $wkKey = (Get-WeekStartMonday $startDate).ToString('yyyy-MM-dd')
+        if ($weekKeyToIndex.ContainsKey($wkKey)) {
+            $idx = [int]$weekKeyToIndex[$wkKey]
+            if ($idx -ge 0 -and $idx -lt $cfdWeekCount) {
+                $cfdWeeklyArrivals[$idx] = [int]$cfdWeeklyArrivals[$idx] + 1
+            }
+        }
+    }
+}
+
+foreach ($item in $completedItems) {
+    $closedRaw = $item.fields.'Microsoft.VSTS.Common.ClosedDate'
+    if (-not $closedRaw) {
+        Add-CfdExclusion -Reason 'missingClosedDate' -Id ([int]$item.id)
+        continue
+    }
+
+    try {
+        $closed = [DateTime]$closedRaw
+    } catch {
+        Add-CfdExclusion -Reason 'invalidClosedDate' -Id ([int]$item.id)
+        continue
+    }
+
+    if ($closed -ge $analysisStart -and $closed -le $analysisEnd) {
+        $wkKey = (Get-WeekStartMonday $closed).ToString('yyyy-MM-dd')
+        if ($weekKeyToIndex.ContainsKey($wkKey)) {
+            $idx = [int]$weekKeyToIndex[$wkKey]
+            if ($idx -ge 0 -and $idx -lt $cfdWeekCount) {
+                $cfdWeeklyDepartures[$idx] = [int]$cfdWeeklyDepartures[$idx] + 1
+            }
+        }
+    }
+}
+
+$cfdCumulativeArrivals = @()
+$cfdCumulativeDepartures = @()
+$runA = 0
+$runD = 0
+for ($i = 0; $i -lt $cfdWeekCount; $i++) {
+    $runA += [int]$cfdWeeklyArrivals[$i]
+    $runD += [int]$cfdWeeklyDepartures[$i]
+    $cfdCumulativeArrivals += $runA
+    $cfdCumulativeDepartures += $runD
+}
+
+$cfdExcludedPercent = if ($cfdCandidates -gt 0) { [Math]::Round(($cfdExcludedCount / $cfdCandidates) * 100, 1) } else { 0 }
+
+$cfdExcludedObject = @{
+    candidates = $cfdCandidates
+    count = $cfdExcludedCount
+    excludedPercent = $cfdExcludedPercent
+    reasons = $cfdExclusionReasons
+    ids = $cfdExclusionIds
+}
+
+$cfdChart = @{
+    labels = $cfdLabels
+    arrivals = $cfdCumulativeArrivals
+    departures = $cfdCumulativeDepartures
+    excluded = $cfdExcludedObject
+}
+
+# Backlog Growth (system stability) derived from CFD arrival/departure rates
+$systemStabilityMetric = @{
+    ratio = '+0.0'
+    text = 'STABLE'
+    class = 'trend-neutral'
+    trend = @{ direction = 'stable'; isGood = $true }
+}
+
+if ($cfdWeekCount -ge 2) {
+    $arrivalStart = [double]($cfdCumulativeArrivals[0])
+    $arrivalEnd = [double]($cfdCumulativeArrivals[$cfdWeekCount - 1])
+    $departureStart = [double]($cfdCumulativeDepartures[0])
+    $departureEnd = [double]($cfdCumulativeDepartures[$cfdWeekCount - 1])
+
+    $arrivalRate = ($arrivalEnd - $arrivalStart) / ($cfdWeekCount - 1)
+    $departureRate = ($departureEnd - $departureStart) / ($cfdWeekCount - 1)
+    $netRate = $arrivalRate - $departureRate
+
+    $ratioStr = if ($netRate -ge 0) { "+$([Math]::Round($netRate, 1))" } else { "$([Math]::Round($netRate, 1))" }
+
+    $trendObj = if ($arrivalRate -gt ($departureRate * 1.1)) {
+        @{ direction = 'up'; isGood = $false }
+    } elseif ($departureRate -gt ($arrivalRate * 1.1)) {
+        @{ direction = 'down'; isGood = $true }
+    } else {
+        @{ direction = 'stable'; isGood = $true }
+    }
+
+    $text = if ($trendObj.direction -eq 'up') {
+        '[!] GROWING'
+    } elseif ($trendObj.direction -eq 'down') {
+        'SHRINKING'
+    } else {
+        'STABLE'
+    }
+
+    $class = if ($trendObj.direction -eq 'up') {
+        'trend-warning'
+    } elseif ($trendObj.direction -eq 'down') {
+        'trend-good'
+    } else {
+        'trend-neutral'
+    }
+
+    $systemStabilityMetric = @{
+        ratio = $ratioStr
+        text = $text
+        class = $class
+        trend = $trendObj
+    }
+}
+
+# Data quality: Time In Column coverage
+$timeInColumnCandidates = [int]$completedWithMetrics.Count
+$timeInColumnExcluded = [int](@($completedWithMetrics | Where-Object { -not $_.columnTime -or $_.columnTime.Count -eq 0 }).Count)
+$timeInColumnExcludedPercent = if ($timeInColumnCandidates -gt 0) { [Math]::Round(($timeInColumnExcluded / $timeInColumnCandidates) * 100, 1) } else { 0 }
+
 # Build final data structure matching template expectations
 $dashboardData = @{ 
     teamName = "$($rawData.metadata.team) ($($rawData.metadata.project))"
@@ -1995,8 +2218,8 @@ $dashboardData = @{
     
     # Metadata about metric calculations
     metricDefinitions = @{
-        leadTimeMethod = if ($config -and $config.metrics.leadTime.startType) { $config.metrics.leadTime.startType } else { 'boardEntry' }
-        leadTimeStartColumn = if ($config -and $config.metrics.leadTime.startColumn) { $config.metrics.leadTime.startColumn } else { 'New' }
+        leadTimeMethod = $effectiveLt.startType
+        leadTimeStartColumn = if ($effectiveLt.startType -eq 'column') { $effectiveLt.startColumn } else { 'New' }
         leadTimeDescription = if ($config -and $config.metrics.leadTime.startDescription) { 
             $config.metrics.leadTime.startDescription 
         } else { 
@@ -2030,6 +2253,24 @@ $dashboardData = @{
         }
         columns = if ($config -and $config.columns) { $config.columns } else { $null }
         states = if ($config -and $config.states) { $config.states } else { $null }
+        dataQuality = @{
+            warningThresholdPercent = 10
+            policy = 'No guessing. If required data is missing, the item is excluded and counted here.'
+            charts = [ordered]@{
+                cfd = @{
+                    name = 'CFD (Arrivals vs Departures)'
+                    candidates = $cfdCandidates
+                    excluded = $cfdExcludedCount
+                    excludedPercent = $cfdExcludedPercent
+                }
+                timeInColumn = @{
+                    name = 'Time In Column'
+                    candidates = $timeInColumnCandidates
+                    excluded = $timeInColumnExcluded
+                    excludedPercent = $timeInColumnExcludedPercent
+                }
+            }
+        }
         blockers = @{
             tags = if ($config -and $config.blockers -and $config.blockers.tags) { @($config.blockers.tags) } else { @() }
             columns = if ($config -and $config.blockers -and $config.blockers.columns) { @($config.blockers.columns) } else { @() }
@@ -2084,12 +2325,7 @@ $dashboardData = @{
             insight = "Placeholder - needs calculation"
             trend = @{ direction = "stable"; isGood = $true }
         }
-        systemStability = @{
-            ratio = "+5.0"
-            text = "[!] GROWING"
-            class = "trend-warning"
-            trend = @{ direction = "up"; isGood = $false }
-        }
+        systemStability = $systemStabilityMetric
         bugRate = @{
             percentage = "$([Math]::Round(($bugs.Count / $completedWithMetrics.Count) * 100, 1))"
             count = $bugs.Count
@@ -2131,14 +2367,7 @@ $dashboardData = @{
             # Per-type statistics for dynamic reference lines
             byType = $cycleTimeByTypeStats
         }
-        cfd = @{
-            labels = @()
-            arrivals = @()
-            departures = @()
-            arrivalTrend = @()
-            departureTrend = @()
-            states = @()
-        }
+        cfd = $cfdChart
         wip = $wipAgingChart
         bugRate = @{
             labels = $bugRateLabels
