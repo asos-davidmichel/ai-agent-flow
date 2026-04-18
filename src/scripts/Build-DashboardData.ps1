@@ -101,6 +101,14 @@ function Test-IsTrackedWorkItemType {
 $activeItems = @($rawData.activeItems | Where-Object { Test-IsTrackedWorkItemType $_.fields.'System.WorkItemType' })
 $completedItems = @($rawData.completedItems | Where-Object { Test-IsTrackedWorkItemType $_.fields.'System.WorkItemType' })
 
+# Only fetch ADO type styles for work item types that actually appear in this dataset
+$observedTrackedTypes = @(
+    @($activeItems + $completedItems) |
+        ForEach-Object { $_.fields.'System.WorkItemType' } |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Select-Object -Unique
+)
+
 function Get-AdoPatFromEnv {
     if (-not [string]::IsNullOrWhiteSpace($env:AZURE_DEVOPS_EXT_PAT)) { return $env:AZURE_DEVOPS_EXT_PAT }
     if (-not [string]::IsNullOrWhiteSpace($env:ADO_PAT)) { return $env:ADO_PAT }
@@ -120,6 +128,15 @@ function Normalize-HexColor {
     return $c
 }
 
+function Get-SafeFileNameFragment {
+    param([string]$Text)
+    if ([string]::IsNullOrWhiteSpace($Text)) { return 'unknown' }
+    $safe = ($Text -replace '[^a-zA-Z0-9._-]+', '-')
+    $safe = $safe.Trim('-')
+    if ([string]::IsNullOrWhiteSpace($safe)) { return 'unknown' }
+    return $safe
+}
+
 function Get-AdoWorkItemTypeStyles {
     param(
         [Parameter(Mandatory = $true)][string]$Organization,
@@ -130,9 +147,73 @@ function Get-AdoWorkItemTypeStyles {
     $pat = Get-AdoPatFromEnv
     if ([string]::IsNullOrWhiteSpace($pat)) { return @{} }
 
+    $requested = @(
+        @($WorkItemTypes) |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            Select-Object -Unique
+    )
+    if (-not $requested -or $requested.Count -eq 0) {
+        return @{
+            styles = @{}
+            typeUrlCount = 0
+            errorCount = 0
+            sampleErrors = @{}
+            cache = @{ enabled = $true; used = $false; hitCount = 0; missCount = 0 }
+        }
+    }
+
+    $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
+    $cacheDir = Join-Path (Join-Path $repoRoot 'output') '_cache'
+    if (-not (Test-Path $cacheDir)) {
+        New-Item -ItemType Directory -Path $cacheDir | Out-Null
+    }
+    $cacheFile = Join-Path $cacheDir ("ado-workitemtype-styles-{0}-{1}.json" -f (Get-SafeFileNameFragment -Text $Organization), (Get-SafeFileNameFragment -Text $Project))
+
+    $cachedStyles = @{}
+    $cacheMeta = $null
+    if (Test-Path $cacheFile) {
+        try {
+            $cacheObj = Get-Content $cacheFile -Raw | ConvertFrom-Json
+            if ($cacheObj -and $cacheObj.styles) {
+                $cachedStyles = @{}
+                foreach ($p in $cacheObj.styles.PSObject.Properties) {
+                    $cachedStyles[$p.Name] = $p.Value
+                }
+            }
+            $cacheMeta = $cacheObj.meta
+        } catch {
+            $cachedStyles = @{}
+            $cacheMeta = $null
+        }
+    }
+
     try {
         $base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$pat"))
         $headers = @{ Authorization = "Basic $base64AuthInfo"; Accept = "application/json" }
+
+        $styles = @{}
+        $cacheHitCount = 0
+        foreach ($name in $requested) {
+            if ($cachedStyles -and $cachedStyles.ContainsKey($name)) {
+                $styles[$name] = $cachedStyles[$name]
+                $cacheHitCount++
+            }
+        }
+
+        $missing = @(
+            $requested |
+                Where-Object { -not $styles.ContainsKey($_) }
+        )
+
+        if ($missing.Count -eq 0) {
+            return @{
+                styles = $styles
+                typeUrlCount = 0
+                errorCount = 0
+                sampleErrors = @{}
+                cache = @{ enabled = $true; used = $true; file = $cacheFile; hitCount = $cacheHitCount; missCount = 0 }
+            }
+        }
 
         # List type categories first (reliable in this org), then fetch each requested type definition URL.
         $catUri = "https://dev.azure.com/$Organization/$Project/_apis/wit/workitemtypecategories?api-version=7.1-preview.2"
@@ -152,10 +233,8 @@ function Get-AdoWorkItemTypeStyles {
             }
         }
 
-        $styles = @{}
         $errors = @{}
-        foreach ($name in @($WorkItemTypes)) {
-            if ([string]::IsNullOrWhiteSpace($name)) { continue }
+        foreach ($name in $missing) {
             if (-not $typeUrlByName.ContainsKey($name)) { continue }
 
             $defUrl = $typeUrlByName[$name]
@@ -188,11 +267,29 @@ function Get-AdoWorkItemTypeStyles {
             }
         }
 
+        # Update cache (best-effort, no secrets)
+        try {
+            $cachePayload = @{
+                meta = @{
+                    organization = $Organization
+                    project = $Project
+                    apiVersion = '7.1-preview.2'
+                    fetchedAtUtc = ([DateTime]::UtcNow.ToString('o'))
+                    types = @($styles.Keys | Sort-Object)
+                }
+                styles = $styles
+            }
+            $cachePayload | ConvertTo-Json -Depth 8 | Set-Content -Path $cacheFile -Encoding UTF8
+        } catch {
+            # ignore cache write failures
+        }
+
         return @{
             styles = $styles
             typeUrlCount = [int]$typeUrlByName.Keys.Count
             errorCount = [int]$errors.Keys.Count
             sampleErrors = $errors
+            cache = @{ enabled = $true; used = $true; file = $cacheFile; hitCount = $cacheHitCount; missCount = [int]$missing.Count }
         }
     } catch {
         return @{
@@ -200,20 +297,22 @@ function Get-AdoWorkItemTypeStyles {
             typeUrlCount = 0
             errorCount = 1
             sampleErrors = @{ _fatal = $_.Exception.Message }
+            cache = @{ enabled = $true; used = $false; file = $cacheFile; hitCount = 0; missCount = [int]$requested.Count }
         }
     }
 }
 
-$adoTypeStyleResult = Get-AdoWorkItemTypeStyles -Organization $rawData.metadata.organization -Project $rawData.metadata.project -WorkItemTypes @($trackedWorkItemTypes)
+$adoTypeStyleResult = Get-AdoWorkItemTypeStyles -Organization $rawData.metadata.organization -Project $rawData.metadata.project -WorkItemTypes @($observedTrackedTypes)
 $adoWorkItemTypeStyles = if ($adoTypeStyleResult -and $adoTypeStyleResult.styles) { $adoTypeStyleResult.styles } else { @{} }
 $adoWorkItemTypeStylesDebug = @{
     patPresent = -not [string]::IsNullOrWhiteSpace((Get-AdoPatFromEnv))
-    requestedTypes = @($trackedWorkItemTypes)
+    observedTypes = @($observedTrackedTypes)
     fetchedTypeCount = if ($adoWorkItemTypeStyles) { [int]$adoWorkItemTypeStyles.Keys.Count } else { 0 }
     fetchedTypes = if ($adoWorkItemTypeStyles) { @($adoWorkItemTypeStyles.Keys | Sort-Object) } else { @() }
     typeUrlCount = if ($adoTypeStyleResult -and $adoTypeStyleResult.typeUrlCount) { [int]$adoTypeStyleResult.typeUrlCount } else { 0 }
     errorCount = if ($adoTypeStyleResult -and $adoTypeStyleResult.errorCount -ne $null) { [int]$adoTypeStyleResult.errorCount } else { 0 }
     sampleErrors = if ($adoTypeStyleResult -and $adoTypeStyleResult.sampleErrors) { $adoTypeStyleResult.sampleErrors } else { @{} }
+    cache = if ($adoTypeStyleResult -and $adoTypeStyleResult.cache) { $adoTypeStyleResult.cache } else { @{} }
 }
 
 function Get-WorkItemTypeStyle {
