@@ -74,10 +74,14 @@ $results = @()
 foreach ($workItemId in $WorkItemIds) {
     try {
         Write-Verbose "Processing Work Item #$workItemId..."
+
+        # Derive ClosedDate from the updates payload (avoids extra API calls and works even when work item GET is blocked)
+        $closedDate = $null
+        $closedDateFromStateChange = $null
         
         # Fetch all revisions for this work item
         $updatesUri = "https://dev.azure.com/$Organization/$Project/_apis/wit/workitems/$workItemId/updates?api-version=7.0"
-        $updates = Invoke-RestMethod -Uri $updatesUri -Headers $headers -Method Get
+        $updates = Invoke-RestMethod -Uri $updatesUri -Headers $headers -Method Get -ErrorAction Stop
         
         # Track board column changes with timestamps (prioritize BoardColumn over State)
         $columnHistory = @()
@@ -88,6 +92,27 @@ foreach ($workItemId in $WorkItemIds) {
             if ($revisedDate.Year -ge 9999) {
                 Write-Verbose "  Skipping placeholder date: $($update.revisedDate)"
                 continue
+            }
+
+            # Capture explicit ClosedDate if present in this revision
+            if ($update.fields.PSObject.Properties.Name -contains 'Microsoft.VSTS.Common.ClosedDate') {
+                $cd = $update.fields.'Microsoft.VSTS.Common.ClosedDate'.newValue
+                if ($cd) {
+                    try {
+                        $parsed = [DateTime]$cd
+                        if ($parsed.Year -lt 9999) { $closedDate = $parsed }
+                    } catch {
+                        # ignore parse failures
+                    }
+                }
+            }
+
+            # Fallback: if we see a state transition into a done/closed state, use that revision timestamp
+            if (-not $closedDate -and ($update.fields.PSObject.Properties.Name -contains 'System.State')) {
+                $newState = $update.fields.'System.State'.newValue
+                if ($newState -in @('Closed','Done','Removed')) {
+                    $closedDateFromStateChange = $revisedDate
+                }
             }
             
             $fieldToUse = $null
@@ -114,6 +139,10 @@ foreach ($workItemId in $WorkItemIds) {
                 $columnHistory += $columnChange
             }
         }
+
+        if (-not $closedDate -and $closedDateFromStateChange) {
+            $closedDate = $closedDateFromStateChange
+        }
         
         # If no column changes found, work item might have been created in final state
         if ($columnHistory.Count -eq 0) {
@@ -122,6 +151,26 @@ foreach ($workItemId in $WorkItemIds) {
         }
         
         Write-Verbose "  Found $($columnHistory.Count) transitions (using field: $($columnHistory[0].Field))"
+
+        # Ensure transitions are in chronological order (updates API order is not guaranteed)
+        $columnHistory = @(
+            $columnHistory |
+                Sort-Object -Property @(
+                    @{ Expression = { $_.Timestamp } },
+                    @{ Expression = { $_.RevisionNumber } }
+                )
+        )
+
+        # Remove consecutive duplicates (can happen with mixed BoardColumn/State or repeated values)
+        $deduped = @()
+        $lastCol = $null
+        foreach ($c in $columnHistory) {
+            if ([string]::IsNullOrWhiteSpace($c.Column)) { continue }
+            if ($lastCol -ne $null -and $c.Column -eq $lastCol) { continue }
+            $deduped += $c
+            $lastCol = $c.Column
+        }
+        $columnHistory = $deduped
         
         # Calculate time spent in each column/state
         $columnTime = @{}
@@ -137,12 +186,23 @@ foreach ($workItemId in $WorkItemIds) {
             
             $startTime = $columnHistory[$i].Timestamp
             
-            # Determine end time (next state change or current time if still in this state)
+            # Determine end time (next state change, ClosedDate for completed items, or now if still active)
             if ($i -lt ($columnHistory.Count - 1)) {
                 $endTime = $columnHistory[$i + 1].Timestamp
             } else {
-                # This is the current state - use current time
-                $endTime = Get-Date
+                # This is the last recorded state - cap at ClosedDate if available, otherwise use current time
+                $endTime = if ($closedDate) { $closedDate } else { Get-Date }
+            }
+
+            # Defensive: cap endTime to ClosedDate if we have one
+            if ($closedDate -and $endTime -gt $closedDate) {
+                $endTime = $closedDate
+            }
+
+            # Defensive: ignore invalid/negative spans
+            if ($endTime -lt $startTime) {
+                Write-Verbose "  Skipping negative span for '$currentColumn' (start $startTime, end $endTime)"
+                continue
             }
             
             # Calculate days in this column/state
@@ -157,10 +217,10 @@ foreach ($workItemId in $WorkItemIds) {
             }
         }
         
-        # Round all values to whole days (optional - can keep decimals if preferred)
+        # Keep 1-decimal precision (matches the dashboard's other day-based metrics)
         $roundedColumnTime = @{}
         foreach ($key in $columnTime.Keys) {
-            $roundedColumnTime[$key] = [Math]::Round($columnTime[$key])
+            $roundedColumnTime[$key] = [Math]::Round([double]$columnTime[$key], 1)
         }
         
         $results += @{
@@ -174,7 +234,7 @@ foreach ($workItemId in $WorkItemIds) {
         Write-Verbose "  Processed work item #$workItemId - $($roundedColumnTime.Count) columns/states, $totalDays total days"
         
     } catch {
-        Write-Error "Failed to process work item #${workItemId}: $($_.Exception.Message)"
+        Write-Warning "Failed to process work item #${workItemId}: $($_.Exception.Message)"
     }
 }
 

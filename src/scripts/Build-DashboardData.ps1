@@ -76,6 +76,140 @@ function Test-IsTrackedWorkItemType {
 $activeItems = @($rawData.activeItems | Where-Object { Test-IsTrackedWorkItemType $_.fields.'System.WorkItemType' })
 $completedItems = @($rawData.completedItems | Where-Object { Test-IsTrackedWorkItemType $_.fields.'System.WorkItemType' })
 
+function Get-EfficiencyColumnMapping {
+    param(
+        $Config,
+        [string[]]$ActiveOverride,
+        [string[]]$WaitingOverride,
+        [string[]]$BeforeOverride,
+        [string[]]$AfterOverride
+    )
+
+    $effSource = 'heuristic'
+
+    $cfgBefore = if ($Config -and $Config.columns -and $Config.columns.backlog) { @($Config.columns.backlog) } else { @() }
+    $cfgInProgress = if ($Config -and $Config.columns -and $Config.columns.inProgress) { @($Config.columns.inProgress) } else { @() }
+    $cfgAfter = if ($Config -and $Config.columns -and $Config.columns.done) { @($Config.columns.done) } else { @('Closed', 'Done') }
+
+    $effBefore = if ($BeforeOverride -and $BeforeOverride.Count -gt 0) {
+        $effSource = 'override'
+        @($BeforeOverride)
+    } elseif ($Config -and $Config.metrics -and $Config.metrics.efficiency -and $Config.metrics.efficiency.beforeWorkflowColumns) {
+        $effSource = 'config'
+        @($Config.metrics.efficiency.beforeWorkflowColumns)
+    } elseif ($cfgBefore.Count -gt 0) {
+        @($cfgBefore)
+    } else {
+        @()
+    }
+
+    $effAfter = if ($AfterOverride -and $AfterOverride.Count -gt 0) {
+        $effSource = 'override'
+        @($AfterOverride)
+    } elseif ($Config -and $Config.metrics -and $Config.metrics.efficiency -and $Config.metrics.efficiency.afterWorkflowColumns) {
+        $effSource = 'config'
+        @($Config.metrics.efficiency.afterWorkflowColumns)
+    } elseif ($cfgAfter.Count -gt 0) {
+        @($cfgAfter)
+    } else {
+        @('Closed', 'Done', 'Removed')
+    }
+
+    $effActive = @()
+    $effWaiting = @()
+
+    if ($ActiveOverride -and $ActiveOverride.Count -gt 0) {
+        $effSource = 'override'
+        $effActive = @($ActiveOverride)
+    }
+    if ($WaitingOverride -and $WaitingOverride.Count -gt 0) {
+        $effSource = 'override'
+        $effWaiting = @($WaitingOverride)
+    }
+
+    if ($effActive.Count -eq 0 -and $Config -and $Config.metrics -and $Config.metrics.efficiency -and $Config.metrics.efficiency.activeColumns) {
+        $effSource = 'config'
+        $effActive = @($Config.metrics.efficiency.activeColumns)
+    }
+    if ($effWaiting.Count -eq 0 -and $Config -and $Config.metrics -and $Config.metrics.efficiency -and $Config.metrics.efficiency.waitingColumns) {
+        $effSource = 'config'
+        $effWaiting = @($Config.metrics.efficiency.waitingColumns)
+    }
+
+    if ($effActive.Count -eq 0 -and $effWaiting.Count -eq 0) {
+        $waitingRegex = '(?i)\bready\b|\bwaiting\b|\bqueue\b|\bon hold\b|\bblocked\b'
+        foreach ($col in $cfgInProgress) {
+            if ([string]::IsNullOrWhiteSpace($col)) { continue }
+            if ($col -match $waitingRegex) {
+                $effWaiting += $col
+            } else {
+                $effActive += $col
+            }
+        }
+    }
+
+    $effActive = @($effActive | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+    $effWaiting = @($effWaiting | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+    $effBefore = @($effBefore | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+    $effAfter = @($effAfter | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+
+    return @{
+        source = $effSource
+        activeColumns = $effActive
+        waitingColumns = $effWaiting
+        beforeWorkflowColumns = $effBefore
+        afterWorkflowColumns = $effAfter
+    }
+}
+
+function Get-ColumnTimeDays {
+    param(
+        $ColumnTime,
+        [Parameter(Mandatory = $true)][string]$ColumnName
+    )
+
+    if (-not $ColumnTime) { return 0 }
+
+    # Hashtable / dictionary
+    if ($ColumnTime -is [System.Collections.IDictionary]) {
+        if ($ColumnTime.Contains($ColumnName)) {
+            $v = $ColumnTime[$ColumnName]
+            try { return [Math]::Max(0, [double]$v) } catch { return 0 }
+        }
+
+        foreach ($k in $ColumnTime.Keys) {
+            if ([string]$k -ieq $ColumnName) {
+                $v = $ColumnTime[$k]
+                try { return [Math]::Max(0, [double]$v) } catch { return 0 }
+            }
+        }
+
+        return 0
+    }
+
+    # PSCustomObject
+    $prop = $ColumnTime.PSObject.Properties | Where-Object { $_.Name -ieq $ColumnName } | Select-Object -First 1
+    if (-not $prop) { return 0 }
+    try { return [Math]::Max(0, [double]$prop.Value) } catch { return 0 }
+}
+
+function Sum-ColumnTimeDays {
+    param(
+        $ColumnTime,
+        [string[]]$Columns
+    )
+
+    if (-not $Columns -or $Columns.Count -eq 0) { return 0 }
+    $sum = 0.0
+    foreach ($c in $Columns) {
+        if ([string]::IsNullOrWhiteSpace($c)) { continue }
+        $sum += (Get-ColumnTimeDays -ColumnTime $ColumnTime -ColumnName $c)
+    }
+    return [Math]::Round($sum, 1)
+}
+
+$efficiencyMapping = Get-EfficiencyColumnMapping -Config $config -ActiveOverride $EfficiencyActiveColumns -WaitingOverride $EfficiencyWaitingColumns -BeforeOverride $EfficiencyBeforeWorkflowColumns -AfterOverride $EfficiencyAfterWorkflowColumns
+
 # Analysis scope (for the dashboard "Configuration" tab)
 $allTypesInRaw = @()
 $allTypesInRaw += @($rawData.activeItems | ForEach-Object { $_.fields.'System.WorkItemType' })
@@ -472,19 +606,27 @@ foreach ($item in $completedItems) {
     $columnTime = ($ColumnTimeData | Where-Object { $_.WorkItemId -eq $item.id }).ColumnTime
     if (-not $columnTime) { $columnTime = @{} }
     
-    # Calculate cycle time from state transitions if columnTime is empty
+    # Calculate cycle time from real columnTime when available.
+    # Definition used by the Efficiency tab: cycle time = time in ACTIVE + WAITING workflow columns (from the first ACTIVE column onwards).
     $cycleTime = 0
-    if ($columnTime.Count -gt 0) {
-        # Use columnTime if available
-        $activeColumns = @('In Development', 'In Review', 'External Review', 'QA')
-        foreach ($col in $activeColumns) {
-            if ($columnTime.$col) {
-                $cycleTime += $columnTime.$col
-            }
-        }
+    $activeTimeDays = 0
+    $waitingTimeDays = 0
+    $hasColumnTime = $false
+    if ($columnTime -is [System.Collections.IDictionary]) {
+        $hasColumnTime = ($columnTime.Count -gt 0)
+    } elseif ($columnTime -and $columnTime.PSObject -and $columnTime.PSObject.Properties) {
+        $hasColumnTime = ($columnTime.PSObject.Properties.Count -gt 0)
+    }
+
+    if ($hasColumnTime) {
+        $activeTimeDays = Sum-ColumnTimeDays -ColumnTime $columnTime -Columns $efficiencyMapping.activeColumns
+        $waitingTimeDays = Sum-ColumnTimeDays -ColumnTime $columnTime -Columns $efficiencyMapping.waitingColumns
+        $cycleTime = [Math]::Round(($activeTimeDays + $waitingTimeDays), 1)
     } else {
-        # Calculate from state transitions
-        $cycleTime = Get-CycleTimeFromUpdates -item $item
+        # No real board column history available => no workflow cycle time.
+        $cycleTime = 0
+        $activeTimeDays = 0
+        $waitingTimeDays = 0
     }
     
     $completedWithMetrics += [PSCustomObject]@{
@@ -496,6 +638,8 @@ foreach ($item in $completedItems) {
         completedDate = $item.fields.'Microsoft.VSTS.Common.ClosedDate'
         columnTime = $columnTime
         cycleTime = $cycleTime
+        activeTime = $activeTimeDays
+        waitingTime = $waitingTimeDays
         leadTime = (Get-LeadTime -item $item -config $config)
     }
 }
@@ -2191,84 +2335,8 @@ $blockedTrend = if ($netBlocked -gt 0) {
     @{ direction = 'stable'; isGood = $true }
 }
 
-# Efficiency column mapping (working vs waiting)
-$effSource = 'heuristic'
-
-$cfgBefore = if ($config -and $config.columns -and $config.columns.backlog) { @($config.columns.backlog) } else { @() }
-$cfgInProgress = if ($config -and $config.columns -and $config.columns.inProgress) { @($config.columns.inProgress) } else { @() }
-$cfgAfter = if ($config -and $config.columns -and $config.columns.done) { @($config.columns.done) } else { @('Closed', 'Done') }
-
-$effBefore = if ($EfficiencyBeforeWorkflowColumns -and $EfficiencyBeforeWorkflowColumns.Count -gt 0) {
-    $effSource = 'override'
-    @($EfficiencyBeforeWorkflowColumns)
-} elseif ($config -and $config.metrics -and $config.metrics.efficiency -and $config.metrics.efficiency.beforeWorkflowColumns) {
-    $effSource = 'config'
-    @($config.metrics.efficiency.beforeWorkflowColumns)
-} elseif ($cfgBefore.Count -gt 0) {
-    @($cfgBefore)
-} else {
-    @()
-}
-
-$effAfter = if ($EfficiencyAfterWorkflowColumns -and $EfficiencyAfterWorkflowColumns.Count -gt 0) {
-    $effSource = 'override'
-    @($EfficiencyAfterWorkflowColumns)
-} elseif ($config -and $config.metrics -and $config.metrics.efficiency -and $config.metrics.efficiency.afterWorkflowColumns) {
-    $effSource = 'config'
-    @($config.metrics.efficiency.afterWorkflowColumns)
-} elseif ($cfgAfter.Count -gt 0) {
-    @($cfgAfter)
-} else {
-    @('Closed', 'Done', 'Removed')
-}
-
-$effActive = @()
-$effWaiting = @()
-
-if ($EfficiencyActiveColumns -and $EfficiencyActiveColumns.Count -gt 0) {
-    $effSource = 'override'
-    $effActive = @($EfficiencyActiveColumns)
-}
-if ($EfficiencyWaitingColumns -and $EfficiencyWaitingColumns.Count -gt 0) {
-    $effSource = 'override'
-    $effWaiting = @($EfficiencyWaitingColumns)
-}
-
-if ($effActive.Count -eq 0 -and $config -and $config.metrics -and $config.metrics.efficiency -and $config.metrics.efficiency.activeColumns) {
-    $effSource = 'config'
-    $effActive = @($config.metrics.efficiency.activeColumns)
-}
-if ($effWaiting.Count -eq 0 -and $config -and $config.metrics -and $config.metrics.efficiency -and $config.metrics.efficiency.waitingColumns) {
-    $effSource = 'config'
-    $effWaiting = @($config.metrics.efficiency.waitingColumns)
-}
-
-if ($effActive.Count -eq 0 -and $effWaiting.Count -eq 0) {
-    # Heuristic split of in-progress columns: "Ready/Waiting/Queue" => waiting, otherwise active
-    $waitingRegex = '(?i)\bready\b|\bwaiting\b|\bqueue\b|\bon hold\b|\bblocked\b'
-    foreach ($col in $cfgInProgress) {
-        if ([string]::IsNullOrWhiteSpace($col)) { continue }
-        if ($col -match $waitingRegex) {
-            $effWaiting += $col
-        } else {
-            $effActive += $col
-        }
-    }
-}
-
-# Normalise and de-duplicate
-$effActive = @($effActive | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
-$effWaiting = @($effWaiting | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
-$effBefore = @($effBefore | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
-$effAfter = @($effAfter | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
-
-$efficiencyMapping = @{
-    source = $effSource
-    activeColumns = $effActive
-    waitingColumns = $effWaiting
-    beforeWorkflowColumns = $effBefore
-    afterWorkflowColumns = $effAfter
-}
+# Efficiency column mapping (working vs waiting) is computed near the top of this script so
+# per-item cycle time can use it consistently.
 
 # Cumulative Flow Diagram (whole board): arrivals vs departures over time
 # Arrivals uses the same start-point choice as lead time (creation / board entry / specific column)

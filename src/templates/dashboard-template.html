@@ -2533,10 +2533,8 @@
                     id: item.id,
                     title: item.title,
                     completedDate: item.completedDate,
-                    cycleTime: item.y,
-                    leadTime: item.leadTime,
-                    backlogDelay: item.leadTime - item.y,
-                    efficiency: ((item.y / item.leadTime) * 100).toFixed(1),
+                    cycleTime: Number(item.y),
+                    leadTime: Number(item.leadTime),
                     type: dataset.label,
                     columnTime: item.columnTime || {}
                 });
@@ -2544,55 +2542,90 @@
         });
         allItems.sort((a, b) => new Date(a.completedDate) - new Date(b.completedDate));
 
+        const wseValidItems = allItems
+            .map(item => {
+                const cycleTime = Number(item.cycleTime);
+                const leadTime = Number(item.leadTime);
+                if (!Number.isFinite(cycleTime) || !Number.isFinite(leadTime)) return null;
+                if (cycleTime < 0) return null;
+                if (leadTime <= 0) return null;
+
+                const backlogDelay = leadTime - cycleTime;
+                if (backlogDelay < 0) return null;
+
+                const efficiency = (cycleTime / leadTime) * 100;
+                if (!Number.isFinite(efficiency)) return null;
+
+                return {
+                    ...item,
+                    backlogDelay,
+                    efficiency: efficiency.toFixed(1)
+                };
+            })
+            .filter(Boolean);
+
         // Define column categorization (case-insensitive keys handled by getColumnTime helper)
         const columnCategories = boardConfig.columnIcons;
 
         // Calculate statistics for Work Start Efficiency
-        const wseEfficiencies = allItems.map(item => parseFloat(item.efficiency));
-        const wseAvg = (wseEfficiencies.reduce((a, b) => a + b, 0) / wseEfficiencies.length).toFixed(1);
-        const wseSorted = [...allItems].sort((a, b) => parseFloat(b.efficiency) - parseFloat(a.efficiency));
-        const wseBest = wseSorted[0];
-        const wseWorst = wseSorted[wseSorted.length - 1];
+        const wseSorted = [...wseValidItems].sort((a, b) => parseFloat(a.efficiency) - parseFloat(b.efficiency)); // worst -> best
+        const wseEfficiencies = wseValidItems.map(item => parseFloat(item.efficiency)).filter(Number.isFinite);
+        const wseAvg = (wseEfficiencies.length > 0)
+            ? (wseEfficiencies.reduce((a, b) => a + b, 0) / wseEfficiencies.length).toFixed(1)
+            : '0.0';
+        const wseWorst = wseSorted.length > 0 ? wseSorted[0] : null;
+        const wseBest = wseSorted.length > 0 ? wseSorted[wseSorted.length - 1] : null;
 
-        // Populate summary card
-        document.getElementById('wseAvgValue').textContent = wseAvg + '%';
-        document.getElementById('wseBestValue').textContent = wseBest.efficiency + '%';
-        document.getElementById('wseBestItem').textContent = `#${wseBest.id}`;
-        document.getElementById('wseWorstValue').textContent = wseWorst.efficiency + '%';
-        document.getElementById('wseWorstItem').textContent = `#${wseWorst.id}`;
-        
-        // Generate dynamic insight for Work Start Efficiency
-        const backlogPct = (100 - parseFloat(wseAvg)).toFixed(0);
-        let wseInterpretation = '';
-        if (parseFloat(wseAvg) >= 80) {
-            wseInterpretation = `Excellent - items leave pre-workflow columns (${getBeforeWorkflowLabel()}) quickly.`;
-        } else if (parseFloat(wseAvg) >= 60) {
-            wseInterpretation = `Good - most time is spent from ${getCycleStartColumn()} onwards rather than waiting in backlog.`;
-        } else if (parseFloat(wseAvg) >= 40) {
-            wseInterpretation = `Fair - significant time spent in backlog before reaching ${getCycleStartColumn()}.`;
+        if (wseValidItems.length === 0) {
+            document.getElementById('wseAvgValue').textContent = 'N/A';
+            document.getElementById('wseBestValue').textContent = 'N/A';
+            document.getElementById('wseBestItem').textContent = `0 of ${allItems.length} items`;
+            document.getElementById('wseWorstValue').textContent = 'N/A';
+            document.getElementById('wseWorstItem').textContent = 'No valid lead/cycle time';
+            document.getElementById('workStartEfficiencyInsight').innerHTML = `<p><strong>Insight:</strong> No valid items for Work Start Efficiency (requires lead time > 0 and non-negative pre-workflow time).</p>`;
         } else {
-            wseInterpretation = 'Poor - most time spent waiting in backlog before cycle time starts.';
+            // Populate summary card
+            document.getElementById('wseAvgValue').textContent = wseAvg + '%';
+            document.getElementById('wseBestValue').textContent = wseBest.efficiency + '%';
+            document.getElementById('wseBestItem').textContent = `#${wseBest.id}`;
+            document.getElementById('wseWorstValue').textContent = wseWorst.efficiency + '%';
+            document.getElementById('wseWorstItem').textContent = `#${wseWorst.id}`;
         }
-        const wseInsight = `Average work start efficiency ${wseAvg}% - items spend ${wseAvg}% of total time from ${getCycleStartColumn()} onwards (cycle time). The remaining ${backlogPct}% is pre-workflow time in the ${getBeforeWorkflowLabel()} columns. ${wseInterpretation} Best: #${wseBest.id} at ${wseBest.efficiency}%. Worst: #${wseWorst.id} at ${wseWorst.efficiency}%.`;
-        document.getElementById('workStartEfficiencyInsight').innerHTML = `<p><strong>Insight:</strong> ${wseInsight}</p>`;
+        
+        if (wseValidItems.length > 0) {
+            // Generate dynamic insight for Work Start Efficiency
+            const backlogPct = (100 - parseFloat(wseAvg)).toFixed(0);
+            let wseInterpretation = '';
+            if (parseFloat(wseAvg) >= 80) {
+                wseInterpretation = `Excellent - items leave pre-workflow columns (${getBeforeWorkflowLabel()}) quickly.`;
+            } else if (parseFloat(wseAvg) >= 60) {
+                wseInterpretation = `Good - most time is spent from ${getCycleStartColumn()} onwards rather than waiting in backlog.`;
+            } else if (parseFloat(wseAvg) >= 40) {
+                wseInterpretation = `Fair - significant time spent in backlog before reaching ${getCycleStartColumn()}.`;
+            } else {
+                wseInterpretation = 'Poor - most time spent waiting in backlog before cycle time starts.';
+            }
+            const wseInsight = `Average work start efficiency ${wseAvg}% - items spend ${wseAvg}% of total time from ${getCycleStartColumn()} onwards (cycle time). The remaining ${backlogPct}% is pre-workflow time in the ${getBeforeWorkflowLabel()} columns. ${wseInterpretation} Best: #${wseBest.id} at ${wseBest.efficiency}%. Worst: #${wseWorst.id} at ${wseWorst.efficiency}%.`;
+            document.getElementById('workStartEfficiencyInsight').innerHTML = `<p><strong>Insight:</strong> ${wseInsight}</p>`;
+        }
 
-        // Filter to top/bottom N items (always best to worst)
+        // Filter to top best and top worst items (or show all when small)
         let wseFilteredItems;
-        if (allItems.length <= 15) {
-            // Show all items if 15 or fewer (best to worst)
+        if (wseSorted.length <= 20) {
             wseFilteredItems = wseSorted;
-        } else if (allItems.length <= 30) {
-            // Show best 15 items (best to worst)
-            wseFilteredItems = wseSorted.slice(0, 15);
         } else {
-            // Show worst 10 + best 10
-            wseFilteredItems = [...wseSorted.slice(-10), ...wseSorted.slice(0, 10)];
+            const n = 10;
+            const worst = wseSorted.slice(0, n);
+            const best = wseSorted.slice(-n);
+            const byId = new Map();
+            [...worst, ...best].forEach(i => byId.set(i.id, i));
+            wseFilteredItems = [...byId.values()].sort((a, b) => parseFloat(a.efficiency) - parseFloat(b.efficiency));
         }
 
         // Build stacked bar data for Work Start Efficiency
         const wseLabels = wseFilteredItems.map(item => `#${item.id}`);
-        const wseCycleTimeData = wseFilteredItems.map(item => item.cycleTime);
-        const wseBacklogDelayData = wseFilteredItems.map(item => item.backlogDelay);
+        const wseCycleTimeData = wseFilteredItems.map(item => Math.max(0, Number(item.cycleTime) || 0));
+        const wseBacklogDelayData = wseFilteredItems.map(item => Math.max(0, Number(item.backlogDelay) || 0));
 
         new Chart(document.getElementById('workStartEfficiencyChart'), {
             type: 'bar',
@@ -2688,7 +2721,7 @@
                     },
                     y: {
                         stacked: true,
-                        title: { display: true, text: `Work Items (showing ${wseFilteredItems.length} of ${allItems.length})` },
+                        title: { display: true, text: `Work Items (showing ${wseFilteredItems.length} of ${wseValidItems.length})` },
                         grid: { display: false },
                         ticks: {
                             autoSkip: false,
@@ -2724,22 +2757,33 @@
         const ctfeItems = allItems
             .filter(item => item.columnTime && Object.keys(item.columnTime).length > 0)
             .map(item => {
+                const cycleTime = Number(item.cycleTime);
+                if (!Number.isFinite(cycleTime) || cycleTime <= 0) return null;
+
                 // Calculate from actual column data (case-insensitive matching)
-                const activeTime = activeColumns.reduce((sum, col) => sum + getColumnTime(item.columnTime, col), 0);
-                const waitingTime = waitingColumns.reduce((sum, col) => sum + getColumnTime(item.columnTime, col), 0);
-                
-                const ctfeEff = item.cycleTime > 0 ? ((activeTime / item.cycleTime) * 100).toFixed(1) : '0.0';
+                const activeTimeRaw = activeColumns.reduce((sum, col) => sum + getColumnTime(item.columnTime, col), 0);
+                const waitingTimeRaw = waitingColumns.reduce((sum, col) => sum + getColumnTime(item.columnTime, col), 0);
+
+                // Clamp to ensure stacked segments never go negative or exceed the total
+                const activeTime = Math.max(0, Math.min(activeTimeRaw, cycleTime));
+                const waitingTime = Math.max(0, Math.min(waitingTimeRaw, Math.max(0, cycleTime - activeTime)));
+
+                const ctfeEff = (activeTime / cycleTime) * 100;
+                if (!Number.isFinite(ctfeEff)) return null;
+
                 return {
                     ...item,
+                    cycleTime,
                     activeTime: activeTime.toFixed(1),
                     waitingTime: waitingTime.toFixed(1),
-                    ctfeEfficiency: ctfeEff
+                    ctfeEfficiency: ctfeEff.toFixed(1)
                 };
-            });
+            })
+            .filter(Boolean);
 
         // Calculate statistics for Cycle Time Flow Efficiency
-        const ctfeEfficiencies = ctfeItems.map(item => parseFloat(item.ctfeEfficiency));
-        const ctfeSorted = [...ctfeItems].sort((a, b) => parseFloat(b.ctfeEfficiency) - parseFloat(a.ctfeEfficiency));
+        const ctfeEfficiencies = ctfeItems.map(item => parseFloat(item.ctfeEfficiency)).filter(Number.isFinite);
+        const ctfeSorted = [...ctfeItems].sort((a, b) => parseFloat(a.ctfeEfficiency) - parseFloat(b.ctfeEfficiency)); // worst -> best
         
         if (ctfeItems.length === 0) {
             // No real data available
@@ -2751,8 +2795,8 @@
             document.getElementById('cycleTimeFlowEfficiencyInsight').innerHTML = `<p><strong>Insight:</strong> No columnTime data available. Run extraction scripts to get real flow efficiency data.</p>`;
         } else {
             const ctfeAvg = (ctfeEfficiencies.reduce((a, b) => a + b, 0) / ctfeEfficiencies.length).toFixed(1);
-            const ctfeBest = ctfeSorted[0];
-            const ctfeWorst = ctfeSorted[ctfeSorted.length - 1];
+            const ctfeWorst = ctfeSorted[0];
+            const ctfeBest = ctfeSorted[ctfeSorted.length - 1];
 
             // Populate summary card
             document.getElementById('ctfeAvgValue').textContent = ctfeAvg + '%';
@@ -2777,19 +2821,22 @@
             document.getElementById('cycleTimeFlowEfficiencyInsight').innerHTML = `<p><strong>Insight:</strong> ${ctfeInsight}</p>`;
         }
 
-        // Filter to top/bottom N items (always best to worst)
+        // Filter to top best and top worst items (or show all when small)
         let ctfeFilteredItems;
-        if (ctfeItems.length <= 15) {
+        if (ctfeSorted.length <= 20) {
             ctfeFilteredItems = ctfeSorted;
-        } else if (ctfeItems.length <= 30) {
-            ctfeFilteredItems = ctfeSorted.slice(0, 15);
         } else {
-            ctfeFilteredItems = ctfeSorted.slice(0, 20);
+            const n = 10;
+            const worst = ctfeSorted.slice(0, n);
+            const best = ctfeSorted.slice(-n);
+            const byId = new Map();
+            [...worst, ...best].forEach(i => byId.set(i.id, i));
+            ctfeFilteredItems = [...byId.values()].sort((a, b) => parseFloat(a.ctfeEfficiency) - parseFloat(b.ctfeEfficiency));
         }
 
         const ctfeLabels = ctfeFilteredItems.map(item => `#${item.id}`);
-        const ctfeActiveData = ctfeFilteredItems.map(item => parseFloat(item.activeTime));
-        const ctfeWaitingData = ctfeFilteredItems.map(item => parseFloat(item.waitingTime));
+        const ctfeActiveData = ctfeFilteredItems.map(item => Math.max(0, parseFloat(item.activeTime) || 0));
+        const ctfeWaitingData = ctfeFilteredItems.map(item => Math.max(0, parseFloat(item.waitingTime) || 0));
 
         new Chart(document.getElementById('cycleTimeFlowEfficiencyChart'), {
             type: 'bar',
@@ -2909,21 +2956,29 @@
         const ltfeItems = allItems
             .filter(item => item.columnTime && Object.keys(item.columnTime).length > 0)
             .map(item => {
+                const leadTime = Number(item.leadTime);
+                if (!Number.isFinite(leadTime) || leadTime <= 0) return null;
+
                 // Calculate from actual column data (case-insensitive matching)
-                const activeTime = activeColumns.reduce((sum, col) => sum + getColumnTime(item.columnTime, col), 0);
-                const nonActiveTime = (item.leadTime - activeTime).toFixed(1);
-                const ltfeEff = item.leadTime > 0 ? ((activeTime / item.leadTime) * 100).toFixed(1) : '0.0';
+                const activeTimeRaw = activeColumns.reduce((sum, col) => sum + getColumnTime(item.columnTime, col), 0);
+
+                const activeTime = Math.max(0, Math.min(activeTimeRaw, leadTime));
+                const nonActiveTime = Math.max(0, leadTime - activeTime);
+                const ltfeEff = (activeTime / leadTime) * 100;
+                if (!Number.isFinite(ltfeEff)) return null;
+
                 return {
                     ...item,
                     activeTime: activeTime.toFixed(1),
-                nonActiveTime: nonActiveTime,
-                ltfeEfficiency: ltfeEff
-            };
-        });
+                    nonActiveTime: nonActiveTime.toFixed(1),
+                    ltfeEfficiency: ltfeEff.toFixed(1)
+                };
+            })
+            .filter(Boolean);
 
         // Calculate statistics for Lead Time Flow Efficiency
-        const ltfeEfficiencies = ltfeItems.map(item => parseFloat(item.ltfeEfficiency));
-        const ltfeSorted = [...ltfeItems].sort((a, b) => parseFloat(b.ltfeEfficiency) - parseFloat(a.ltfeEfficiency));
+        const ltfeEfficiencies = ltfeItems.map(item => parseFloat(item.ltfeEfficiency)).filter(Number.isFinite);
+        const ltfeSorted = [...ltfeItems].sort((a, b) => parseFloat(a.ltfeEfficiency) - parseFloat(b.ltfeEfficiency)); // worst -> best
         
         if (ltfeItems.length === 0) {
             // No real data available
@@ -2938,8 +2993,8 @@
             document.getElementById('overallLtfeValue').textContent = 'N/A';
         } else {
             const ltfeAvg = (ltfeEfficiencies.reduce((a, b) => a + b, 0) / ltfeEfficiencies.length).toFixed(1);
-            const ltfeBest = ltfeSorted[0];
-            const ltfeWorst = ltfeSorted[ltfeSorted.length - 1];
+            const ltfeWorst = ltfeSorted[0];
+            const ltfeBest = ltfeSorted[ltfeSorted.length - 1];
 
             // Populate summary card
             document.getElementById('ltfeAvgValue').textContent = ltfeAvg + '%';
@@ -2981,19 +3036,22 @@
             document.getElementById('leadTimeFlowEfficiencyInsight').innerHTML = `<p><strong>Insight:</strong> ${ltfeInsight}</p>`;
         }
 
-        // Filter to top/bottom N items (always best to worst)
+        // Filter to top best and top worst items (or show all when small)
         let ltfeFilteredItems;
-        if (ltfeItems.length <= 15) {
+        if (ltfeSorted.length <= 20) {
             ltfeFilteredItems = ltfeSorted;
-        } else if (ltfeItems.length <= 30) {
-            ltfeFilteredItems = ltfeSorted.slice(0, 15);
         } else {
-            ltfeFilteredItems = ltfeSorted.slice(0, 20);
+            const n = 10;
+            const worst = ltfeSorted.slice(0, n);
+            const best = ltfeSorted.slice(-n);
+            const byId = new Map();
+            [...worst, ...best].forEach(i => byId.set(i.id, i));
+            ltfeFilteredItems = [...byId.values()].sort((a, b) => parseFloat(a.ltfeEfficiency) - parseFloat(b.ltfeEfficiency));
         }
 
         const ltfeLabels = ltfeFilteredItems.map(item => `#${item.id}`);
-        const ltfeActiveData = ltfeFilteredItems.map(item => parseFloat(item.activeTime));
-        const ltfeNonActiveData = ltfeFilteredItems.map(item => parseFloat(item.nonActiveTime));
+        const ltfeActiveData = ltfeFilteredItems.map(item => Math.max(0, parseFloat(item.activeTime) || 0));
+        const ltfeNonActiveData = ltfeFilteredItems.map(item => Math.max(0, parseFloat(item.nonActiveTime) || 0));
 
         new Chart(document.getElementById('leadTimeFlowEfficiencyChart'), {
             type: 'bar',
