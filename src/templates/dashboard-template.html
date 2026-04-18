@@ -745,7 +745,24 @@
             <!-- Tab 2: Efficiency (Distributions + Top Best/Worst) -->
             <div id="efficiency" class="tab-content">
                 <div class="charts-grid">
-                    <div class="chart-card" style="grid-column: 1 / -1;">
+                    <div class="chart-card chart-card-full">
+                        <h2>⚡ Lead Time Flow Efficiency Distribution (Active / Lead Time)</h2>
+                        <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                            Histogram of completed items by end-to-end flow efficiency percentage (requires column-time data).
+                        </p>
+                        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px; align-items: start;">
+                            <div class="chart-container" style="height: 360px;">
+                                <canvas id="ltfeHistogramChart"></canvas>
+                            </div>
+                            <div style="background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+                                <div style="font-weight: 700; color: #2d3748; margin-bottom: 8px;">Top items</div>
+                                <div id="ltfeHistogramTopItems" style="font-size: 13px; line-height: 1.6; color: #4a5568;"></div>
+                            </div>
+                        </div>
+                        <div class="insight-box" id="ltfeHistogramInsight"></div>
+                    </div>
+
+                    <div class="chart-card">
                         <h2>⚡ Start Delay Distribution (Lead Time − Cycle Time)</h2>
                         <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
                             Histogram of completed items by start delay in days (time before reaching the first ACTIVE column). Buckets are sized automatically.
@@ -777,23 +794,6 @@
                             </div>
                         </div>
                         <div class="insight-box" id="ctfeHistogramInsight"></div>
-                    </div>
-
-                    <div class="chart-card">
-                        <h2>⚡ Lead Time Flow Efficiency Distribution (Active / Lead Time)</h2>
-                        <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                            Histogram of completed items by end-to-end flow efficiency percentage (requires column-time data).
-                        </p>
-                        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px; align-items: start;">
-                            <div class="chart-container" style="height: 360px;">
-                                <canvas id="ltfeHistogramChart"></canvas>
-                            </div>
-                            <div style="background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
-                                <div style="font-weight: 700; color: #2d3748; margin-bottom: 8px;">Top items</div>
-                                <div id="ltfeHistogramTopItems" style="font-size: 13px; line-height: 1.6; color: #4a5568;"></div>
-                            </div>
-                        </div>
-                        <div class="insight-box" id="ltfeHistogramInsight"></div>
                     </div>
                 </div>
             </div>
@@ -1646,8 +1646,8 @@
                 tooltipHideTimeout = null;
             }
 
-            const title = (tooltipModel.title && tooltipModel.title.length > 0)
-                ? tooltipModel.title.map(t => escapeHtml(String(t))).join('<br>')
+            const titleText = (tooltipModel.title && tooltipModel.title.length > 0)
+                ? tooltipModel.title.map(t => String(t)).join(' • ')
                 : 'Details';
 
             const bodyLines = (tooltipModel.body && tooltipModel.body.length > 0)
@@ -1670,19 +1670,35 @@
                 }
             });
 
+            const uniqueById = new Map();
+            items.forEach(it => {
+                if (!it || !it.id) return;
+                if (!uniqueById.has(it.id)) uniqueById.set(it.id, it);
+            });
+            const uniqueItems = Array.from(uniqueById.values());
+            const singleItem = uniqueItems.length === 1;
+
             let contentHtml = '';
             if (bodyLines.length > 0) {
                 contentHtml += bodyLines.map(l => `<div style="margin-bottom: 6px;">${l}</div>`).join('');
             }
-            if (items.length > 0) {
-                contentHtml += `<div style="margin-top: 10px;"><strong>Work items:</strong><br><br>${buildWorkItemLinksHtml(items)}</div>`;
+            if (!singleItem && uniqueItems.length > 0) {
+                contentHtml += `<div style="margin-top: 10px;"><strong>Work items:</strong><br><br>${buildWorkItemLinksHtml(uniqueItems)}</div>`;
             }
             if (!contentHtml) {
                 contentHtml = '<div style="color:#9ca3af;">(no details)</div>';
             }
 
+            let titleHtml = escapeHtml(titleText);
+            if (singleItem) {
+                const it = uniqueItems[0];
+                const url = getAdoWorkItemUrl(it.id);
+                const t = it.title ? escapeHtml(String(it.title)) : '';
+                titleHtml = `Work item <a href="${url}" target="_blank">#${it.id}</a>` + (t ? ` <span style="color:#9ca3af; font-size: 12px; font-weight: 500;">${t}</span>` : '');
+            }
+
             tooltipEl.innerHTML = `
-                <div class="tooltip-title">${title}</div>
+                <div class="tooltip-title">${titleHtml}</div>
                 <div class="tooltip-content">${contentHtml}</div>
                 <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
             `;
@@ -1787,7 +1803,13 @@
                 labels: dashboardData.charts.throughput.labels,
                 datasets: [{
                     label: 'Items Completed',
-                    data: dashboardData.charts.throughput.values,
+                    data: dashboardData.charts.throughput.values.map((v, i) => ({
+                        x: dashboardData.charts.throughput.labels[i],
+                        y: v,
+                        items: (dashboardData.charts.throughput.items && dashboardData.charts.throughput.items[i])
+                            ? dashboardData.charts.throughput.items[i]
+                            : []
+                    })),
                     borderColor: '#667eea',
                     backgroundColor: 'rgba(102, 126, 234, 0.1)',
                     borderWidth: 3,
@@ -1817,60 +1839,19 @@
                 plugins: {
                     legend: { display: false },
                     tooltip: {
-                        enabled: false,
-                        external: function(context) {
-                            // Tooltip Element
-                            const tooltipEl = document.getElementById('customTooltip');
-                            
-                            // Hide if no tooltip
-                            const tooltipModel = context.tooltip;
-                            if (tooltipModel.opacity === 0) {
-                                if (!isTooltipHovered) {
-                                    hideTooltipWithDelay();
-                                }
-                                return;
+                        filter: function(item) {
+                            // Hide tooltip for the trend line
+                            return item.datasetIndex === 0;
+                        },
+                        callbacks: {
+                            title: function(items) {
+                                return items && items[0] ? `Week Ending ${items[0].label}` : 'Week';
+                            },
+                            label: function(context) {
+                                const raw = context.raw;
+                                const y = (raw && typeof raw === 'object' && Number.isFinite(raw.y)) ? raw.y : context.parsed.y;
+                                return `Items completed: ${y}`;
                             }
-
-                            // Clear any pending hide timeout
-                            if (tooltipHideTimeout) {
-                                clearTimeout(tooltipHideTimeout);
-                                tooltipHideTimeout = null;
-                            }
-
-                            // Get data point
-                            if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
-                                const dataPoint = tooltipModel.dataPoints[0];
-                                const index = dataPoint.dataIndex;
-                                const weekLabel = dashboardData.charts.throughput.labels[index];
-                                const items = dashboardData.charts.throughput.items[index];
-                                const count = dashboardData.charts.throughput.values[index];
-                                
-                                // Build HTML for items list
-                                let itemsHTML = '';
-                                items.forEach(item => {
-                                    const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
-                                    itemsHTML += `<div style="margin-bottom: 6px; padding-left: 8px; border-left: 2px solid #667eea;">
-                                        <a href="${adoUrl}" target="_blank" style="text-decoration: none; font-weight: 600;">#${item.id}</a>
-                                        <span style="color: #ddd; font-size: 12px;"> ${item.title}</span>
-                                    </div>`;
-                                });
-                                
-                                // Build HTML
-                                tooltipEl.innerHTML = `
-                                    <div class="tooltip-title">Week Ending ${weekLabel}</div>
-                                    <div class="tooltip-content">
-                                        <strong>${count} item${count !== 1 ? 's' : ''} completed:</strong><br><br>
-                                        ${itemsHTML}
-                                    </div>
-                                    <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
-                                `;
-                            }
-
-                            // Display tooltip
-                            const position = context.chart.canvas.getBoundingClientRect();
-                            tooltipEl.classList.add('visible');
-                            tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
-                            tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
                         }
                     }
                 },
@@ -1955,52 +1936,19 @@
                         }
                     },
                     tooltip: {
-                        enabled: false,
-                        external: function(context) {
-                            // Tooltip Element
-                            const tooltipEl = document.getElementById('customTooltip');
-                            
-                            // Hide if no tooltip
-                            const tooltipModel = context.tooltip;
-                            if (tooltipModel.opacity === 0) {
-                                if (!isTooltipHovered) {
-                                    hideTooltipWithDelay();
-                                }
-                                return;
+                        callbacks: {
+                            title: function(items) {
+                                const raw = items && items[0] ? items[0].raw : null;
+                                return raw && raw.id ? `Work item #${raw.id}` : 'Work item';
+                            },
+                            label: function(context) {
+                                const it = context.raw || {};
+                                const lines = [];
+                                if (it.title) lines.push(`Title: ${it.title}`);
+                                if (it.completedDate) lines.push(`Completed: ${it.completedDate}`);
+                                lines.push(`Cycle time: ${context.parsed.y} days`);
+                                return lines;
                             }
-
-                            // Clear any pending hide timeout
-                            if (tooltipHideTimeout) {
-                                clearTimeout(tooltipHideTimeout);
-                                tooltipHideTimeout = null;
-                            }
-
-                            // Get data point
-                            if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
-                                const dataPoint = tooltipModel.dataPoints[0];
-                                const item = dataPoint.raw;
-                                const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
-                                const cycleTime = item.y;
-                                
-                                // Build HTML
-                                tooltipEl.innerHTML = `
-                                    <div class="tooltip-title">Work Item Details</div>
-                                    <div class="tooltip-content">
-                                        <strong>ID:</strong> <a href="${adoUrl}" target="_blank">#${item.id}</a><br>
-                                        <strong>Title:</strong> ${item.title}<br>
-                                        <strong>Completed:</strong> ${item.completedDate}<br><br>
-                                        <strong style="color: #4299e1;">⏱️ Cycle Time:</strong> ${cycleTime} days<br>
-                                        <em style="font-size: 11px; color: #9ca3af;">From ${getCycleStartColumn()} → Done</em>
-                                    </div>
-                                    <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
-                                `;
-                            }
-
-                            // Display tooltip
-                            const position = context.chart.canvas.getBoundingClientRect();
-                            tooltipEl.classList.add('visible');
-                            tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
-                            tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
                         }
                     },
                     annotation: {
@@ -2253,51 +2201,20 @@
                         }
                     },
                     tooltip: {
-                        enabled: false,
-                        external: function(context) {
-                            // Tooltip Element
-                            const tooltipEl = document.getElementById('customTooltip');
-                            
-                            // Hide if no tooltip
-                            const tooltipModel = context.tooltip;
-                            if (tooltipModel.opacity === 0) {
-                                if (!isTooltipHovered) {
-                                    hideTooltipWithDelay();
-                                }
-                                return;
+                        callbacks: {
+                            title: function(items) {
+                                const raw = items && items[0] ? items[0].raw : null;
+                                return raw && raw.id ? `Work item #${raw.id}` : 'Work item';
+                            },
+                            label: function(context) {
+                                const it = context.raw || {};
+                                const lines = [];
+                                if (it.title) lines.push(`Title: ${it.title}`);
+                                if (it.completedDate) lines.push(`Completed: ${it.completedDate}`);
+                                const lt = (it.leadTime !== undefined && it.leadTime !== null) ? it.leadTime : context.parsed.y;
+                                lines.push(`Lead time: ${lt} days`);
+                                return lines;
                             }
-
-                            // Clear any pending hide timeout
-                            if (tooltipHideTimeout) {
-                                clearTimeout(tooltipHideTimeout);
-                                tooltipHideTimeout = null;
-                            }
-
-                            // Get data point
-                            if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
-                                const dataPoint = tooltipModel.dataPoints[0];
-                                const item = dataPoint.raw;
-                                const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
-                                const leadTime = item.leadTime;
-                                
-                                // Build HTML
-                                tooltipEl.innerHTML = `
-                                    <div class="tooltip-title">Work Item Details</div>
-                                    <div class="tooltip-content">
-                                        <strong>ID:</strong> <a href="${adoUrl}" target="_blank">#${item.id}</a><br>
-                                        <strong>Title:</strong> ${item.title}<br>
-                                        <strong>Completed:</strong> ${item.completedDate}<br><br>
-                                        <strong style="color: #9f7aea;">🕐 Lead Time:</strong> ${leadTime} days
-                                    </div>
-                                    <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
-                                `;
-                            }
-
-                            // Display tooltip
-                            const position = context.chart.canvas.getBoundingClientRect();
-                            tooltipEl.classList.add('visible');
-                            tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
-                            tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
                         }
                     },
                     annotation: {
@@ -2636,11 +2553,18 @@
             const n = Number(sampleCount) || 0;
             if (n <= 0) return 10;
 
-            // Start with sqrt(n) bins, then round to a "nice" width.
-            const targetBins = Math.min(20, Math.max(5, Math.ceil(Math.sqrt(n))));
+            // Target more bins to avoid overly coarse distributions.
+            const targetBins = Math.min(40, Math.max(10, Math.ceil(Math.sqrt(n) * 2)));
             const rawWidth = 100 / targetBins;
-            const niceWidth = Math.max(5, Math.round(rawWidth / 5) * 5);
-            return niceWidth;
+
+            // Round DOWN to keep more buckets. Keep labels simple (whole %).
+            let step = 1;
+            if (rawWidth > 10) step = 2;
+            if (rawWidth > 20) step = 5;
+
+            const floored = Math.floor(rawWidth / step) * step;
+            const niceWidth = Math.max(step, floored || step);
+            return Math.max(1, niceWidth);
         }
 
         function buildHistogramPercent(values) {
@@ -3671,50 +3595,19 @@
                     plugins: {
                         legend: { display: false },
                         tooltip: {
-                            enabled: false,
-                            external: function(context) {
-                                // Tooltip Element
-                                const tooltipEl = document.getElementById('customTooltip');
-                                
-                                // Hide if no tooltip
-                                const tooltipModel = context.tooltip;
-                                if (tooltipModel.opacity === 0) {
-                                    if (!isTooltipHovered) {
-                                        hideTooltipWithDelay();
-                                    }
-                                    return;
+                            callbacks: {
+                                title: function(items) {
+                                    const raw = items && items[0] ? items[0].raw : null;
+                                    return raw && raw.id ? `Work item #${raw.id}` : 'Work item';
+                                },
+                                label: function(context) {
+                                    const it = context.raw || {};
+                                    const lines = [];
+                                    if (it.title) lines.push(`Title: ${it.title}`);
+                                    if (it.x) lines.push(`Column: ${it.x}`);
+                                    lines.push(`Age: ${context.parsed.y} days`);
+                                    return lines;
                                 }
-
-                                // Clear any pending hide timeout
-                                if (tooltipHideTimeout) {
-                                    clearTimeout(tooltipHideTimeout);
-                                    tooltipHideTimeout = null;
-                                }
-
-                                // Get data point
-                                if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
-                                    const dataPoint = tooltipModel.dataPoints[0];
-                                    const item = dataPoint.raw;
-                                    const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
-                                    
-                                    // Build HTML
-                                    tooltipEl.innerHTML = `
-                                        <div class="tooltip-title">Work Item Details</div>
-                                        <div class="tooltip-content">
-                                            <strong>ID:</strong> <a href="${adoUrl}" target="_blank">#${item.id}</a><br>
-                                            <strong>Title:</strong> ${escapeHtml(item.title)}<br>
-                                            <strong>Column:</strong> ${escapeHtml(item.x)}<br><br>
-                                            <strong style="color: #f59e0b;">📅 Age:</strong> ${item.y} days
-                                        </div>
-                                        <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
-                                    `;
-                                }
-
-                                // Display tooltip
-                                const position = context.chart.canvas.getBoundingClientRect();
-                                tooltipEl.classList.add('visible');
-                                tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
-                                tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
                             }
                         },
                         annotation: {
@@ -3902,7 +3795,14 @@
                     labels: sortedLabels,
                     datasets: [{
                         label: 'Days Since Updated',
-                        data: sortedValues,
+                        data: staleItems.map((it, i) => ({
+                            x: it.value,
+                            y: sortedLabels[i],
+                            id: it.id,
+                            title: it.title,
+                            blockerLabel: sortedBlockerLabels[i],
+                            blockerColor: sortedBlockerColors[i]
+                        })),
                         backgroundColor: colorScale,
                         borderColor: colorScale.map((color, index) => {
                             // Always use a darker shade of the fill colour
@@ -3918,58 +3818,19 @@
                     plugins: {
                         legend: { display: false },
                         tooltip: {
-                            enabled: false,
-                            external: function(context) {
-                                // Tooltip Element
-                                const tooltipEl = document.getElementById('customTooltip');
-                                
-                                // Hide if no tooltip
-                                const tooltipModel = context.tooltip;
-                                if (tooltipModel.opacity === 0) {
-                                    if (!isTooltipHovered) {
-                                        hideTooltipWithDelay();
-                                    }
-                                    return;
+                            callbacks: {
+                                title: function(items) {
+                                    const raw = items && items[0] ? items[0].raw : null;
+                                    return raw && raw.id ? `Work item #${raw.id}` : 'Work item';
+                                },
+                                label: function(context) {
+                                    const it = context.raw || {};
+                                    const lines = [];
+                                    if (it.title) lines.push(`Title: ${it.title}`);
+                                    if (it.blockerLabel) lines.push(`Blocker: ${it.blockerLabel}`);
+                                    lines.push(`Days since updated: ${context.parsed.x} days`);
+                                    return lines;
                                 }
-
-                                // Clear any pending hide timeout
-                                if (tooltipHideTimeout) {
-                                    clearTimeout(tooltipHideTimeout);
-                                    tooltipHideTimeout = null;
-                                }
-
-                                // Get data point
-                                if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
-                                    const dataPoint = tooltipModel.dataPoints[0];
-                                    const index = dataPoint.dataIndex;
-                                    const id = sortedIds[index];
-                                    const title = sortedTitles[index];
-                                    const days = sortedValues[index];
-                                    const blocked = sortedBlocked[index];
-                                    const blockerLabel = sortedBlockerLabels[index];
-                                    const blockerColor = sortedBlockerColors[index];
-                                    const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${id}`;
-                                    
-                                    const blockedBadge = blockerLabel ? `<span style="background: ${blockerColor}; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: bold;">${blockerLabel.toUpperCase()}</span><br>` : '';
-                                    
-                                    // Build HTML
-                                    tooltipEl.innerHTML = `
-                                        <div class="tooltip-title">Work Item Details</div>
-                                        <div class="tooltip-content">
-                                            ${blockedBadge}
-                                            <strong>ID:</strong> <a href="${adoUrl}" target="_blank">#${id}</a><br>
-                                            <strong>Title:</strong> ${title}<br><br>
-                                            <strong style="color: #f59e0b;">⏰ Days Since Updated:</strong> ${days} days
-                                        </div>
-                                        <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
-                                    `;
-                                }
-
-                                // Display tooltip
-                                const position = context.chart.canvas.getBoundingClientRect();
-                                tooltipEl.classList.add('visible');
-                                tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
-                                tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
                             }
                         }
                     },
@@ -4066,7 +3927,12 @@
                     labels: dashboardData.charts.wip.labels,
                     datasets: [{
                         label: 'WIP Age (days)',
-                        data: dashboardData.charts.wip.values,
+                        data: dashboardData.charts.wip.values.map((v, i) => ({
+                            x: v,
+                            y: dashboardData.charts.wip.labels[i],
+                            id: dashboardData.charts.wip.ids[i],
+                            title: dashboardData.charts.wip.titles[i]
+                        })),
                         backgroundColor: dashboardData.charts.wip.colors,
                         borderColor: '#fff',
                         borderWidth: 2
@@ -4079,52 +3945,18 @@
                     plugins: {
                         legend: { display: false },
                         tooltip: {
-                            enabled: false,
-                            external: function(context) {
-                                // Tooltip Element
-                                const tooltipEl = document.getElementById('customTooltip');
-                                
-                                // Hide if no tooltip
-                                const tooltipModel = context.tooltip;
-                                if (tooltipModel.opacity === 0) {
-                                    if (!isTooltipHovered) {
-                                        hideTooltipWithDelay();
-                                    }
-                                    return;
+                            callbacks: {
+                                title: function(items) {
+                                    const raw = items && items[0] ? items[0].raw : null;
+                                    return raw && raw.id ? `Work item #${raw.id}` : 'WIP item';
+                                },
+                                label: function(context) {
+                                    const it = context.raw || {};
+                                    const lines = [];
+                                    if (it.title) lines.push(`Title: ${it.title}`);
+                                    lines.push(`Age: ${context.parsed.x} days`);
+                                    return lines;
                                 }
-
-                                // Clear any pending hide timeout
-                                if (tooltipHideTimeout) {
-                                    clearTimeout(tooltipHideTimeout);
-                                    tooltipHideTimeout = null;
-                                }
-
-                                // Get data point
-                                if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
-                                    const dataPoint = tooltipModel.dataPoints[0];
-                                    const index = dataPoint.dataIndex;
-                                    const workItemId = dashboardData.charts.wip.ids[index];
-                                    const title = dashboardData.charts.wip.titles[index];
-                                    const age = dataPoint.parsed.x;
-                                    const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${workItemId}`;
-                                    
-                                    // Build HTML
-                                    tooltipEl.innerHTML = `
-                                        <div class="tooltip-title">WIP Item</div>
-                                        <div class="tooltip-content">
-                                            <strong>ID:</strong> <a href="${adoUrl}" target="_blank">#${workItemId}</a><br>
-                                            <strong>Title:</strong> ${escapeHtml(title)}<br>
-                                            <strong>Age:</strong> ${age} days
-                                        </div>
-                                        <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
-                                    `;
-                                }
-
-                                // Display tooltip
-                                const position = context.chart.canvas.getBoundingClientRect();
-                                tooltipEl.classList.add('visible');
-                                tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
-                                tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
                             }
                         }
                     },
@@ -4150,7 +3982,19 @@
                 datasets: [
                     {
                         label: 'WIP Bug Rate (%)',
-                        data: dashboardData.charts.bugRate.wipRate,
+                        data: dashboardData.charts.bugRate.wipRate.map((v, i) => ({
+                            x: dashboardData.charts.bugRate.labels[i],
+                            y: v,
+                            items: (dashboardData.charts.bugRate.wipBugs && dashboardData.charts.bugRate.wipBugs[i])
+                                ? dashboardData.charts.bugRate.wipBugs[i]
+                                : [],
+                            bugCount: (dashboardData.charts.bugRate.wipBugCount && dashboardData.charts.bugRate.wipBugCount[i] !== undefined)
+                                ? dashboardData.charts.bugRate.wipBugCount[i]
+                                : null,
+                            totalCount: (dashboardData.charts.bugRate.wipBugCount && dashboardData.charts.bugRate.wipFeatureCount)
+                                ? (dashboardData.charts.bugRate.wipBugCount[i] + dashboardData.charts.bugRate.wipFeatureCount[i])
+                                : null
+                        })),
                         borderColor: '#EF4444',
                         backgroundColor: 'rgba(239, 68, 68, 0.1)',
                         borderWidth: 3,
@@ -4174,7 +4018,19 @@
                     },
                     {
                         label: 'Completion Bug Rate (%)',
-                        data: dashboardData.charts.bugRate.completionRate,
+                        data: dashboardData.charts.bugRate.completionRate.map((v, i) => ({
+                            x: dashboardData.charts.bugRate.labels[i],
+                            y: v,
+                            items: (dashboardData.charts.bugRate.completionBugs && dashboardData.charts.bugRate.completionBugs[i])
+                                ? dashboardData.charts.bugRate.completionBugs[i]
+                                : [],
+                            bugCount: (dashboardData.charts.bugRate.completionBugCount && dashboardData.charts.bugRate.completionBugCount[i] !== undefined)
+                                ? dashboardData.charts.bugRate.completionBugCount[i]
+                                : null,
+                            totalCount: (dashboardData.charts.bugRate.completionBugCount && dashboardData.charts.bugRate.completionFeatureCount)
+                                ? (dashboardData.charts.bugRate.completionBugCount[i] + dashboardData.charts.bugRate.completionFeatureCount[i])
+                                : null
+                        })),
                         borderColor: '#22C55E',
                         backgroundColor: 'rgba(34, 197, 94, 0.1)',
                         borderWidth: 3,
@@ -4212,120 +4068,29 @@
                         position: 'top'
                     },
                     tooltip: {
-                        enabled: false,
-                        external: function(context) {
-                            // Tooltip Element
-                            const tooltipEl = document.getElementById('customTooltip');
-                            
-                            // Hide if no tooltip
-                            const tooltipModel = context.tooltip;
-                            if (tooltipModel.opacity === 0) {
-                                if (!isTooltipHovered) {
-                                    hideTooltipWithDelay();
-                                }
-                                return;
-                            }
+                        filter: function(item) {
+                            // Hide tooltip for trend line datasets
+                            return !(item.datasetIndex === 1 || item.datasetIndex === 3);
+                        },
+                        callbacks: {
+                            title: function(items) {
+                                return items && items[0] ? `Week of ${items[0].label}` : 'Week';
+                            },
+                            label: function(context) {
+                                const raw = context.raw || {};
+                                const isWip = context.datasetIndex === 0;
+                                const kind = isWip ? 'WIP' : 'Completed';
+                                const rate = (raw && raw.y !== null && raw.y !== undefined && Number.isFinite(Number(raw.y)))
+                                    ? Number(raw.y).toFixed(1)
+                                    : 'N/A';
 
-                            // Clear any pending hide timeout
-                            if (tooltipHideTimeout) {
-                                clearTimeout(tooltipHideTimeout);
-                                tooltipHideTimeout = null;
+                                const lines = [];
+                                lines.push(`${kind} bug rate: ${rate}%`);
+                                if (raw.bugCount !== null && raw.totalCount !== null) {
+                                    lines.push(`Bugs: ${raw.bugCount} of ${raw.totalCount} items`);
+                                }
+                                return lines;
                             }
-
-                            // Get data point
-                            if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
-                                const dataPoint = tooltipModel.dataPoints[0];
-                                const index = dataPoint.dataIndex;
-                                const datasetIndex = dataPoint.datasetIndex;
-                                
-                                // Filter out trend lines (indices 1 and 3)
-                                if (datasetIndex === 1 || datasetIndex === 3) {
-                                    if (!isTooltipHovered) {
-                                        hideTooltipWithDelay();
-                                    }
-                                    return;
-                                }
-                                
-                                const weekLabel = dashboardData.charts.bugRate.labels[index];
-                                
-                                // Map dataset index: 0 = WIP, 2 = Completion
-                                const isWIP = (datasetIndex === 0);
-                                
-                                // WIP data for this week
-                                const wipBugCount = dashboardData.charts.bugRate.wipBugCount[index];
-                                const wipFeatureCount = dashboardData.charts.bugRate.wipFeatureCount[index];
-                                const wipTotal = wipBugCount + wipFeatureCount;
-                                const wipRate = dashboardData.charts.bugRate.wipRate[index];
-                                const wipBugsItems = dashboardData.charts.bugRate.wipBugs[index];
-                                
-                                // Completion data for this week
-                                const compBugCount = dashboardData.charts.bugRate.completionBugCount[index];
-                                const compFeatureCount = dashboardData.charts.bugRate.completionFeatureCount[index];
-                                const compTotal = compBugCount + compFeatureCount;
-                                const compRate = dashboardData.charts.bugRate.completionRate[index];
-                                const compBugsItems = dashboardData.charts.bugRate.completionBugs[index];
-                                
-                                // Build HTML for WIP bugs
-                                let wipBugsHTML = '';
-                                if (wipBugsItems && wipBugsItems.length > 0) {
-                                    wipBugsItems.forEach(item => {
-                                        const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
-                                        wipBugsHTML += `<div style="margin-bottom: 4px; padding-left: 8px; border-left: 2px solid #EF4444;">
-                                            <a href="${adoUrl}" target="_blank" style="text-decoration: none; font-weight: 600;">#${item.id}</a>
-                                            <span style="color: #ddd; font-size: 12px;"> ${item.title}</span>
-                                        </div>`;
-                                    });
-                                } else {
-                                    wipBugsHTML = '<div style="color: #aaa; font-style: italic; padding-left: 8px;">None</div>';
-                                }
-                                
-                                // Build HTML for completed bugs
-                                let compBugsHTML = '';
-                                if (compBugsItems && compBugsItems.length > 0) {
-                                    compBugsItems.forEach(item => {
-                                        const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
-                                        compBugsHTML += `<div style="margin-bottom: 4px; padding-left: 8px; border-left: 2px solid #22C55E;">
-                                            <a href="${adoUrl}" target="_blank" style="text-decoration: none; font-weight: 600;">#${item.id}</a>
-                                            <span style="color: #ddd; font-size: 12px;"> ${item.title}</span>
-                                        </div>`;
-                                    });
-                                } else {
-                                    compBugsHTML = '<div style="color: #aaa; font-style: italic; padding-left: 8px;">None</div>';
-                                }
-                                
-                                // Build HTML - show only the hovered dataset's data
-                                if (isWIP) {
-                                    // WIP Bug Rate tooltip
-                                    tooltipEl.innerHTML = `
-                                        <div class="tooltip-title">Week of ${weekLabel}</div>
-                                        <div class="tooltip-content">
-                                            <strong style="color: #EF4444;">📊 Work In Progress:</strong><br>
-                                            WIP Bug Rate: <strong>${wipRate !== null ? wipRate.toFixed(1) : 'N/A'}%</strong><br>
-                                            ${wipBugCount} bugs from ${wipTotal} items in total<br>
-                                            ${wipBugsItems && wipBugsItems.length > 0 ? `<br><strong style="color: #EF4444;">🐛 Bugs in WIP:</strong><br>${wipBugsHTML}` : ''}
-                                        </div>
-                                        <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
-                                    `;
-                                } else {
-                                    // Completion Bug Rate tooltip
-                                    tooltipEl.innerHTML = `
-                                        <div class="tooltip-title">Week of ${weekLabel}</div>
-                                        <div class="tooltip-content">
-                                            <strong style="color: #22C55E;">✅ Completed This Week:</strong><br>
-                                            Completion Bug Rate: <strong>${compRate !== null ? compRate.toFixed(1) : 'N/A'}%</strong><br>
-                                            ${compBugCount} bugs from ${compTotal} items in total<br>
-                                            ${compBugsItems && compBugsItems.length > 0 ? `<br><strong style="color: #22C55E;">🐛 Bugs Completed:</strong><br>${compBugsHTML}` : ''}
-                                        </div>
-                                        <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
-                                    `;
-                                }
-                            }
-
-                            // Display tooltip
-                            const position = context.chart.canvas.getBoundingClientRect();
-                            tooltipEl.classList.add('visible');
-                            tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
-                            tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
                         }
                     }
                 },
@@ -4583,14 +4348,19 @@
             const details = dashboardData.charts.blockedItems.current.details;
             const categories = dashboardData.charts.blockedItems.current.categories;
             const byCategory = dashboardData.charts.blockedItems.current.byCategory;
+
+            const toItemRef = (it) => ({ id: it.id, title: it.title });
             
             // Build datasets - one per category
             const datasets = [];
             if (categories && byCategory) {
                 for (const [categoryKey, categoryConfig] of Object.entries(categories)) {
-                    // Calculate counts per column for this category
+                    // One data point per column, including items for linkable tooltips
                     const categoryData = columns.map(col => {
-                        return details.filter(item => item.column === col && item.category === categoryKey).length;
+                        const items = details
+                            .filter(item => item.column === col && item.category === categoryKey)
+                            .map(toItemRef);
+                        return { x: col, y: items.length, items };
                     });
                     
                     datasets.push({
@@ -4604,10 +4374,12 @@
             }
             
             // Add gray bars for columns with no blocks
-            const totalCounts = columns.map((col, i) => {
-                let total = 0;
-                datasets.forEach(ds => total += ds.data[i]);
-                return total;
+            const totalCounts = columns.map(col => details.filter(item => item.column === col).length);
+            const fallbackDataPoints = columns.map(col => {
+                const items = details
+                    .filter(item => item.column === col)
+                    .map(toItemRef);
+                return { x: col, y: items.length, items };
             });
             
             new Chart(document.getElementById('blockedItemsChart'), {
@@ -4616,7 +4388,7 @@
                     labels: columns,
                     datasets: datasets.length > 0 ? datasets : [{
                         label: 'Blocked Items',
-                        data: totalCounts,
+                        data: fallbackDataPoints,
                         backgroundColor: totalCounts.map(c => c > 0 ? '#ef4444' : '#d1d5db'),
                         borderColor: totalCounts.map(c => c > 0 ? '#dc2626' : '#9ca3af'),
                         borderWidth: 2
@@ -4631,52 +4403,24 @@
                             position: 'top'
                         },
                         tooltip: {
-                            enabled: false,
-                            external: function(context) {
-                                const tooltipEl = document.getElementById('customTooltip');
-                                const tooltipModel = context.tooltip;
-                                
-                                if (tooltipModel.opacity === 0) {
-                                    if (!isTooltipHovered) {
-                                        hideTooltipWithDelay();
-                                    }
-                                    return;
-                                }
-                                
-                                if (tooltipHideTimeout) {
-                                    clearTimeout(tooltipHideTimeout);
-                                    tooltipHideTimeout = null;
-                                }
-                                
-                                if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
-                                    const dataPoint = tooltipModel.dataPoints[0];
-                                    const column = columns[dataPoint.dataIndex];
-                                    const itemsInColumn = details.filter(item => item.column === column);
-                                    
-                                    let html = `<div class="tooltip-title">Blocked in ${column}</div>`;
-                                    html += `<div class="tooltip-content">`;
-                                    html += `<strong>Total:</strong> ${itemsInColumn.length} item${itemsInColumn.length !== 1 ? 's' : ''}<br><br>`;
-                                    
-                                    if (itemsInColumn.length > 0) {
-                                        html += `<strong>Items:</strong><br>`;
-                                        itemsInColumn.forEach(item => {
-                                            const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
-                                            const shortTitle = item.title.length > 40 ? item.title.substring(0, 40) + '...' : item.title;
-                                            const categoryBadge = item.categoryLabel ? `<span style="color: ${item.categoryColor}; font-weight: bold;">[${item.categoryLabel}]</span> ` : '';
-                                            html += `<div style="margin: 4px 0 4px 8px;">• ${categoryBadge}<a href="${adoUrl}" target="_blank" style="color: #60a5fa;">#${item.id}</a>: ${shortTitle} <em style="color: #9ca3af;">(${item.daysSinceChanged}d)</em></div>`;
-                                        });
-                                    }
-                                    
-                                    html += `</div><div class="close-hint">Hover to keep open • Click elsewhere to close</div>`;
-                                    tooltipEl.innerHTML = html;
-                                    tooltipEl.classList.add('visible');
-                                    
-                                    const position = context.chart.canvas.getBoundingClientRect();
-                                    tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
-                                    tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                title: function(items) {
+                                    return items && items[0] ? `Blocked in ${items[0].label}` : 'Blocked items';
+                                },
+                                label: function(context) {
+                                    if (!context || !context.dataset) return null;
+                                    const v = context.parsed.y;
+                                    if (!v) return null;
+                                    return `${context.dataset.label}: ${v}`;
                                 }
                             }
                         }
+                    },
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
                     },
                     scales: {
                         y: {
@@ -4735,7 +4479,16 @@
                     labels: labels,
                     datasets: [{
                         label: 'Days Blocked',
-                        data: daysBlocked,
+                        data: details.map(it => ({
+                            x: it.daysSinceChanged,
+                            y: `${shortType(it.workItemType)} #${it.id}`,
+                            id: it.id,
+                            title: it.title,
+                            column: it.column,
+                            workItemType: it.workItemType,
+                            categoryLabel: it.categoryLabel,
+                            categoryColor: it.categoryColor
+                        })),
                         backgroundColor: barColors,
                         borderColor: borderColors,
                         borderWidth: 2
@@ -4748,44 +4501,22 @@
                     plugins: {
                         legend: { display: false },
                         tooltip: {
-                            enabled: false,
-                            external: function(context) {
-                                const tooltipEl = document.getElementById('customTooltip');
-                                const tooltipModel = context.tooltip;
-                                
-                                if (tooltipModel.opacity === 0) {
-                                    if (!isTooltipHovered) {
-                                        hideTooltipWithDelay();
+                            callbacks: {
+                                title: function(items) {
+                                    const raw = items && items[0] ? items[0].raw : null;
+                                    if (raw && raw.id) {
+                                        return raw.categoryLabel ? `Blocked item (${raw.categoryLabel}) #${raw.id}` : `Blocked item #${raw.id}`;
                                     }
-                                    return;
-                                }
-                                
-                                if (tooltipHideTimeout) {
-                                    clearTimeout(tooltipHideTimeout);
-                                    tooltipHideTimeout = null;
-                                }
-                                
-                                if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
-                                    const dataPoint = tooltipModel.dataPoints[0];
-                                    const item = details[dataPoint.dataIndex];
-                                    const adoUrl = `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${item.id}`;
-                                    const categoryBadge = item.categoryLabel ? `<span style="color: ${item.categoryColor}; font-weight: bold;">${escapeHtml(item.categoryLabel)}</span>` : '';
-                                    
-                                    let html = `<div class="tooltip-title">Blocked Item ${categoryBadge}</div>`;
-                                    html += `<div class="tooltip-content">`;
-                                    html += `<strong>ID:</strong> <a href="${adoUrl}" target="_blank" style="color: #60a5fa;">#${item.id}</a><br>`;
-                                    html += `<strong>Title:</strong> ${escapeHtml(item.title)}<br>`;
-                                    html += `<strong>Column:</strong> ${escapeHtml(item.column)}<br>`;
-                                    html += `<strong>Type:</strong> ${escapeHtml(item.workItemType)}<br><br>`;
-                                    html += `<strong style="color: ${item.categoryColor || '#3b82f6'};">⏰ Days Blocked:</strong> ${item.daysSinceChanged} days`;
-                                    html += `</div><div class="close-hint">Hover to keep open • Click elsewhere to close</div>`;
-                                    
-                                    tooltipEl.innerHTML = html;
-                                    tooltipEl.classList.add('visible');
-                                    
-                                    const position = context.chart.canvas.getBoundingClientRect();
-                                    tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
-                                    tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
+                                    return 'Blocked item';
+                                },
+                                label: function(context) {
+                                    const it = context.raw || {};
+                                    const lines = [];
+                                    if (it.title) lines.push(`Title: ${it.title}`);
+                                    if (it.column) lines.push(`Column: ${it.column}`);
+                                    if (it.workItemType) lines.push(`Type: ${it.workItemType}`);
+                                    lines.push(`Days blocked: ${context.parsed.x} days`);
+                                    return lines;
                                 }
                             }
                         }
