@@ -205,7 +205,8 @@ function Sum-ColumnTimeDays {
         if ([string]::IsNullOrWhiteSpace($c)) { continue }
         $sum += (Get-ColumnTimeDays -ColumnTime $ColumnTime -ColumnName $c)
     }
-    return [Math]::Round($sum, 1)
+    # Keep more precision so short spans don't round to 0.0 days.
+    return [Math]::Round($sum, 3)
 }
 
 $efficiencyMapping = Get-EfficiencyColumnMapping -Config $config -ActiveOverride $EfficiencyActiveColumns -WaitingOverride $EfficiencyWaitingColumns -BeforeOverride $EfficiencyBeforeWorkflowColumns -AfterOverride $EfficiencyAfterWorkflowColumns
@@ -240,7 +241,17 @@ $excludedConfiguredWorkItemTypes = @(
 # Helper: Calculate days between dates
 function Get-DaysBetween($date1, $date2) {
     if (-not $date1 -or -not $date2) { return 0 }
-    return [Math]::Round((([DateTime]$date2) - ([DateTime]$date1)).TotalDays, 1)
+    try {
+        $d1 = [DateTime]$date1
+        $d2 = [DateTime]$date2
+    } catch {
+        return 0
+    }
+
+    $days = ($d2 - $d1).TotalDays
+    if ([double]::IsNaN($days) -or [double]::IsInfinity($days)) { return 0 }
+    if ($days -lt 0) { return 0 }
+    return [Math]::Round($days, 3)
 }
 
 function Get-EffectiveLeadTimeConfig {
@@ -596,7 +607,9 @@ function Get-CycleTimeFromUpdates($item) {
         $totalActiveDays += $daysInState
     }
     
-    return [Math]::Round($totalActiveDays, 1)
+    if ([double]::IsNaN($totalActiveDays) -or [double]::IsInfinity($totalActiveDays)) { return 0 }
+    if ($totalActiveDays -lt 0) { return 0 }
+    return [Math]::Round($totalActiveDays, 3)
 }
 
 # Build completed items with metrics calculated from state transitions
@@ -621,7 +634,21 @@ foreach ($item in $completedItems) {
     if ($hasColumnTime) {
         $activeTimeDays = Sum-ColumnTimeDays -ColumnTime $columnTime -Columns $efficiencyMapping.activeColumns
         $waitingTimeDays = Sum-ColumnTimeDays -ColumnTime $columnTime -Columns $efficiencyMapping.waitingColumns
-        $cycleTime = [Math]::Round(($activeTimeDays + $waitingTimeDays), 1)
+
+        $cycleTime = [Math]::Round(($activeTimeDays + $waitingTimeDays), 3)
+
+        # If mapping didn't match any workflow columns but the item was clearly worked and completed,
+        # fall back to ActivatedDate -> ClosedDate to avoid impossible 0.0d cycle times.
+        if ($cycleTime -le 0) {
+            $activatedRaw = $item.fields.'Microsoft.VSTS.Common.ActivatedDate'
+            $closedRaw = $item.fields.'Microsoft.VSTS.Common.ClosedDate'
+            if ($activatedRaw -and $closedRaw) {
+                $fallback = Get-DaysBetween $activatedRaw $closedRaw
+                if ($fallback -gt 0) {
+                    $cycleTime = $fallback
+                }
+            }
+        }
     } else {
         # No real board column history available => no workflow cycle time.
         $cycleTime = 0
@@ -828,6 +855,7 @@ $currentActiveBugRate = if ($activeItems.Count -gt 0) {
 
 # Current bug breakdown by board column (for pie chart)
 $bugColumnBreakdown = @{}
+$bugColumnItems = @{}
 foreach ($bug in $activeBugs) {
     $column = $bug.fields.'System.BoardColumn'
     if ([string]::IsNullOrWhiteSpace($column)) {
@@ -841,10 +869,35 @@ foreach ($bug in $activeBugs) {
         $bugColumnBreakdown[$column] = 0
     }
     $bugColumnBreakdown[$column]++
+
+    if (-not $bugColumnItems.ContainsKey($column)) {
+        $bugColumnItems[$column] = @()
+    }
+
+    $existing = @($bugColumnItems[$column])
+    $bugColumnItems[$column] = $existing + @(
+        @{
+            id = $bug.id
+            title = $bug.fields.'System.Title'
+            workItemType = $bug.fields.'System.WorkItemType'
+        }
+    )
+}
+
+# Normalise: ensure every bucket is an array (avoid single-item buckets becoming objects)
+foreach ($k in @($bugColumnItems.Keys)) {
+    $v = $bugColumnItems[$k]
+    if ($null -eq $v) {
+        $bugColumnItems[$k] = @()
+        continue
+    }
+    if ($v -is [System.Array]) { continue }
+    $bugColumnItems[$k] = @() + ,$v
 }
 
 # Current bug breakdown by state (for pie chart)
 $bugStateBreakdown = @{}
+$bugStateItems = @{}
 foreach ($bug in $activeBugs) {
     $state = $bug.fields.'System.State'
     if ([string]::IsNullOrWhiteSpace($state)) {
@@ -855,6 +908,30 @@ foreach ($bug in $activeBugs) {
         $bugStateBreakdown[$state] = 0
     }
     $bugStateBreakdown[$state]++
+
+    if (-not $bugStateItems.ContainsKey($state)) {
+        $bugStateItems[$state] = @()
+    }
+
+    $existing = @($bugStateItems[$state])
+    $bugStateItems[$state] = $existing + @(
+        @{
+            id = $bug.id
+            title = $bug.fields.'System.Title'
+            workItemType = $bug.fields.'System.WorkItemType'
+        }
+    )
+}
+
+# Normalise: ensure every bucket is an array (avoid single-item buckets becoming objects)
+foreach ($k in @($bugStateItems.Keys)) {
+    $v = $bugStateItems[$k]
+    if ($null -eq $v) {
+        $bugStateItems[$k] = @()
+        continue
+    }
+    if ($v -is [System.Array]) { continue }
+    $bugStateItems[$k] = @() + ,$v
 }
 
 # Get board columns order for sorting
@@ -867,18 +944,38 @@ if (-not $boardColumns) {
 $currentBugsByColumn = @()
 foreach ($col in $boardColumns) {
     if ($bugColumnBreakdown.ContainsKey($col) -and $bugColumnBreakdown[$col] -gt 0) {
+        $bucket = if ($bugColumnItems.ContainsKey($col)) { $bugColumnItems[$col] } else { $null }
+        $bucketItems = if ($bucket -is [System.Array]) {
+            @($bucket)
+        } elseif ($null -ne $bucket) {
+            @() + ,$bucket
+        } else {
+            @()
+        }
+
         $currentBugsByColumn += @{
             column = $col
             count = $bugColumnBreakdown[$col]
+            items = $bucketItems
         }
     }
 }
 # Add any columns not in board config
 foreach ($col in ($bugColumnBreakdown.Keys | Sort-Object)) {
     if ($boardColumns -notcontains $col -and $bugColumnBreakdown[$col] -gt 0) {
+        $bucket = if ($bugColumnItems.ContainsKey($col)) { $bugColumnItems[$col] } else { $null }
+        $bucketItems = if ($bucket -is [System.Array]) {
+            @($bucket)
+        } elseif ($null -ne $bucket) {
+            @() + ,$bucket
+        } else {
+            @()
+        }
+
         $currentBugsByColumn += @{
             column = $col
             count = $bugColumnBreakdown[$col]
+            items = $bucketItems
         }
     }
 }
@@ -887,9 +984,19 @@ foreach ($col in ($bugColumnBreakdown.Keys | Sort-Object)) {
 $currentBugsByState = @()
 foreach ($state in ($bugStateBreakdown.Keys | Sort-Object)) {
     if ($bugStateBreakdown[$state] -gt 0) {
+        $bucket = if ($bugStateItems.ContainsKey($state)) { $bugStateItems[$state] } else { $null }
+        $bucketItems = if ($bucket -is [System.Array]) {
+            @($bucket)
+        } elseif ($null -ne $bucket) {
+            @() + ,$bucket
+        } else {
+            @()
+        }
+
         $currentBugsByState += @{
             state = $state
             count = $bugStateBreakdown[$state]
+            items = $bucketItems
         }
     }
 }
@@ -1206,10 +1313,13 @@ $blockedTimelineLabels = @($timelineWeekStarts | ForEach-Object { $_.ToString('d
 
 # Initialise buckets for every week in the analysis period (ensures full x-axis)
 $weeklyBuckets = @{}
+$weeklyBucketItems = @{}
 foreach ($wk in $timelineWeekKeys) {
     $weeklyBuckets[$wk] = @{}
+    $weeklyBucketItems[$wk] = @{}
     foreach ($categoryKey in $categoryKeys) {
         $weeklyBuckets[$wk][$categoryKey] = 0
+        $weeklyBucketItems[$wk][$categoryKey] = @()
     }
 }
 
@@ -1235,6 +1345,14 @@ if ($blockedItemDetailsAll.Count -gt 0) {
                 if ($null -ne $weeklyBuckets[$weekKey][$detail.category]) {
                     $weeklyBuckets[$weekKey][$detail.category]++
                 }
+
+                if ($weeklyBucketItems.ContainsKey($weekKey) -and $null -ne $weeklyBucketItems[$weekKey][$detail.category]) {
+                    $weeklyBucketItems[$weekKey][$detail.category] += @{
+                        id = $detail.id
+                        title = $detail.title
+                        workItemType = $detail.workItemType
+                    }
+                }
             }
         }
 
@@ -1243,6 +1361,26 @@ if ($blockedItemDetailsAll.Count -gt 0) {
 
 foreach ($categoryKey in $categoryKeys) {
     $blockedTimelineSeries[$categoryKey] = @($timelineWeekKeys | ForEach-Object { [int]$weeklyBuckets[$_][$categoryKey] })
+}
+
+$blockedTimelineItemsSeries = [ordered]@{}
+foreach ($categoryKey in $categoryKeys) {
+    $perWeek = @()
+    foreach ($wk in $timelineWeekKeys) {
+        $bucket = if ($weeklyBucketItems.ContainsKey($wk)) { $weeklyBucketItems[$wk][$categoryKey] } else { $null }
+
+        $bucketItems = if ($bucket -is [System.Array]) {
+            @($bucket)
+        } elseif ($null -ne $bucket) {
+            @() + ,$bucket
+        } else {
+            @()
+        }
+
+        # Unary comma is critical: it prevents PowerShell from flattening nested arrays.
+        $perWeek += ,$bucketItems
+    }
+    $blockedTimelineItemsSeries[$categoryKey] = $perWeek
 }
 
 # Build blocking/unblocking rates (weekly) with category breakdown - full analysis timeline
@@ -1302,9 +1440,23 @@ function Get-BlockerEventsFromUpdates {
         $hasBlockerNow = $null -ne $newCategory
 
         if ($hasBlockerNow -and -not $hadBlockerBefore) {
-            $events += [PSCustomObject]@{ type = 'blocked'; categoryKey = $newCategory.key; date = $updateDate }
+            $events += [PSCustomObject]@{
+                type = 'blocked'
+                categoryKey = $newCategory.key
+                date = $updateDate
+                id = $WorkItem.id
+                title = $WorkItem.fields.'System.Title'
+                workItemType = $WorkItem.fields.'System.WorkItemType'
+            }
         } elseif (-not $hasBlockerNow -and $hadBlockerBefore) {
-            $events += [PSCustomObject]@{ type = 'unblocked'; categoryKey = $oldCategory.key; date = $updateDate }
+            $events += [PSCustomObject]@{
+                type = 'unblocked'
+                categoryKey = $oldCategory.key
+                date = $updateDate
+                id = $WorkItem.id
+                title = $WorkItem.fields.'System.Title'
+                workItemType = $WorkItem.fields.'System.WorkItemType'
+            }
         }
 
         $previousTags = $newTags
@@ -1325,8 +1477,23 @@ foreach ($blockedEntry in $blockedItems) {
     $id = $blockedEntry.item.id
     if ($blockerDates.ContainsKey($id) -and $blockerDates[$id].blockerAddedDate) {
         $addedDate = [DateTime]$blockerDates[$id].blockerAddedDate
-        $blockerEvents += [PSCustomObject]@{ type = 'blocked'; categoryKey = $blockedEntry.category.key; date = $addedDate }
+        $blockerEvents += [PSCustomObject]@{
+            type = 'blocked'
+            categoryKey = $blockedEntry.category.key
+            date = $addedDate
+            id = $blockedEntry.item.id
+            title = $blockedEntry.item.fields.'System.Title'
+            workItemType = $blockedEntry.item.fields.'System.WorkItemType'
+        }
     }
+}
+
+# Per-week tooltip item lists for blocker flow (totals)
+$blockedEventsItemsByWeek = @()
+$unblockedEventsItemsByWeek = @()
+for ($i = 0; $i -lt $timelineWeekKeys.Count; $i++) {
+    $blockedEventsItemsByWeek += ,@()
+    $unblockedEventsItemsByWeek += ,@()
 }
 
 foreach ($ev in $blockerEvents) {
@@ -1341,13 +1508,30 @@ foreach ($ev in $blockerEvents) {
     $idx = [int]$weekKeyToIndex[$weekKey]
     $cat = $ev.categoryKey
 
+    $itemRef = $null
+    if ($ev.id) {
+        $itemRef = @{
+            id = $ev.id
+            title = $ev.title
+            workItemType = $ev.workItemType
+        }
+    }
+
     if ($ev.type -eq 'blocked') {
         if ($blockedRateSeries.Contains($cat)) {
             $blockedRateSeries[$cat][$idx] = [int]$blockedRateSeries[$cat][$idx] + 1
         }
+
+        if ($itemRef) {
+            $blockedEventsItemsByWeek[$idx] += $itemRef
+        }
     } elseif ($ev.type -eq 'unblocked') {
         if ($unblockedRateSeries.Contains($cat)) {
             $unblockedRateSeries[$cat][$idx] = [int]$unblockedRateSeries[$cat][$idx] + 1
+        }
+
+        if ($itemRef) {
+            $unblockedEventsItemsByWeek[$idx] += $itemRef
         }
     }
 }
@@ -2119,7 +2303,7 @@ $bugLeadTimes = $bugs | ForEach-Object { $_.leadTime } | Where-Object { $_ -gt 0
 $pbiLeadTimes = $pbis | ForEach-Object { $_.leadTime } | Where-Object { $_ -gt 0 }
 
 # Net Flow chart (weekly started vs finished) - full analysis timeline
-$startedByWeekMap = @{}
+$startedByWeekItemsMap = @{}
 foreach ($item in @($activeItems + $completedItems)) {
     $createdDateRaw = $item.fields.'System.CreatedDate'
     if (-not $createdDateRaw) { continue }
@@ -2128,25 +2312,50 @@ foreach ($item in @($activeItems + $completedItems)) {
     if ($weekStart -lt $firstWeekStart -or $weekStart -gt $lastWeekStart) { continue }
 
     $key = $weekStart.ToString('yyyy-MM-dd')
-    if (-not $startedByWeekMap.ContainsKey($key)) {
-        $startedByWeekMap[$key] = 0
+    if (-not $startedByWeekItemsMap.ContainsKey($key)) {
+        $startedByWeekItemsMap[$key] = @()
     }
-    $startedByWeekMap[$key] += 1
+    $startedByWeekItemsMap[$key] += @{
+        id = $item.id
+        title = $item.fields.'System.Title'
+        workItemType = $item.fields.'System.WorkItemType'
+    }
 }
 
 $netFlowStarted = @()
 $netFlowFinished = @()
 $netFlowValues = @()
+$netFlowStartedItems = @()
+$netFlowFinishedItems = @()
 
 foreach ($ws in $weekStarts) {
     $key = $ws.ToString('yyyy-MM-dd')
 
-    $startedCount = if ($startedByWeekMap.ContainsKey($key)) { [int]$startedByWeekMap[$key] } else { 0 }
-    $finishedCount = if ($completedByWeekMap.ContainsKey($key)) { @($completedByWeekMap[$key]).Count } else { 0 }
+    $startedItems = if ($startedByWeekItemsMap.ContainsKey($key)) { @($startedByWeekItemsMap[$key]) } else { @() }
+    $finishedItems = if ($completedByWeekMap.ContainsKey($key)) {
+        @(
+            @($completedByWeekMap[$key]) |
+                ForEach-Object {
+                    @{
+                        id = $_.id
+                        title = $_.title
+                        workItemType = $_.type
+                    }
+                }
+        )
+    } else {
+        @()
+    }
+
+    $startedCount = $startedItems.Count
+    $finishedCount = $finishedItems.Count
 
     $netFlowStarted += $startedCount
     $netFlowFinished += $finishedCount
     $netFlowValues += ($finishedCount - $startedCount)
+
+    $netFlowStartedItems += ,@($startedItems)
+    $netFlowFinishedItems += ,@($finishedItems)
 }
 
 $netFlowChart = @{
@@ -2154,6 +2363,8 @@ $netFlowChart = @{
     values = $netFlowValues
     started = $netFlowStarted
     finished = $netFlowFinished
+    startedItems = $netFlowStartedItems
+    finishedItems = $netFlowFinishedItems
 }
 
 $netTotalStarted = ($netFlowStarted | Measure-Object -Sum).Sum
@@ -2863,6 +3074,7 @@ $dashboardData = @{
             labels = $blockedTimelineLabels
             series = $blockedTimelineSeries
             categories = $blockerCategories
+            itemsSeries = $blockedTimelineItemsSeries
         }
         blockerRates = @{
             labels = $blockedTimelineLabels
@@ -2873,6 +3085,8 @@ $dashboardData = @{
             unblockedTotals = $unblockedRateTotals
             netValues = $blockedNetValues
             categories = $blockerCategories
+            blockedItems = $blockedEventsItemsByWeek
+            unblockedItems = $unblockedEventsItemsByWeek
         }
         transitionRates = @{
             labels = @()

@@ -1612,6 +1612,26 @@
             return String(t);
         }
 
+        function formatDurationDaysHuman(days) {
+            const d = Number(days);
+            if (!Number.isFinite(d) || d < 0) return 'N/A';
+
+            // Prefer human-readable units for very small durations
+            if (d < (1 / 24)) {
+                const mins = Math.max(0, Math.round(d * 24 * 60));
+                if (mins <= 1) return '< 1 min';
+                return `${mins} mins`;
+            }
+
+            if (d < 1) {
+                const hrs = Math.max(0, Math.round(d * 24 * 10) / 10);
+                return `${hrs} hrs`;
+            }
+
+            if (d < 10) return `${Math.round(d * 10) / 10} days`;
+            return `${Math.round(d)} days`;
+        }
+
         function buildWorkItemLinksHtml(items) {
             if (!items || !Array.isArray(items) || items.length === 0) return '';
 
@@ -1665,17 +1685,60 @@
 
             // Infer work item(s) for this tooltip when the hovered point represents a work item
             const items = [];
+            const startedItems = [];
+            const finishedItems = [];
             let hasDirectWorkItem = false;
             const dataPoints = tooltipModel.dataPoints || [];
             dataPoints.forEach(dp => {
                 const raw = dp.raw;
                 if (raw && typeof raw === 'object') {
                     if (raw.id) {
-                        items.push({ id: raw.id, title: raw.title || '' });
+                        items.push({
+                            id: raw.id,
+                            title: raw.title || '',
+                            workItemType: raw.workItemType || raw.type || ''
+                        });
                         hasDirectWorkItem = true;
                     } else if (Array.isArray(raw.items)) {
                         raw.items.forEach(it => {
-                            if (it && it.id) items.push({ id: it.id, title: it.title || '' });
+                            if (it && it.id) {
+                                items.push({
+                                    id: it.id,
+                                    title: it.title || '',
+                                    workItemType: it.workItemType || it.type || ''
+                                });
+                            }
+                        });
+                    } else if (raw.items && typeof raw.items === 'object' && raw.items.id) {
+                        const it = raw.items;
+                        items.push({
+                            id: it.id,
+                            title: it.title || '',
+                            workItemType: it.workItemType || it.type || ''
+                        });
+                    }
+
+                    if (Array.isArray(raw.startedItems)) {
+                        raw.startedItems.forEach(it => {
+                            if (it && it.id) {
+                                startedItems.push({
+                                    id: it.id,
+                                    title: it.title || '',
+                                    workItemType: it.workItemType || it.type || ''
+                                });
+                            }
+                        });
+                    }
+
+                    if (Array.isArray(raw.finishedItems)) {
+                        raw.finishedItems.forEach(it => {
+                            if (it && it.id) {
+                                finishedItems.push({
+                                    id: it.id,
+                                    title: it.title || '',
+                                    workItemType: it.workItemType || it.type || ''
+                                });
+                            }
                         });
                     }
                 }
@@ -1687,13 +1750,25 @@
                 if (!uniqueById.has(it.id)) uniqueById.set(it.id, it);
             });
             const uniqueItems = Array.from(uniqueById.values());
+
+            const uniqueStarted = Array.from(new Map(startedItems.filter(it => it && it.id).map(it => [it.id, it])).values());
+            const uniqueFinished = Array.from(new Map(finishedItems.filter(it => it && it.id).map(it => [it.id, it])).values());
+            const hasGrouped = uniqueStarted.length > 0 || uniqueFinished.length > 0;
             const singleDirectItem = hasDirectWorkItem && uniqueItems.length === 1;
 
             let contentHtml = '';
             if (bodyLines.length > 0) {
                 contentHtml += bodyLines.map(l => `<div style="margin-bottom: 6px;">${l}</div>`).join('');
             }
-            if (!singleDirectItem && uniqueItems.length > 0) {
+
+            if (!singleDirectItem && hasGrouped) {
+                if (uniqueFinished.length > 0) {
+                    contentHtml += `<div style="margin-top: 10px;"><strong>Finished:</strong><br><br>${buildWorkItemLinksHtml(uniqueFinished)}</div>`;
+                }
+                if (uniqueStarted.length > 0) {
+                    contentHtml += `<div style="margin-top: 10px;"><strong>Started:</strong><br><br>${buildWorkItemLinksHtml(uniqueStarted)}</div>`;
+                }
+            } else if (!singleDirectItem && uniqueItems.length > 0) {
                 contentHtml += `<div style="margin-top: 10px;"><strong>Work items:</strong><br><br>${buildWorkItemLinksHtml(uniqueItems)}</div>`;
             }
             if (!contentHtml) {
@@ -1957,7 +2032,7 @@
                                 const lines = [];
                                 if (it.title) lines.push(`Title: ${it.title}`);
                                 if (it.completedDate) lines.push(`Completed: ${it.completedDate}`);
-                                lines.push(`Cycle time: ${context.parsed.y} days`);
+                                lines.push(`Cycle time: ${formatDurationDaysHuman(context.parsed.y)}`);
                                 return lines;
                             }
                         }
@@ -2118,7 +2193,7 @@
                             callbacks: {
                                 label: function(context) {
                                     if (context.datasetIndex === 0) {
-                                        return `Avg Cycle Time: ${context.parsed.y} days`;
+                                        return `Avg Cycle Time: ${formatDurationDaysHuman(context.parsed.y)}`;
                                     }
                                     // Don't show tooltip for trend line
                                     return null;
@@ -2223,7 +2298,7 @@
                                 if (it.title) lines.push(`Title: ${it.title}`);
                                 if (it.completedDate) lines.push(`Completed: ${it.completedDate}`);
                                 const lt = (it.leadTime !== undefined && it.leadTime !== null) ? it.leadTime : context.parsed.y;
-                                lines.push(`Lead time: ${lt} days`);
+                                lines.push(`Lead time: ${formatDurationDaysHuman(lt)}`);
                                 return lines;
                             }
                         }
@@ -2369,7 +2444,7 @@
                             callbacks: {
                                 label: function(context) {
                                     if (context.datasetIndex === 0) {
-                                        return `Avg Lead Time: ${context.parsed.y} days`;
+                                        return `Avg Lead Time: ${formatDurationDaysHuman(context.parsed.y)}`;
                                     }
                                     // Don't show tooltip for trend line
                                     return null;
@@ -2580,17 +2655,31 @@
 
         function buildHistogramPercent(values) {
             const clean = (values || [])
-                .map(v => Number(v))
-                .filter(v => Number.isFinite(v))
-                .map(v => Math.max(0, Math.min(100, v)));
+                .map(v => {
+                    if (v && typeof v === 'object') {
+                        const value = Number(v.value);
+                        const item = (v.id)
+                            ? { id: v.id, title: v.title || '', workItemType: v.workItemType || v.type || '' }
+                            : null;
+                        return { value, item };
+                    }
+                    return { value: Number(v), item: null };
+                })
+                .filter(x => Number.isFinite(x.value))
+                .map(x => ({
+                    ...x,
+                    value: Math.max(0, Math.min(100, x.value))
+                }));
 
             const width = getAutoBinWidthPercent(clean.length);
             const bins = Math.ceil(100 / width);
             const counts = new Array(bins).fill(0);
+            const itemsByBin = new Array(bins).fill(0).map(() => []);
 
-            clean.forEach(v => {
-                const idx = Math.min(bins - 1, Math.floor(v / width));
+            clean.forEach(x => {
+                const idx = Math.min(bins - 1, Math.floor(x.value / width));
                 counts[idx] += 1;
+                if (x.item) itemsByBin[idx].push(x.item);
             });
 
             const labels = counts.map((_, i) => {
@@ -2599,7 +2688,7 @@
                 return `${start}–${end}%`;
             });
 
-            return { labels, counts, width, sampleCount: clean.length };
+            return { labels, counts, width, sampleCount: clean.length, itemsByBin };
         }
 
         function getAutoBinWidthDays(sampleCount, maxValue) {
@@ -2639,18 +2728,32 @@
 
         function buildHistogramDays(values) {
             const clean = (values || [])
-                .map(v => Number(v))
-                .filter(v => Number.isFinite(v))
-                .map(v => Math.max(0, v));
+                .map(v => {
+                    if (v && typeof v === 'object') {
+                        const value = Number(v.value);
+                        const item = (v.id)
+                            ? { id: v.id, title: v.title || '', workItemType: v.workItemType || v.type || '' }
+                            : null;
+                        return { value, item };
+                    }
+                    return { value: Number(v), item: null };
+                })
+                .filter(x => Number.isFinite(x.value))
+                .map(x => ({
+                    ...x,
+                    value: Math.max(0, x.value)
+                }));
 
-            const maxV = clean.length > 0 ? Math.max(...clean) : 0;
+            const maxV = clean.length > 0 ? Math.max(...clean.map(x => x.value)) : 0;
             const width = getAutoBinWidthDays(clean.length, maxV);
             const bins = Math.max(1, Math.ceil((maxV || 0) / width) + 1);
             const counts = new Array(bins).fill(0);
+            const itemsByBin = new Array(bins).fill(0).map(() => []);
 
-            clean.forEach(v => {
-                const idx = Math.min(bins - 1, Math.floor(v / width));
+            clean.forEach(x => {
+                const idx = Math.min(bins - 1, Math.floor(x.value / width));
                 counts[idx] += 1;
+                if (x.item) itemsByBin[idx].push(x.item);
             });
 
             const fmt = (d) => {
@@ -2665,7 +2768,7 @@
                 return `${fmt(start)}–${fmt(end)}d`;
             });
 
-            return { labels, counts, width, sampleCount: clean.length };
+            return { labels, counts, width, sampleCount: clean.length, itemsByBin };
         }
 
         function renderTopBestWorst(containerId, items, valueKey) {
@@ -2776,7 +2879,10 @@
                 return;
             }
 
-            const cleanVals = (values || []).map(v => Number(v)).filter(v => Number.isFinite(v)).map(v => Math.max(0, Math.min(100, v)));
+            const cleanVals = (values || [])
+                .map(v => (v && typeof v === 'object') ? Number(v.value) : Number(v))
+                .filter(v => Number.isFinite(v))
+                .map(v => Math.max(0, Math.min(100, v)));
             const mean = cleanVals.length > 0 ? (cleanVals.reduce((a, b) => a + b, 0) / cleanVals.length) : null;
             const p50 = percentile(cleanVals, 0.5);
             const p85 = percentile(cleanVals, 0.85);
@@ -2914,7 +3020,11 @@
                     datasets: [
                         {
                             label: titleText,
-                            data: h.counts,
+                            data: h.labels.map((label, idx) => ({
+                                x: label,
+                                y: h.counts[idx],
+                                items: (h.itemsByBin && h.itemsByBin[idx]) ? h.itemsByBin[idx] : []
+                            })),
                             backgroundColor: barColor,
                             borderColor: barColor,
                             borderWidth: 1
@@ -2963,7 +3073,10 @@
             const h = buildHistogramDays(values);
             if (h.sampleCount === 0) return;
 
-            const cleanVals = (values || []).map(v => Number(v)).filter(v => Number.isFinite(v)).map(v => Math.max(0, v));
+            const cleanVals = (values || [])
+                .map(v => (v && typeof v === 'object') ? Number(v.value) : Number(v))
+                .filter(v => Number.isFinite(v))
+                .map(v => Math.max(0, v));
             const mean = cleanVals.length > 0 ? (cleanVals.reduce((a, b) => a + b, 0) / cleanVals.length) : null;
             const p50 = percentile(cleanVals, 0.5);
             const p85 = percentile(cleanVals, 0.85);
@@ -3098,7 +3211,11 @@
                     datasets: [
                         {
                             label: titleText,
-                            data: h.counts,
+                            data: h.labels.map((label, idx) => ({
+                                x: label,
+                                y: h.counts[idx],
+                                items: (h.itemsByBin && h.itemsByBin[idx]) ? h.itemsByBin[idx] : []
+                            })),
                             backgroundColor: barColor,
                             borderColor: barColor,
                             borderWidth: 1
@@ -3161,7 +3278,7 @@
 
             const fmt = (v) => (v === null || v === undefined || !Number.isFinite(v)) ? 'N/A' : v.toFixed(1);
             const coverage = (totalCompleted && totalCompleted > 0)
-                ? `${clean.length} of ${totalCompleted}`
+                ? (clean.length === totalCompleted ? `${clean.length}` : `${clean.length} of ${totalCompleted}`)
                 : `${clean.length}`;
 
             let exclusionsText = '';
@@ -3217,7 +3334,7 @@
 
             const fmt = (v) => (v === null || v === undefined || !Number.isFinite(v)) ? 'N/A' : v.toFixed(1);
             const coverage = (totalCompleted && totalCompleted > 0)
-                ? `${clean.length} of ${totalCompleted}`
+                ? (clean.length === totalCompleted ? `${clean.length}` : `${clean.length} of ${totalCompleted}`)
                 : `${clean.length}`;
 
             let exclusionsText = '';
@@ -3250,7 +3367,12 @@
         renderHistogramChartDays(
             'wseHistogramChart',
             'Start delay (days)',
-            wseValidItems.map(i => Number(i.backlogDelay) || 0),
+            wseValidItems.map(i => ({
+                value: Number(i.backlogDelay) || 0,
+                id: i.id,
+                title: i.title,
+                type: i.type
+            })),
             boardConfig.colors.waitingTime
         );
         renderTopBestWorstDays(
@@ -3268,7 +3390,12 @@
         renderHistogramChart(
             'ctfeHistogramChart',
             'Cycle Time Flow Efficiency',
-            ctfeItems.map(i => parseFloat(i.ctfeEfficiency)),
+            ctfeItems.map(i => ({
+                value: parseFloat(i.ctfeEfficiency),
+                id: i.id,
+                title: i.title,
+                type: i.type
+            })),
             boardConfig.colors.activeTime
         );
         renderTopBestWorst(
@@ -3292,7 +3419,12 @@
         renderHistogramChart(
             'ltfeHistogramChart',
             'Lead Time Flow Efficiency',
-            ltfeItems.map(i => parseFloat(i.ltfeEfficiency)),
+            ltfeItems.map(i => ({
+                value: parseFloat(i.ltfeEfficiency),
+                id: i.id,
+                title: i.title,
+                type: i.type
+            })),
             boardConfig.colors.leadTimeActiveTime
         );
         renderTopBestWorst(
@@ -4135,7 +4267,11 @@
                     labels: bugsByColumn.map(item => item.column),
                     datasets: [{
                         label: 'Bugs',
-                        data: bugsByColumn.map(item => item.count),
+                        data: bugsByColumn.map(item => ({
+                            value: item.count,
+                            items: item.items || []
+                        })),
+                        parsing: { key: 'value' },
                         backgroundColor: colors.slice(0, bugsByColumn.length),
                         borderColor: '#ffffff',
                         borderWidth: 2
@@ -4183,9 +4319,11 @@
                                     const item = bugsByColumn[context.dataIndex];
                                     const total = bugsByColumn.reduce((sum, b) => sum + b.count, 0);
                                     const percentage = ((item.count / total) * 100).toFixed(1);
+                                    const raw = context.raw;
+                                    const v = (raw && typeof raw === 'object' && Number.isFinite(Number(raw.value))) ? Number(raw.value) : item.count;
                                     return [
                                         `Column: ${item.column}`,
-                                        `Bugs: ${item.count}`,
+                                        `Bugs: ${v}`,
                                         `Percentage: ${percentage}%`
                                     ];
                                 }
@@ -4211,7 +4349,11 @@
                     labels: bugsByState.map(item => item.state),
                     datasets: [{
                         label: 'Bugs',
-                        data: bugsByState.map(item => item.count),
+                        data: bugsByState.map(item => ({
+                            value: item.count,
+                            items: item.items || []
+                        })),
+                        parsing: { key: 'value' },
                         backgroundColor: stateColors.slice(0, bugsByState.length),
                         borderColor: '#ffffff',
                         borderWidth: 2
@@ -4259,9 +4401,11 @@
                                     const item = bugsByState[context.dataIndex];
                                     const total = bugsByState.reduce((sum, b) => sum + b.count, 0);
                                     const percentage = ((item.count / total) * 100).toFixed(1);
+                                    const raw = context.raw;
+                                    const v = (raw && typeof raw === 'object' && Number.isFinite(Number(raw.value))) ? Number(raw.value) : item.count;
                                     return [
                                         `State: ${item.state}`,
-                                        `Bugs: ${item.count}`,
+                                        `Bugs: ${v}`,
                                         `Percentage: ${percentage}%`
                                     ];
                                 }
@@ -4275,6 +4419,14 @@
         // Net Flow Chart (Sustainability)
         const netFlowData = dashboardData.charts.netFlow.values.map(val => val);
         const netFlowColors = netFlowData.map(val => val >= 0 ? '#4299e1' : '#f59e0b');
+
+        const netFlowStartedItems = (dashboardData.charts.netFlow.startedItems && Array.isArray(dashboardData.charts.netFlow.startedItems))
+            ? dashboardData.charts.netFlow.startedItems
+            : new Array(netFlowData.length).fill(0).map(() => []);
+
+        const netFlowFinishedItems = (dashboardData.charts.netFlow.finishedItems && Array.isArray(dashboardData.charts.netFlow.finishedItems))
+            ? dashboardData.charts.netFlow.finishedItems
+            : new Array(netFlowData.length).fill(0).map(() => []);
         
         new Chart(document.getElementById('netFlowChart'), {
             type: 'bar',
@@ -4282,7 +4434,14 @@
                 labels: dashboardData.charts.netFlow.labels,
                 datasets: [{
                     label: 'Net Flow',
-                    data: netFlowData,
+                    data: dashboardData.charts.netFlow.labels.map((lab, i) => ({
+                        x: lab,
+                        y: netFlowData[i],
+                        startedItems: netFlowStartedItems[i] || [],
+                        finishedItems: netFlowFinishedItems[i] || [],
+                        // Fallback combined list for older tooltip logic
+                        items: ([]).concat(netFlowFinishedItems[i] || []).concat(netFlowStartedItems[i] || [])
+                    })),
                     backgroundColor: netFlowColors,
                     borderColor: netFlowColors,
                     borderWidth: 2
@@ -4304,7 +4463,7 @@
                                 const value = context.parsed.y;
                                 if (value > 0) {
                                     return `Net Flow: +${value} (More finished than started)`;
-                                } else if (value < 0) {
+                                    lines.push(`Days blocked: ${formatDurationDaysHuman(context.parsed.x)}`);
                                     return `Net Flow: ${value} (More started than finished)`;
                                 } else {
                                     return `Net Flow: ${value} (Balanced)`;
@@ -4560,13 +4719,18 @@
             const labels = tl.labels;
             const categories = tl.categories || {};
             const series = tl.series || {};
+            const itemsSeries = tl.itemsSeries || {};
 
             const datasets = [];
             for (const [categoryKey, categoryConfig] of Object.entries(categories)) {
                 const data = series[categoryKey] || new Array(labels.length).fill(0);
                 datasets.push({
                     label: categoryConfig.label || categoryKey,
-                    data,
+                    data: labels.map((lab, i) => ({
+                        x: lab,
+                        y: (data[i] !== undefined && data[i] !== null) ? data[i] : 0,
+                        items: (itemsSeries[categoryKey] && itemsSeries[categoryKey][i]) ? itemsSeries[categoryKey][i] : []
+                    })),
                     backgroundColor: categoryConfig.color,
                     borderColor: categoryConfig.color,
                     borderWidth: 2
@@ -4589,7 +4753,12 @@
                 }
             });
 
-            const totals = labels.map((_, i) => datasets.reduce((sum, ds) => sum + (ds.data[i] || 0), 0));
+            const totals = labels.map((_, i) => datasets.reduce((sum, ds) => {
+                const v = ds.data[i];
+                if (v && typeof v === 'object' && Number.isFinite(Number(v.y))) return sum + Number(v.y);
+                if (Number.isFinite(Number(v))) return sum + Number(v);
+                return sum;
+            }, 0));
             const total = totals.reduce((a, b) => a + b, 0);
             const peakIndex = totals.length ? totals.indexOf(Math.max(...totals)) : -1;
             const peakLabel = peakIndex >= 0 ? labels[peakIndex] : 'N/A';
@@ -4611,6 +4780,13 @@
             const blockedTotals = Array.isArray(rates.blockedTotals) ? rates.blockedTotals : new Array(labels.length).fill(0);
             const unblockedTotals = Array.isArray(rates.unblockedTotals) ? rates.unblockedTotals : new Array(labels.length).fill(0);
 
+            const blockedItems = Array.isArray(rates.blockedItems)
+                ? rates.blockedItems
+                : new Array(labels.length).fill(0).map(() => []);
+            const unblockedItems = Array.isArray(rates.unblockedItems)
+                ? rates.unblockedItems
+                : new Array(labels.length).fill(0).map(() => []);
+
             const netValues = Array.isArray(rates.netValues)
                 ? rates.netValues
                 : blockedTotals.map((b, i) => (b || 0) - (unblockedTotals[i] || 0));
@@ -4621,14 +4797,22 @@
             const datasets = [
                 {
                     label: 'Blocked',
-                    data: blockedTotals,
+                    data: labels.map((lab, i) => ({
+                        x: lab,
+                        y: (blockedTotals[i] || 0),
+                        items: blockedItems[i] || []
+                    })),
                     backgroundColor: blockedColor,
                     borderColor: darkenHexColor(blockedColor, 0.18),
                     borderWidth: 2
                 },
                 {
                     label: 'Unblocked',
-                    data: unblockedTotals.map(v => -(v || 0)),
+                    data: labels.map((lab, i) => ({
+                        x: lab,
+                        y: -((unblockedTotals[i] || 0)),
+                        items: unblockedItems[i] || []
+                    })),
                     backgroundColor: unblockedColor,
                     borderColor: darkenHexColor(unblockedColor, 0.18),
                     borderWidth: 2

@@ -177,6 +177,10 @@ foreach ($workItemId in $WorkItemIds) {
         
         # Calculate time spent in each column/state
         $columnTime = @{}
+
+        # Precision: 3 decimals of a day ~= 1.44 minutes.
+        # This avoids short-lived items collapsing to 0.0d due to rounding.
+        $daysPrecision = 3
         
         for ($i = 0; $i -lt $columnHistory.Count; $i++) {
             $currentColumn = $columnHistory[$i].Column
@@ -210,7 +214,7 @@ foreach ($workItemId in $WorkItemIds) {
             
             # Calculate days in this column/state
             $timeSpan = $endTime - $startTime
-            $days = [Math]::Round($timeSpan.TotalDays, 1)
+            $days = [Math]::Round($timeSpan.TotalDays, $daysPrecision)
             
             # Accumulate time if same column/state appears multiple times
             if ($columnTime.ContainsKey($currentColumn)) {
@@ -220,10 +224,10 @@ foreach ($workItemId in $WorkItemIds) {
             }
         }
         
-        # Keep 1-decimal precision (matches the dashboard's other day-based metrics)
+        # Keep 3-decimal precision so sub-hour work doesn't become 0.0 days.
         $roundedColumnTime = @{}
         foreach ($key in $columnTime.Keys) {
-            $roundedColumnTime[$key] = [Math]::Round([double]$columnTime[$key], 1)
+            $roundedColumnTime[$key] = [Math]::Round([double]$columnTime[$key], $daysPrecision)
         }
         
         $results += @{
