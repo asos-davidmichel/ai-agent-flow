@@ -1605,6 +1605,13 @@
             return `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${id}`;
         }
 
+        function formatWorkItemType(t) {
+            if (!t) return '';
+            if (t === 'Product Backlog Item') return 'PBI';
+            if (t === 'User Story') return 'Story';
+            return String(t);
+        }
+
         function buildWorkItemLinksHtml(items) {
             if (!items || !Array.isArray(items) || items.length === 0) return '';
 
@@ -1616,9 +1623,11 @@
                 const id = item && item.id ? item.id : null;
                 if (!id) return '';
                 const title = item && item.title ? escapeHtml(String(item.title)) : '';
+                const t = item && (item.workItemType || item.type) ? escapeHtml(formatWorkItemType(item.workItemType || item.type)) : '';
                 const url = getAdoWorkItemUrl(id);
                 return `<div style="margin-bottom: 6px; padding-left: 8px; border-left: 2px solid #667eea;">
                     <a href="${url}" target="_blank" style="text-decoration: none; font-weight: 600;">#${id}</a>
+                    ${t ? `<span style="color:#9ca3af; font-size: 11px; margin-left: 6px;">(${t})</span>` : ''}
                     ${title ? `<span style="color: #ddd; font-size: 12px;"> ${title}</span>` : ''}
                 </div>`;
             }).filter(Boolean).join('');
@@ -1656,12 +1665,14 @@
 
             // Infer work item(s) for this tooltip when the hovered point represents a work item
             const items = [];
+            let hasDirectWorkItem = false;
             const dataPoints = tooltipModel.dataPoints || [];
             dataPoints.forEach(dp => {
                 const raw = dp.raw;
                 if (raw && typeof raw === 'object') {
                     if (raw.id) {
                         items.push({ id: raw.id, title: raw.title || '' });
+                        hasDirectWorkItem = true;
                     } else if (Array.isArray(raw.items)) {
                         raw.items.forEach(it => {
                             if (it && it.id) items.push({ id: it.id, title: it.title || '' });
@@ -1676,13 +1687,13 @@
                 if (!uniqueById.has(it.id)) uniqueById.set(it.id, it);
             });
             const uniqueItems = Array.from(uniqueById.values());
-            const singleItem = uniqueItems.length === 1;
+            const singleDirectItem = hasDirectWorkItem && uniqueItems.length === 1;
 
             let contentHtml = '';
             if (bodyLines.length > 0) {
                 contentHtml += bodyLines.map(l => `<div style="margin-bottom: 6px;">${l}</div>`).join('');
             }
-            if (!singleItem && uniqueItems.length > 0) {
+            if (!singleDirectItem && uniqueItems.length > 0) {
                 contentHtml += `<div style="margin-top: 10px;"><strong>Work items:</strong><br><br>${buildWorkItemLinksHtml(uniqueItems)}</div>`;
             }
             if (!contentHtml) {
@@ -1690,7 +1701,7 @@
             }
 
             let titleHtml = escapeHtml(titleText);
-            if (singleItem) {
+            if (singleDirectItem) {
                 const it = uniqueItems[0];
                 const url = getAdoWorkItemUrl(it.id);
                 const t = it.title ? escapeHtml(String(it.title)) : '';
@@ -4349,7 +4360,7 @@
             const categories = dashboardData.charts.blockedItems.current.categories;
             const byCategory = dashboardData.charts.blockedItems.current.byCategory;
 
-            const toItemRef = (it) => ({ id: it.id, title: it.title });
+            const toItemRef = (it) => ({ id: it.id, title: it.title, workItemType: it.workItemType || it.type });
             
             // Build datasets - one per category
             const datasets = [];

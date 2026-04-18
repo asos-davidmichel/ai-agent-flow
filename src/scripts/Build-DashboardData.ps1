@@ -692,7 +692,16 @@ foreach ($ws in $weekStarts) {
     $weekItems = if ($completedByWeekMap.ContainsKey($key)) { @($completedByWeekMap[$key]) } else { @() }
 
     # Build items list for this week first
-    $weekItemsList = @($weekItems | ForEach-Object { @{ id = $_.id; title = $_.title } })
+    $weekItemsList = @(
+        $weekItems |
+            ForEach-Object {
+                @{
+                    id = $_.id
+                    title = $_.title
+                    workItemType = $_.type
+                }
+            }
+    )
     
     # Count based on the built list to ensure consistency
     $count = $weekItemsList.Count
@@ -782,6 +791,7 @@ foreach ($week in $wipSnapshots) {
             $wipBugItems += @{
                 id = $bugItem.id
                 title = $bugItem.fields.'System.Title'
+                workItemType = $bugItem.fields.'System.WorkItemType'
             }
         }
     }
@@ -796,6 +806,7 @@ foreach ($week in $wipSnapshots) {
             $wipFeatureItems += @{
                 id = $featureItem.id
                 title = $featureItem.fields.'System.Title'
+                workItemType = $featureItem.fields.'System.WorkItemType'
             }
         }
     }
@@ -1854,11 +1865,13 @@ foreach ($item in $completedItems) {
             $completedByWeek[$weekLabel].bugs += @{
                 id = $item.id
                 title = $item.fields.'System.Title'
+                workItemType = $itemType
             }
         } else {
             $completedByWeek[$weekLabel].features += @{
                 id = $item.id
                 title = $item.fields.'System.Title'
+                workItemType = $itemType
             }
         }
     }
