@@ -1892,7 +1892,13 @@
                 const it = uniqueItems[0];
                 const url = getAdoWorkItemUrl(it.id);
                 const t = it.title ? escapeHtml(String(it.title)) : '';
-                titleHtml = `Work item <a href="${url}" target="_blank">#${it.id}</a>` + (t ? ` <span style="color:#9ca3af; font-size: 12px; font-weight: 500;">${t}</span>` : '');
+                const rawType = it && (it.workItemType || it.type) ? (it.workItemType || it.type) : '';
+                const style = getWorkItemTypeStyle(rawType);
+                const icon = style.iconUrl
+                    ? `<img src="${escapeHtml(style.iconUrl)}" alt="${escapeHtml(style.label)}" style="width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px;">`
+                    : `<span title="${escapeHtml(style.label)}" style="display:inline-flex; align-items:center; justify-content:center; width: 14px; height: 14px; border-radius: 3px; background: ${style.color}; color: #fff; font-size: 10px; font-weight: 800; margin-right: 6px; border: 1px solid rgba(255,255,255,0.35);">${escapeHtml(style.abbr)}</span>`;
+
+                titleHtml = `${icon}Work item <a href="${url}" target="_blank">#${it.id}</a>` + (t ? ` <span style="color:#9ca3af; font-size: 12px; font-weight: 500;">${t}</span>` : '');
             }
 
             tooltipEl.innerHTML = `
@@ -2226,6 +2232,7 @@
                     y: item.leadTime,
                     leadTime: item.leadTime,
                     id: item.id,
+                    workItemType: item.workItemType || item.type || ds.workItemType || '',
                     title: item.title,
                     completedDate: item.completedDate
                 }))

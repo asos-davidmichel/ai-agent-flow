@@ -2475,6 +2475,7 @@ foreach ($g in $completedTypeGroupsOrdered) {
                     y = $_.cycleTime
                     leadTime = $_.leadTime
                     id = $_.id
+                    workItemType = $workItemType
                     title = $_.title
                     completedDate = $completedDate.ToString('dd MMM yyyy')
                     columnTime = $_.columnTime
