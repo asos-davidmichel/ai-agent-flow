@@ -26,6 +26,23 @@
       "format": "date",
       "description": "Date when configuration was created/updated"
     },
+    "colors": {
+      "type": "object",
+      "description": "Optional colour overrides for dashboard visuals",
+      "properties": {
+        "ageBands": {
+          "type": "object",
+          "description": "Colours used for green/amber/red age banding",
+          "properties": {
+            "green": { "type": "string", "description": "Green band colour (hex)" },
+            "amber": { "type": "string", "description": "Amber band colour (hex)" },
+            "red": { "type": "string", "description": "Red band colour (hex)" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": true
+    },
     "columns": {
       "type": "object",
       "description": "Board columns categorized by workflow stage",

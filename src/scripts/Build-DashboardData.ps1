@@ -59,6 +59,31 @@ if ($ConfigFile -and (Test-Path $ConfigFile)) {
     Write-Host "  Using configuration: $ConfigFile" -ForegroundColor Gray
 }
 
+# Optional colour configuration (keeps defaults if not provided)
+$ageBandGreen = '#22c55e'
+$ageBandAmber = '#f59e0b'
+$ageBandRed = '#ef4444'
+if ($config -and $config.colors -and $config.colors.ageBands) {
+    if ($config.colors.ageBands.green) { $ageBandGreen = [string]$config.colors.ageBands.green }
+    if ($config.colors.ageBands.amber) { $ageBandAmber = [string]$config.colors.ageBands.amber }
+    if ($config.colors.ageBands.red) { $ageBandRed = [string]$config.colors.ageBands.red }
+}
+
+# Canonical board column ordering (used for ordering + detecting unknown/old columns)
+$configuredBoardColumns = @()
+if ($config -and $config.columns) {
+    if ($config.columns.backlog) { $configuredBoardColumns += @($config.columns.backlog) }
+    if ($config.columns.inProgress) { $configuredBoardColumns += @($config.columns.inProgress) }
+    if ($config.columns.done) { $configuredBoardColumns += @($config.columns.done) }
+} elseif ($rawData.boardConfig -and $rawData.boardConfig.columns) {
+    $configuredBoardColumns += @($rawData.boardConfig.columns)
+}
+$configuredBoardColumns = @(
+    $configuredBoardColumns |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Select-Object -Unique
+)
+
 # Limit analysis to tracked work item types (PBI/Story/Bug level)
 $trackedWorkItemTypes = if ($config -and $config.workItemTypes -and $config.workItemTypes.tracked) {
     @($config.workItemTypes.tracked)
@@ -75,6 +100,130 @@ function Test-IsTrackedWorkItemType {
 
 $activeItems = @($rawData.activeItems | Where-Object { Test-IsTrackedWorkItemType $_.fields.'System.WorkItemType' })
 $completedItems = @($rawData.completedItems | Where-Object { Test-IsTrackedWorkItemType $_.fields.'System.WorkItemType' })
+
+function Get-AdoPatFromEnv {
+    if (-not [string]::IsNullOrWhiteSpace($env:AZURE_DEVOPS_EXT_PAT)) { return $env:AZURE_DEVOPS_EXT_PAT }
+    if (-not [string]::IsNullOrWhiteSpace($env:ADO_PAT)) { return $env:ADO_PAT }
+    $userPat = [System.Environment]::GetEnvironmentVariable('ADO_PAT', 'User')
+    if (-not [string]::IsNullOrWhiteSpace($userPat)) { return $userPat }
+    return $null
+}
+
+function Normalize-HexColor {
+    param([string]$Color)
+    if ([string]::IsNullOrWhiteSpace($Color)) { return $null }
+    $c = $Color.Trim()
+    if ($c -match '^#?[0-9a-fA-F]{6}$') {
+        if ($c.StartsWith('#')) { return $c }
+        return "#$c"
+    }
+    return $c
+}
+
+function Get-AdoWorkItemTypeStyles {
+    param(
+        [Parameter(Mandatory = $true)][string]$Organization,
+        [Parameter(Mandatory = $true)][string]$Project,
+        [string[]]$WorkItemTypes
+    )
+
+    $pat = Get-AdoPatFromEnv
+    if ([string]::IsNullOrWhiteSpace($pat)) { return @{} }
+
+    try {
+        $base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$pat"))
+        $headers = @{ Authorization = "Basic $base64AuthInfo"; Accept = "application/json" }
+
+        # List type categories first (reliable in this org), then fetch each requested type definition URL.
+        $catUri = "https://dev.azure.com/$Organization/$Project/_apis/wit/workitemtypecategories?api-version=7.1-preview.2"
+        $cats = Invoke-RestMethod -Uri $catUri -Headers $headers -Method Get -ErrorAction Stop
+        if ($cats -is [string]) { $cats = $cats | ConvertFrom-Json }
+        $catValues = if ($cats -and $cats.value) { @($cats.value) } else { @() }
+
+        $typeUrlByName = @{}
+        foreach ($cat in $catValues) {
+            foreach ($t in @($cat.workItemTypes)) {
+                $n = if ($t.name) { [string]$t.name } else { $null }
+                $u = if ($t.url) { [string]$t.url } else { $null }
+                if ([string]::IsNullOrWhiteSpace($n) -or [string]::IsNullOrWhiteSpace($u)) { continue }
+                if (-not $typeUrlByName.ContainsKey($n)) {
+                    $typeUrlByName[$n] = $u
+                }
+            }
+        }
+
+        $styles = @{}
+        $errors = @{}
+        foreach ($name in @($WorkItemTypes)) {
+            if ([string]::IsNullOrWhiteSpace($name)) { continue }
+            if (-not $typeUrlByName.ContainsKey($name)) { continue }
+
+            $defUrl = $typeUrlByName[$name]
+            if ($defUrl -notmatch 'api-version=') {
+                $defUrl = "${defUrl}?api-version=7.1-preview.2"
+            }
+
+            try {
+                $wr = Invoke-WebRequest -Uri $defUrl -Headers $headers -Method Get -UseBasicParsing -ErrorAction Stop
+                $defJson = if ($wr -and $wr.Content) { [string]$wr.Content } else { '' }
+
+                $color = $null
+                $iconUrl = $null
+
+                # Extract only what we need (payload contains large xmlForm)
+                $mColor = [regex]::Match($defJson, '"color"\s*:\s*"(?<c>[^"]+)"')
+                if ($mColor.Success) { $color = Normalize-HexColor -Color ($mColor.Groups['c'].Value) }
+
+                $mIcon = [regex]::Match($defJson, '"icon"\s*:\s*\{[^\}]*"url"\s*:\s*"(?<u>[^"]+)"')
+                if ($mIcon.Success) { $iconUrl = [string]$mIcon.Groups['u'].Value }
+
+                $styles[$name] = @{
+                    color = $color
+                    iconUrl = $iconUrl
+                }
+            } catch {
+                if ($errors.Count -lt 5 -and -not $errors.ContainsKey($name)) {
+                    $errors[$name] = $_.Exception.Message
+                }
+            }
+        }
+
+        return @{
+            styles = $styles
+            typeUrlCount = [int]$typeUrlByName.Keys.Count
+            errorCount = [int]$errors.Keys.Count
+            sampleErrors = $errors
+        }
+    } catch {
+        return @{
+            styles = @{}
+            typeUrlCount = 0
+            errorCount = 1
+            sampleErrors = @{ _fatal = $_.Exception.Message }
+        }
+    }
+}
+
+$adoTypeStyleResult = Get-AdoWorkItemTypeStyles -Organization $rawData.metadata.organization -Project $rawData.metadata.project -WorkItemTypes @($trackedWorkItemTypes)
+$adoWorkItemTypeStyles = if ($adoTypeStyleResult -and $adoTypeStyleResult.styles) { $adoTypeStyleResult.styles } else { @{} }
+$adoWorkItemTypeStylesDebug = @{
+    patPresent = -not [string]::IsNullOrWhiteSpace((Get-AdoPatFromEnv))
+    requestedTypes = @($trackedWorkItemTypes)
+    fetchedTypeCount = if ($adoWorkItemTypeStyles) { [int]$adoWorkItemTypeStyles.Keys.Count } else { 0 }
+    fetchedTypes = if ($adoWorkItemTypeStyles) { @($adoWorkItemTypeStyles.Keys | Sort-Object) } else { @() }
+    typeUrlCount = if ($adoTypeStyleResult -and $adoTypeStyleResult.typeUrlCount) { [int]$adoTypeStyleResult.typeUrlCount } else { 0 }
+    errorCount = if ($adoTypeStyleResult -and $adoTypeStyleResult.errorCount -ne $null) { [int]$adoTypeStyleResult.errorCount } else { 0 }
+    sampleErrors = if ($adoTypeStyleResult -and $adoTypeStyleResult.sampleErrors) { $adoTypeStyleResult.sampleErrors } else { @{} }
+}
+
+function Get-WorkItemTypeStyle {
+    param([string]$WorkItemType)
+    if ([string]::IsNullOrWhiteSpace($WorkItemType)) { return $null }
+    if ($adoWorkItemTypeStyles -and $adoWorkItemTypeStyles.ContainsKey($WorkItemType)) {
+        return $adoWorkItemTypeStyles[$WorkItemType]
+    }
+    return $null
+}
 
 function Get-EfficiencyColumnMapping {
     param(
@@ -616,7 +765,9 @@ function Get-CycleTimeFromUpdates($item) {
 $completedWithMetrics = @()
 foreach ($item in $completedItems) {
     # Try to use provided columnTime data if available
-    $columnTime = ($ColumnTimeData | Where-Object { $_.WorkItemId -eq $item.id }).ColumnTime
+    $columnTimeEntry = ($ColumnTimeData | Where-Object { $_.WorkItemId -eq $item.id } | Select-Object -First 1)
+    $columnTime = if ($columnTimeEntry) { $columnTimeEntry.ColumnTime } else { $null }
+    $columnTimeField = if ($columnTimeEntry -and $columnTimeEntry.FieldUsed) { [string]$columnTimeEntry.FieldUsed } else { $null }
     if (-not $columnTime) { $columnTime = @{} }
     
     # Calculate cycle time from real columnTime when available.
@@ -664,6 +815,7 @@ foreach ($item in $completedItems) {
         createdDate = $item.fields.'System.CreatedDate'
         completedDate = $item.fields.'Microsoft.VSTS.Common.ClosedDate'
         columnTime = $columnTime
+        columnTimeField = $columnTimeField
         cycleTime = $cycleTime
         activeTime = $activeTimeDays
         waitingTime = $waitingTimeDays
@@ -853,16 +1005,54 @@ $currentActiveBugRate = if ($activeItems.Count -gt 0) {
     [Math]::Round(($activeBugs.Count / $activeItems.Count) * 100, 1) 
 } else { 0 }
 
+# Current board columns (source of truth for column-based charts)
+$boardColumns = $rawData.boardConfig.columns
+if (-not $boardColumns) { $boardColumns = @() }
+$boardColumns = @(
+    @($boardColumns) |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Select-Object -Unique
+)
+
 # Current bug breakdown by board column (for pie chart)
 $bugColumnBreakdown = @{}
 $bugColumnItems = @{}
+
+$bugsByColumnCandidates = [int]$activeBugs.Count
+$bugsByColumnExcludedMissingBoardColumn = 0
+$bugsByColumnExcludedUnknownColumns = 0
+$bugsByColumnOldColumnsCounts = @{}
+$bugsByColumnExcludedItemsSample = @()
+
 foreach ($bug in $activeBugs) {
-    $column = $bug.fields.'System.BoardColumn'
+    $column = [string]$bug.fields.'System.BoardColumn'
+
     if ([string]::IsNullOrWhiteSpace($column)) {
-        $column = $bug.fields.'System.State'
+        $bugsByColumnExcludedMissingBoardColumn++
+        if ($bugsByColumnExcludedItemsSample.Count -lt 10) {
+            $bugsByColumnExcludedItemsSample += @{
+                id = $bug.id
+                workItemType = $bug.fields.'System.WorkItemType'
+                columns = @('missingBoardColumn')
+            }
+        }
+        continue
     }
-    if ([string]::IsNullOrWhiteSpace($column)) {
-        $column = "Unknown"
+
+    # Ignore bugs in old/unknown board columns
+    if ($boardColumns -notcontains $column) {
+        $bugsByColumnExcludedUnknownColumns++
+        if (-not $bugsByColumnOldColumnsCounts.ContainsKey($column)) { $bugsByColumnOldColumnsCounts[$column] = 0 }
+        $bugsByColumnOldColumnsCounts[$column] += 1
+
+        if ($bugsByColumnExcludedItemsSample.Count -lt 10) {
+            $bugsByColumnExcludedItemsSample += @{
+                id = $bug.id
+                workItemType = $bug.fields.'System.WorkItemType'
+                columns = @($column)
+            }
+        }
+        continue
     }
     
     if (-not $bugColumnBreakdown.ContainsKey($column)) {
@@ -934,35 +1124,10 @@ foreach ($k in @($bugStateItems.Keys)) {
     $bugStateItems[$k] = @() + ,$v
 }
 
-# Get board columns order for sorting
-$boardColumns = $rawData.boardConfig.columns
-if (-not $boardColumns) {
-    $boardColumns = @()
-}
-
 # Format bug breakdown for output, ordered by board column sequence
 $currentBugsByColumn = @()
 foreach ($col in $boardColumns) {
     if ($bugColumnBreakdown.ContainsKey($col) -and $bugColumnBreakdown[$col] -gt 0) {
-        $bucket = if ($bugColumnItems.ContainsKey($col)) { $bugColumnItems[$col] } else { $null }
-        $bucketItems = if ($bucket -is [System.Array]) {
-            @($bucket)
-        } elseif ($null -ne $bucket) {
-            @() + ,$bucket
-        } else {
-            @()
-        }
-
-        $currentBugsByColumn += @{
-            column = $col
-            count = $bugColumnBreakdown[$col]
-            items = $bucketItems
-        }
-    }
-}
-# Add any columns not in board config
-foreach ($col in ($bugColumnBreakdown.Keys | Sort-Object)) {
-    if ($boardColumns -notcontains $col -and $bugColumnBreakdown[$col] -gt 0) {
         $bucket = if ($bugColumnItems.ContainsKey($col)) { $bugColumnItems[$col] } else { $null }
         $bucketItems = if ($bucket -is [System.Array]) {
             @($bucket)
@@ -1212,11 +1377,16 @@ if ($blockedItems.Count -gt 0) {
 }
 
 # Initialize blocked by column with ALL columns (even if count is 0)
-$boardColumns = $rawData.boardConfig.columns
 $blockedByColumn = [ordered]@{}
 foreach ($col in $boardColumns) {
     $blockedByColumn[$col] = 0
 }
+
+$blockedByColumnCandidates = [int]$blockedItems.Count
+$blockedByColumnExcludedMissingBoardColumn = 0
+$blockedByColumnExcludedUnknownColumns = 0
+$blockedByColumnOldColumnsCounts = @{}
+$blockedByColumnExcludedItemsSample = @()
 
 # Initialize blocked by category
 $blockedByCategory = @{}
@@ -1242,12 +1412,29 @@ foreach ($blockedEntry in $blockedItems) {
     # Count by category
     $blockedByCategory[$category.key]++
     
-    # Count by column (increment existing)
-    if ($blockedByColumn.Contains($column)) {
+    # Count by column (ignore items in old/unknown columns)
+    if ([string]::IsNullOrWhiteSpace($column)) {
+        $blockedByColumnExcludedMissingBoardColumn++
+        if ($blockedByColumnExcludedItemsSample.Count -lt 10) {
+            $blockedByColumnExcludedItemsSample += @{
+                id = $item.id
+                workItemType = $workItemType
+                columns = @('missingBoardColumn')
+            }
+        }
+    } elseif ($blockedByColumn.Contains($column)) {
         $blockedByColumn[$column]++
     } else {
-        # Column not in board config - add it
-        $blockedByColumn[$column] = 1
+        $blockedByColumnExcludedUnknownColumns++
+        if (-not $blockedByColumnOldColumnsCounts.ContainsKey($column)) { $blockedByColumnOldColumnsCounts[$column] = 0 }
+        $blockedByColumnOldColumnsCounts[$column] += 1
+        if ($blockedByColumnExcludedItemsSample.Count -lt 10) {
+            $blockedByColumnExcludedItemsSample += @{
+                id = $item.id
+                workItemType = $workItemType
+                columns = @($column)
+            }
+        }
     }
     
     # Count by type
@@ -1849,11 +2036,11 @@ foreach ($item in $wipAgingItemsSorted) {
     # Colour by age bands (green -> amber -> red)
     # Use a wider amber band so mid-aged items are visually distinct.
     $wipAgingColors += if ($item.age -gt 30) {
-        '#ef4444'
+        $ageBandRed
     } elseif ($item.age -gt 14) {
-        '#f59e0b'
+        $ageBandAmber
     } else {
-        '#22c55e'
+        $ageBandGreen
     }
 }
 
@@ -1907,6 +2094,16 @@ if ($config -and $config.columns -and $config.columns.inProgress) {
             Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
             Select-Object -Unique
     )
+
+    # If boardConfig columns are present, filter out any configured columns that are no longer on the board
+    if ($rawData.boardConfig -and $rawData.boardConfig.columns) {
+        $boardCols = @(
+            @($rawData.boardConfig.columns) |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+                Select-Object -Unique
+        )
+        $workItemAgeAllowedColumns = @($workItemAgeAllowedColumns | Where-Object { $boardCols -contains $_ })
+    }
 } elseif ($rawData.boardConfig -and $rawData.boardConfig.columns) {
     # Fallback: use board order, excluding first+last columns
     $workflowColumnsAll = @(
@@ -2147,10 +2344,29 @@ foreach ($g in $completedTypeGroupsOrdered) {
     $label = Get-TypeDatasetLabel -WorkItemType $workItemType
     $items = @($g.Group | Sort-Object completedDate)
 
+    $style = Get-WorkItemTypeStyle -WorkItemType $workItemType
+    $dsColor = if ($style -and $style.color) {
+        [string]$style.color
+    } elseif ($workItemType -eq 'Bug') {
+        '#ef4444'
+    } elseif ($workItemType -eq 'Spike') {
+        '#8b5cf6'
+    } else {
+        # PBI/Story default
+        '#3b82f6'
+    }
+
     if ($items.Count -gt 0) {
         $cycleTimeDatasets += @{
             label = $label
             workItemType = $workItemType
+            backgroundColor = $dsColor
+            borderColor = $dsColor
+            pointBackgroundColor = $dsColor
+            pointBorderColor = '#ffffff'
+            pointBorderWidth = 2
+            pointRadius = 5
+            pointHoverRadius = 7
             data = @($items | ForEach-Object {
                 # Use Monday of the week for x-axis to align with other charts
                 $completedDate = [DateTime]$_.completedDate
@@ -2398,10 +2614,56 @@ $bestWeekLabel = if ($bestIdx -ge 0) { $throughputLabels[$bestIdx] } else { 'N/A
 $netFlowInsightText = "Across $($weekStarts.Count) weeks: started $netTotalStarted, finished $netTotalFinished. Net flow (finished - started): $netDelta. Best week: $bestWeekLabel ($netBestValue). Worst week: $worstWeekLabel ($netWorstValue)."
 
 # Time in column chart (completed items only)
+# Exclude items whose columnTime contains columns not present in the configured board.
+$boardColumnsCurrent = if ($rawData.boardConfig -and $rawData.boardConfig.columns) { @($rawData.boardConfig.columns) } else { @() }
+$boardColumnsCurrent = @(
+    $boardColumnsCurrent |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Select-Object -Unique
+)
+
+$workflowColumnsAll = if ($boardColumnsCurrent.Count -gt 0) { @($boardColumnsCurrent) } else { @($configuredBoardColumns) }
+
+$timeInColumnOldColumnsCounts = @{}
+$timeInColumnOldColumnExcludedItems = @()
+$timeInColumnExcludedUnknownColumns = 0
+$timeInColumnExcludedStateBased = 0
+
 $columnTotals = @{}
 $columnCounts = @{}
 foreach ($item in $completedWithMetrics) {
     if (-not $item.columnTime -or $item.columnTime.Count -eq 0) { continue }
+
+    # If we couldn't compute real board column history (fell back to System.State), exclude.
+    if ($item.columnTimeField -and $item.columnTimeField -ne 'System.BoardColumn') {
+        $timeInColumnExcludedStateBased++
+        continue
+    }
+
+    $unknownCols = @()
+    foreach ($prop in $item.columnTime.PSObject.Properties) {
+        $col = $prop.Name
+        if ($workflowColumnsAll -notcontains $col) {
+            $unknownCols += $col
+        }
+    }
+
+    if ($unknownCols.Count -gt 0) {
+        $timeInColumnExcludedUnknownColumns++
+
+        foreach ($uc in ($unknownCols | Select-Object -Unique)) {
+            if (-not $timeInColumnOldColumnsCounts.ContainsKey($uc)) { $timeInColumnOldColumnsCounts[$uc] = 0 }
+            $timeInColumnOldColumnsCounts[$uc] += 1
+        }
+
+        $timeInColumnOldColumnExcludedItems += @{
+            id = $item.id
+            workItemType = $item.type
+            columns = @($unknownCols | Select-Object -Unique)
+        }
+
+        continue
+    }
 
     foreach ($prop in $item.columnTime.PSObject.Properties) {
         $col = $prop.Name
@@ -2419,15 +2681,6 @@ foreach ($item in $completedWithMetrics) {
 }
 
 # Only include board columns (not states), and exclude the first + last column in the workflow
-$workflowColumnsAll = @()
-if ($config -and $config.columns) {
-    $workflowColumnsAll += @($config.columns.backlog)
-    $workflowColumnsAll += @($config.columns.inProgress)
-    $workflowColumnsAll += @($config.columns.done)
-} elseif ($rawData.boardConfig -and $rawData.boardConfig.columns) {
-    $workflowColumnsAll += @($rawData.boardConfig.columns)
-}
-
 $workflowColumnsAll = @(
     $workflowColumnsAll |
         Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
@@ -2855,8 +3108,49 @@ if ($cfdWeekCount -ge 2) {
 
 # Data quality: Time In Column coverage
 $timeInColumnCandidates = [int]$completedWithMetrics.Count
-$timeInColumnExcluded = [int](@($completedWithMetrics | Where-Object { -not $_.columnTime -or $_.columnTime.Count -eq 0 }).Count)
+$timeInColumnExcludedMissingColumnTime = [int](@($completedWithMetrics | Where-Object { -not $_.columnTime -or $_.columnTime.Count -eq 0 }).Count)
+$timeInColumnExcludedUnknownColumns = [int]$timeInColumnExcludedUnknownColumns
+$timeInColumnExcludedStateBased = [int]$timeInColumnExcludedStateBased
+$timeInColumnExcluded = [int]($timeInColumnExcludedMissingColumnTime + $timeInColumnExcludedUnknownColumns)
+$timeInColumnExcluded = [int]($timeInColumnExcluded + $timeInColumnExcludedStateBased)
 $timeInColumnExcludedPercent = if ($timeInColumnCandidates -gt 0) { [Math]::Round(($timeInColumnExcluded / $timeInColumnCandidates) * 100, 1) } else { 0 }
+
+$timeInColumnUnknownColumns = @(
+    $timeInColumnOldColumnsCounts.Keys |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Sort-Object
+)
+
+$timeInColumnExcludedUnknownColumnItemsSample = @(
+    @($timeInColumnOldColumnExcludedItems) |
+        Select-Object -First 10
+)
+
+$bugsByColumnExcluded = [int]($bugsByColumnExcludedMissingBoardColumn + $bugsByColumnExcludedUnknownColumns)
+$bugsByColumnExcludedPercent = if ($bugsByColumnCandidates -gt 0) { [Math]::Round(($bugsByColumnExcluded / $bugsByColumnCandidates) * 100, 1) } else { 0 }
+$bugsByColumnUnknownColumns = @(
+    $bugsByColumnOldColumnsCounts.Keys |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Sort-Object
+)
+
+$blockedByColumnExcluded = [int]($blockedByColumnExcludedMissingBoardColumn + $blockedByColumnExcludedUnknownColumns)
+$blockedByColumnExcludedPercent = if ($blockedByColumnCandidates -gt 0) { [Math]::Round(($blockedByColumnExcluded / $blockedByColumnCandidates) * 100, 1) } else { 0 }
+$blockedByColumnUnknownColumns = @(
+    $blockedByColumnOldColumnsCounts.Keys |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Sort-Object
+)
+
+# Column mismatch summary (config vs current board)
+$configuredNotOnBoard = @(
+    @($configuredBoardColumns) |
+        Where-Object { $boardColumnsCurrent -notcontains $_ }
+)
+$boardNotInConfigured = @(
+    @($boardColumnsCurrent) |
+        Where-Object { $configuredBoardColumns -notcontains $_ }
+)
 
 # Build final data structure matching template expectations
 $dashboardData = @{ 
@@ -2905,9 +3199,15 @@ $dashboardData = @{
         columns = if ($config -and $config.columns) { $config.columns } else { $null }
         states = if ($config -and $config.states) { $config.states } else { $null }
         efficiency = $efficiencyMapping
+        workItemTypeStyles = $adoWorkItemTypeStyles
+        workItemTypeStylesDebug = $adoWorkItemTypeStylesDebug
         dataQuality = @{
             warningThresholdPercent = 10
             policy = 'No guessing. If required data is missing, the item is excluded and counted here.'
+            columnsMismatch = @{
+                configuredNotOnBoard = @($configuredNotOnBoard)
+                boardNotInConfig = @($boardNotInConfigured)
+            }
             charts = [ordered]@{
                 cfd = @{
                     name = 'CFD (Arrivals vs Departures)'
@@ -2915,11 +3215,36 @@ $dashboardData = @{
                     excluded = $cfdExcludedCount
                     excludedPercent = $cfdExcludedPercent
                 }
+                bugsByColumn = @{
+                    name = 'Bugs by Column'
+                    candidates = $bugsByColumnCandidates
+                    excluded = $bugsByColumnExcluded
+                    excludedPercent = $bugsByColumnExcludedPercent
+                    excludedMissingBoardColumn = $bugsByColumnExcludedMissingBoardColumn
+                    excludedUnknownColumns = $bugsByColumnExcludedUnknownColumns
+                    unknownColumns = $bugsByColumnUnknownColumns
+                    unknownColumnItemsSample = @($bugsByColumnExcludedItemsSample | Select-Object -First 10)
+                }
+                blockedByColumn = @{
+                    name = 'Blocked Items by Column'
+                    candidates = $blockedByColumnCandidates
+                    excluded = $blockedByColumnExcluded
+                    excludedPercent = $blockedByColumnExcludedPercent
+                    excludedMissingBoardColumn = $blockedByColumnExcludedMissingBoardColumn
+                    excludedUnknownColumns = $blockedByColumnExcludedUnknownColumns
+                    unknownColumns = $blockedByColumnUnknownColumns
+                    unknownColumnItemsSample = @($blockedByColumnExcludedItemsSample | Select-Object -First 10)
+                }
                 timeInColumn = @{
                     name = 'Time In Column'
                     candidates = $timeInColumnCandidates
                     excluded = $timeInColumnExcluded
                     excludedPercent = $timeInColumnExcludedPercent
+                    excludedMissingColumnTime = $timeInColumnExcludedMissingColumnTime
+                    excludedUnknownColumns = $timeInColumnExcludedUnknownColumns
+                    excludedStateBased = $timeInColumnExcludedStateBased
+                    unknownColumns = $timeInColumnUnknownColumns
+                    unknownColumnItemsSample = $timeInColumnExcludedUnknownColumnItemsSample
                 }
             }
         }

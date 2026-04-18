@@ -85,6 +85,7 @@ foreach ($workItemId in $WorkItemIds) {
         
         # Track board column changes with timestamps (prioritize BoardColumn over State)
         $columnHistory = @()
+        $seenBoardColumn = $false
         
         foreach ($update in $updates.value) {
             # Parse revision timestamp (note: ADO sometimes uses 9999-01-01 as a placeholder)
@@ -125,6 +126,7 @@ foreach ($workItemId in $WorkItemIds) {
             if ($update.fields.PSObject.Properties.Name -contains 'System.BoardColumn') {
                 $fieldToUse = 'System.BoardColumn'
                 $newValue = $update.fields.'System.BoardColumn'.newValue
+                if (-not [string]::IsNullOrWhiteSpace($newValue)) { $seenBoardColumn = $true }
             }
             # Fall back to State if no BoardColumn
             elseif ($update.fields.PSObject.Properties.Name -contains 'System.State') {
@@ -143,6 +145,12 @@ foreach ($workItemId in $WorkItemIds) {
             }
         }
 
+        # If this item has ANY real board column history, use ONLY BoardColumn transitions.
+        # This avoids polluting columnTime with System.State values like "Backlog"/"Active".
+        if ($seenBoardColumn) {
+            $columnHistory = @($columnHistory | Where-Object { $_.Field -eq 'System.BoardColumn' })
+        }
+
         if (-not $closedDate -and $closedDateFromStateChange) {
             $closedDate = $closedDateFromStateChange
         }
@@ -154,6 +162,9 @@ foreach ($workItemId in $WorkItemIds) {
         }
         
         Write-Verbose "  Found $($columnHistory.Count) transitions (using field: $($columnHistory[0].Field))"
+
+        $hasBoardColumnHistory = @($columnHistory | Where-Object { $_.Field -eq 'System.BoardColumn' }).Count -gt 0
+        $fieldUsed = if ($hasBoardColumnHistory) { 'System.BoardColumn' } else { 'System.State' }
 
         # Ensure transitions are in chronological order (updates API order is not guaranteed)
         $columnHistory = @(
@@ -232,6 +243,7 @@ foreach ($workItemId in $WorkItemIds) {
         
         $results += @{
             WorkItemId = $workItemId
+            FieldUsed = $fieldUsed
             ColumnTime = $roundedColumnTime
             TotalDays = ($roundedColumnTime.Values | Measure-Object -Sum).Sum
             StateCount = $roundedColumnTime.Count

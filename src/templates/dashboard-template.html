@@ -821,7 +821,7 @@
 
             <!-- Net Flow (Sustainability) -->
             <div class="chart-card">
-                <h2>⚖️ Sustainability (Net Flow)</h2>
+                <h2>⚖️ Started vs Completed Net Flow</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
                     Shows the difference between work started and work completed each week.
                 </p>
@@ -1363,29 +1363,94 @@
         if (dqEl) {
             const threshold = (dq && typeof dq.warningThresholdPercent === 'number') ? dq.warningThresholdPercent : 10;
             const charts = (dq && dq.charts && typeof dq.charts === 'object') ? dq.charts : null;
+            const mismatch = (dq && dq.columnsMismatch && typeof dq.columnsMismatch === 'object') ? dq.columnsMismatch : null;
 
             if (!charts || Object.keys(charts).length === 0) {
                 dqEl.innerHTML = '<span style="color: #718096;">(no data)</span>';
             } else {
-                const lines = Object.entries(charts).map(([key, v]) => {
+                const entriesWithExclusions = Object.entries(charts).filter(([_, v]) => {
+                    const excluded = (v && typeof v.excluded === 'number') ? v.excluded : 0;
+                    return excluded > 0;
+                });
+
+                const lines = entriesWithExclusions.map(([key, v]) => {
                     const name = (v && v.name) ? v.name : key;
                     const candidates = (v && typeof v.candidates === 'number') ? v.candidates : 0;
                     const excluded = (v && typeof v.excluded === 'number') ? v.excluded : 0;
                     const pct = (v && typeof v.excludedPercent === 'number') ? v.excludedPercent : 0;
                     const isWarn = pct >= threshold;
 
+                    const excludedMissing = (v && typeof v.excludedMissingColumnTime === 'number') ? v.excludedMissingColumnTime : null;
+                    const excludedUnknown = (v && typeof v.excludedUnknownColumns === 'number') ? v.excludedUnknownColumns : null;
+                    const excludedStateBased = (v && typeof v.excludedStateBased === 'number') ? v.excludedStateBased : null;
+                    const unknownColumns = (v && Array.isArray(v.unknownColumns)) ? v.unknownColumns : [];
+                    const unknownItemsSample = (v && Array.isArray(v.unknownColumnItemsSample)) ? v.unknownColumnItemsSample : [];
+
                     const badge = isWarn
                         ? '<span style="display:inline-block; padding: 2px 8px; border-radius: 999px; border: 1px solid #e2e8f0; background: #fff; color: #b45309; font-weight: 700; font-size: 12px; margin-left: 8px;">High</span>'
                         : '';
 
-                    return `<div style="margin-bottom: 8px;">` +
+                                        const breakdown = (excludedMissing !== null || excludedUnknown !== null || excludedStateBased !== null)
+                        ? `<div style="margin-top: 4px; color: #718096; font-size: 12px;">` +
+                                                        `${excludedMissing !== null ? `Missing columnTime: <strong>${excludedMissing}</strong>` : ''}` +
+                                                        `${(excludedMissing !== null && (excludedUnknown !== null || excludedStateBased !== null)) ? ' • ' : ''}` +
+                                                        `${excludedUnknown !== null ? `Old/unknown columns: <strong>${excludedUnknown}</strong>` : ''}` +
+                                                        `${(excludedUnknown !== null && excludedStateBased !== null) ? ' • ' : ''}` +
+                                                        `${excludedStateBased !== null ? `State-only history: <strong>${excludedStateBased}</strong>` : ''}` +
+                          `</div>`
+                        : '';
+
+                    const unknownColsHtml = (unknownColumns && unknownColumns.length > 0)
+                        ? `<div style="margin-top: 4px; color: #718096; font-size: 12px;">` +
+                            `Old/unknown columns detected: <strong>${unknownColumns.length}</strong><br>` +
+                            `<span style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;">${unknownColumns.map(escapeHtml).join(' • ')}</span>` +
+                          `</div>`
+                        : '';
+
+                                        const unknownItemsHtml = (unknownItemsSample && unknownItemsSample.length > 0)
+                                                ? `<div style="margin-top: 4px; color: #718096; font-size: 12px;">` +
+                                                        `Sample excluded items: ` +
+                                                        unknownItemsSample.slice(0, 6).map(it => {
+                                                                const id = it && it.id ? it.id : null;
+                                                                if (!id) return '';
+                                                                const url = getAdoWorkItemUrl(id);
+                                                                return `<a href="${url}" target="_blank" style="color:#667eea; text-decoration:none; font-weight:700;">#${id}</a>`;
+                                                        }).filter(Boolean).join(' • ') +
+                                                    `</div>`
+                                                : '';
+
+                    return `<div style="margin-bottom: 10px;">` +
                         `<strong>${escapeHtml(name)}:</strong> ` +
                         `${excluded} excluded out of ${candidates} (${pct.toFixed(1)}%)` +
                         `${badge}` +
+                        `${breakdown}` +
+                        `${unknownColsHtml}` +
+                        `${unknownItemsHtml}` +
                         `</div>`;
                 });
 
-                dqEl.innerHTML = lines.join('');
+                                const mismatchConfiguredNotOnBoard = mismatch && Array.isArray(mismatch.configuredNotOnBoard) ? mismatch.configuredNotOnBoard : [];
+                                const mismatchBoardNotInConfig = mismatch && Array.isArray(mismatch.boardNotInConfig) ? mismatch.boardNotInConfig : [];
+
+                                const mismatchHtml = (mismatchConfiguredNotOnBoard.length > 0 || mismatchBoardNotInConfig.length > 0)
+                                        ? `<div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #e2e8f0;">` +
+                                                `<div style="font-weight: 700; color: #2d3748; margin-bottom: 6px;">Columns mismatch</div>` +
+                                                `${mismatchConfiguredNotOnBoard.length > 0
+                                                        ? `<div style="margin-bottom: 6px; color: #718096; font-size: 12px;">` +
+                                                                `In config but not on board: <strong>${mismatchConfiguredNotOnBoard.length}</strong><br>` +
+                                                                `<span style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;">${mismatchConfiguredNotOnBoard.map(escapeHtml).join(' • ')}</span>` +
+                                                            `</div>`
+                                                        : ''}` +
+                                                `${mismatchBoardNotInConfig.length > 0
+                                                        ? `<div style="margin-bottom: 0; color: #718096; font-size: 12px;">` +
+                                                                `On board but not in config: <strong>${mismatchBoardNotInConfig.length}</strong><br>` +
+                                                                `<span style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;">${mismatchBoardNotInConfig.map(escapeHtml).join(' • ')}</span>` +
+                                                            `</div>`
+                                                        : ''}` +
+                                            `</div>`
+                                        : '';
+
+                                dqEl.innerHTML = (lines.length > 0 ? lines.join('') : '') + mismatchHtml;
             }
         }
 
@@ -1613,6 +1678,48 @@
             return String(t);
         }
 
+        function normalizeWorkItemTypeKey(t) {
+            const tt = String(t || '').trim();
+            if (!tt) return 'Other';
+            if (tt === 'Product Backlog Item') return 'PBI';
+            if (tt === 'User Story' || tt === 'Story') return 'Story';
+            if (tt === 'Spike' || tt === 'Spikes') return 'Spike';
+            if (tt === 'Bug') return 'Bug';
+            return tt;
+        }
+
+        // Type styles (align with existing "delivery"-style colours used across the dashboard)
+        const WORK_ITEM_TYPE_STYLES = {
+            PBI: { label: 'PBI', abbr: 'P', color: '#3b82f6' },
+            Story: { label: 'Story', abbr: 'S', color: '#3b82f6' },
+            Bug: { label: 'Bug', abbr: 'B', color: '#ef4444' },
+            Spike: { label: 'Spike', abbr: '∧', color: '#8b5cf6' },
+            Other: { label: 'Other', abbr: '?', color: '#6b7280' }
+        };
+
+        // Optional overrides from generator (ADO work item type metadata)
+        const ADO_TYPE_STYLES = (dashboardData.configuration && dashboardData.configuration.workItemTypeStyles)
+            ? dashboardData.configuration.workItemTypeStyles
+            : null;
+
+        function getWorkItemTypeStyle(t) {
+            const key = normalizeWorkItemTypeKey(t);
+
+            // Prefer raw ADO work item type style when available
+            const raw = String(t || '').trim();
+            if (ADO_TYPE_STYLES && raw && ADO_TYPE_STYLES[raw]) {
+                const s = ADO_TYPE_STYLES[raw] || {};
+                const base = WORK_ITEM_TYPE_STYLES[key] || WORK_ITEM_TYPE_STYLES.Other;
+                return {
+                    ...base,
+                    color: s.color || base.color,
+                    iconUrl: s.iconUrl || base.iconUrl
+                };
+            }
+
+            return WORK_ITEM_TYPE_STYLES[key] || WORK_ITEM_TYPE_STYLES.Other;
+        }
+
         function formatDurationDaysHuman(days) {
             const d = Number(days);
             if (!Number.isFinite(d) || d < 0) return 'N/A';
@@ -1644,11 +1751,15 @@
                 const id = item && item.id ? item.id : null;
                 if (!id) return '';
                 const title = item && item.title ? escapeHtml(String(item.title)) : '';
-                const t = item && (item.workItemType || item.type) ? escapeHtml(formatWorkItemType(item.workItemType || item.type)) : '';
+                const rawType = item && (item.workItemType || item.type) ? (item.workItemType || item.type) : '';
+                const style = getWorkItemTypeStyle(rawType);
                 const url = getAdoWorkItemUrl(id);
-                return `<div style="margin-bottom: 6px; padding-left: 8px; border-left: 2px solid #667eea;">
-                    <a href="${url}" target="_blank" style="text-decoration: none; font-weight: 600;">#${id}</a>
-                    ${t ? `<span style="color:#9ca3af; font-size: 11px; margin-left: 6px;">(${t})</span>` : ''}
+                const icon = style.iconUrl
+                    ? `<img src="${escapeHtml(style.iconUrl)}" alt="${escapeHtml(style.label)}" style="width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px;">`
+                    : `<span title="${escapeHtml(style.label)}" style="display:inline-flex; align-items:center; justify-content:center; width: 14px; height: 14px; border-radius: 3px; background: ${style.color}; color: #fff; font-size: 10px; font-weight: 800; margin-right: 6px; border: 1px solid rgba(255,255,255,0.35);">${escapeHtml(style.abbr)}</span>`;
+
+                return `<div style="margin-bottom: 6px; padding-left: 8px; border-left: 2px solid ${style.color};">
+                    ${icon}<a href="${url}" target="_blank" style="text-decoration: none; font-weight: 700; color: ${style.color};">#${id}</a>
                     ${title ? `<span style="color: #ddd; font-size: 12px;"> ${title}</span>` : ''}
                 </div>`;
             }).filter(Boolean).join('');
@@ -3736,16 +3847,8 @@
             const presentTypes = Array.from(new Set(allWorkItemAgeItems.map(it => typeKey(it.workItemType)))).filter(Boolean);
             const showLegend = presentTypes.length > 1;
 
-            const typeColors = {
-                Bug: '#ef4444',
-                PBI: '#3b82f6',
-                Story: '#3b82f6',
-                Spike: '#8b5cf6',
-                Other: '#6b7280'
-            };
-
             const datasets = presentTypes.map(t => {
-                const color = typeColors[t] || '#6b7280';
+                const color = (getWorkItemTypeStyle(t) && getWorkItemTypeStyle(t).color) ? getWorkItemTypeStyle(t).color : '#6b7280';
                 return {
                     label: t,
                     data: allWorkItemAgeItems
@@ -3996,6 +4099,7 @@
                         data,
                         backgroundColor: bg,
                         borderColor: border,
+                        legendColor: (getWorkItemTypeStyle(t) && getWorkItemTypeStyle(t).color) ? getWorkItemTypeStyle(t).color : '#9ca3af',
                         borderWidth: 2
                     };
                 })
@@ -4020,7 +4124,23 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { display: showLegend, position: 'top' },
+                        legend: {
+                            display: showLegend,
+                            position: 'top',
+                            labels: {
+                                generateLabels: function(chart) {
+                                    const base = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+                                    base.forEach((l) => {
+                                        const ds = chart.data.datasets[l.datasetIndex];
+                                        if (ds && ds.legendColor) {
+                                            l.fillStyle = ds.legendColor;
+                                            l.strokeStyle = ds.legendColor;
+                                        }
+                                    });
+                                    return base;
+                                }
+                            }
+                        },
                         tooltip: {
                             callbacks: {
                                 title: function(items) {
@@ -4156,8 +4276,8 @@
             }));
 
             const legendColorByType = presentTypes.reduce((acc, t) => {
-                const first = fullItems.find(it => it.type === t && it.color && it.color !== 'rgba(0,0,0,0)' && it.color !== 'transparent');
-                acc[t] = first ? first.color : '#9ca3af';
+                // Keep legend swatches consistent (type-based), even though bars are age-coloured.
+                acc[t] = (getWorkItemTypeStyle(t) && getWorkItemTypeStyle(t).color) ? getWorkItemTypeStyle(t).color : '#9ca3af';
                 return acc;
             }, {});
 
@@ -4602,7 +4722,7 @@
             });
         }
 
-        // Net Flow Chart (Sustainability)
+        // Net Flow Chart (Started vs Completed)
         const netFlowData = dashboardData.charts.netFlow.values.map(val => val);
         const netFlowColors = netFlowData.map(val => val >= 0 ? '#4299e1' : '#f59e0b');
 
@@ -4614,24 +4734,39 @@
             ? dashboardData.charts.netFlow.finishedItems
             : new Array(netFlowData.length).fill(0).map(() => []);
         
+        const netFlowTrend = calculateLinearRegression(netFlowData);
+
         new Chart(document.getElementById('netFlowChart'), {
             type: 'bar',
             data: {
                 labels: dashboardData.charts.netFlow.labels,
-                datasets: [{
-                    label: 'Net Flow',
-                    data: dashboardData.charts.netFlow.labels.map((lab, i) => ({
-                        x: lab,
-                        y: netFlowData[i],
-                        startedItems: netFlowStartedItems[i] || [],
-                        finishedItems: netFlowFinishedItems[i] || [],
-                        // Fallback combined list for older tooltip logic
-                        items: ([]).concat(netFlowFinishedItems[i] || []).concat(netFlowStartedItems[i] || [])
-                    })),
-                    backgroundColor: netFlowColors,
-                    borderColor: netFlowColors,
-                    borderWidth: 2
-                }]
+                datasets: [
+                    {
+                        label: 'Net Flow',
+                        data: dashboardData.charts.netFlow.labels.map((lab, i) => ({
+                            x: lab,
+                            y: netFlowData[i],
+                            startedItems: netFlowStartedItems[i] || [],
+                            finishedItems: netFlowFinishedItems[i] || [],
+                            // Fallback combined list for older tooltip logic
+                            items: ([]).concat(netFlowFinishedItems[i] || []).concat(netFlowStartedItems[i] || [])
+                        })),
+                        backgroundColor: netFlowColors,
+                        borderColor: netFlowColors,
+                        borderWidth: 2
+                    },
+                    {
+                        type: 'line',
+                        label: 'Trend',
+                        data: dashboardData.charts.netFlow.labels.map((lab, i) => ({ x: lab, y: netFlowTrend[i] })),
+                        borderColor: '#9ca3af',
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        borderDash: [8, 6],
+                        pointRadius: 0,
+                        tension: 0
+                    }
+                ]
             },
             options: {
                 responsive: true,
@@ -4641,6 +4776,10 @@
                     tooltip: {
                         backgroundColor: 'rgba(0,0,0,0.8)',
                         padding: 12,
+                        filter: function(item) {
+                            // Hide tooltip for the trend line
+                            return item.datasetIndex === 0;
+                        },
                         callbacks: {
                             title: function(context) {
                                 return 'Week of ' + context[0].label;
@@ -4649,7 +4788,7 @@
                                 const value = context.parsed.y;
                                 if (value > 0) {
                                     return `Net Flow: +${value} (More finished than started)`;
-                                    lines.push(`Days blocked: ${formatDurationDaysHuman(context.parsed.x)}`);
+                                } else if (value < 0) {
                                     return `Net Flow: ${value} (More started than finished)`;
                                 } else {
                                     return `Net Flow: ${value} (Balanced)`;
