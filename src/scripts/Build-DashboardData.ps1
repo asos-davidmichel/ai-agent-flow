@@ -1091,6 +1091,7 @@ $staleWorkLabels = @()
 $staleWorkValues = @()
 $staleWorkIds = @()
 $staleWorkTitles = @()
+$staleWorkTypes = @()
 $staleWorkBlocked = @()
 $staleWorkBlockerCategories = @()
 $staleWorkBlockerLabels = @()
@@ -1102,6 +1103,7 @@ foreach ($item in $staleWorkItems) {
     $staleWorkValues += $item.daysSinceChanged
     $staleWorkIds += $item.id
     $staleWorkTitles += $item.title
+    $staleWorkTypes += $item.workItemType
     $staleWorkBlocked += $item.isBlocked
     $staleWorkBlockerCategories += $item.blockerCategory
     $staleWorkBlockerLabels += $item.blockerLabel
@@ -1826,17 +1828,29 @@ $wipAgingValues = @()
 $wipAgingIds = @()
 $wipAgingTitles = @()
 $wipAgingColors = @()
+$wipAgingTypes = @()
 
 foreach ($item in $wipAgingItemsSorted) {
-    $typeLabel = if ($item.workItemType -eq 'Bug') { 'Bug' } elseif ($item.workItemType -eq 'Product Backlog Item') { 'PBI' } else { $item.workItemType }
+    $typeLabel = if ($item.workItemType -eq 'Bug') {
+        'Bug'
+    } elseif ($item.workItemType -eq 'Product Backlog Item') {
+        'PBI'
+    } elseif ($item.workItemType -eq 'Spike' -or $item.workItemType -eq 'Spikes') {
+        'Spike'
+    } else {
+        $item.workItemType
+    }
     $wipAgingLabels += "$typeLabel #$($item.id)"
     $wipAgingValues += [int]$item.age
     $wipAgingIds += $item.id
     $wipAgingTitles += $item.title
+    $wipAgingTypes += $item.workItemType
 
-    $wipAgingColors += if ($item.age -gt 14) {
+    # Colour by age bands (green -> amber -> red)
+    # Use a wider amber band so mid-aged items are visually distinct.
+    $wipAgingColors += if ($item.age -gt 30) {
         '#ef4444'
-    } elseif ($item.age -gt 7) {
+    } elseif ($item.age -gt 14) {
         '#f59e0b'
     } else {
         '#22c55e'
@@ -1849,6 +1863,7 @@ $wipAgingChart = @{
     ids = $wipAgingIds
     titles = $wipAgingTitles
     colors = $wipAgingColors
+    types = $wipAgingTypes
 }
 
 $wipInsightText = if ($wipAgingItems.Count -eq 0) {
@@ -1922,6 +1937,7 @@ foreach ($wi in $activeItems) {
     $workItemAgeItems += [PSCustomObject]@{
         id = $wi.id
         title = $fields.'System.Title'
+        workItemType = $fields.'System.WorkItemType'
         column = $column
         age = $ageDays
     }
@@ -1934,7 +1950,7 @@ foreach ($col in $workItemAgeAllowedColumns) {
     $itemsInCol = @($workItemAgeItems | Where-Object { $_.column -eq $col } | Sort-Object -Property age -Descending)
 
     foreach ($it in $itemsInCol) {
-        $columnItems += @{ id = $it.id; title = $it.title; age = [int]$it.age }
+        $columnItems += @{ id = $it.id; title = $it.title; workItemType = $it.workItemType; age = [int]$it.age }
     }
 
     $workItemAgeStates += @{
@@ -3041,6 +3057,7 @@ $dashboardData = @{
             values = $staleWorkValues
             ids = $staleWorkIds
             titles = $staleWorkTitles
+            types = $staleWorkTypes
             blocked = $staleWorkBlocked
             blockerCategories = $staleWorkBlockerCategories
             blockerLabels = $staleWorkBlockerLabels

@@ -273,6 +273,7 @@
 
         .close {
             color: #aaa;
+                            stacked: showLegend,
             float: right;
             font-size: 28px;
             font-weight: bold;
@@ -3709,34 +3710,70 @@
 
         // Work Item Age by State
         if (dashboardData.charts.workItemAge) {
-            // Flatten all items with state info for easier lookup
+            // Flatten items with column (x) and type
             const allWorkItemAgeItems = [];
-            dashboardData.charts.workItemAge.states.forEach(state => {
-                state.items.forEach(item => {
-                    allWorkItemAgeItems.push({ ...item, state: state.name });
+            (dashboardData.charts.workItemAge.states || []).forEach(state => {
+                (state.items || []).forEach(item => {
+                    allWorkItemAgeItems.push({
+                        id: item.id,
+                        title: item.title,
+                        workItemType: item.workItemType || item.type || '',
+                        column: state.name,
+                        age: item.age
+                    });
                 });
+            });
+
+            const typeKey = (t) => {
+                const tt = String(t || '').trim();
+                if (!tt) return 'Other';
+                if (tt === 'Product Backlog Item') return 'PBI';
+                if (tt === 'User Story') return 'Story';
+                if (tt === 'Spike' || tt === 'Spikes') return 'Spike';
+                return tt;
+            };
+
+            const presentTypes = Array.from(new Set(allWorkItemAgeItems.map(it => typeKey(it.workItemType)))).filter(Boolean);
+            const showLegend = presentTypes.length > 1;
+
+            const typeColors = {
+                Bug: '#ef4444',
+                PBI: '#3b82f6',
+                Story: '#3b82f6',
+                Spike: '#8b5cf6',
+                Other: '#6b7280'
+            };
+
+            const datasets = presentTypes.map(t => {
+                const color = typeColors[t] || '#6b7280';
+                return {
+                    label: t,
+                    data: allWorkItemAgeItems
+                        .filter(it => typeKey(it.workItemType) === t)
+                        .map(it => ({
+                            x: it.column,
+                            y: it.age,
+                            id: it.id,
+                            title: it.title,
+                            workItemType: it.workItemType
+                        })),
+                    backgroundColor: color,
+                    pointRadius: 6,
+                    pointHoverRadius: 8
+                };
             });
 
             new Chart(document.getElementById('workItemAgeChart'), {
                 type: 'scatter',
                 data: {
                     labels: dashboardData.charts.workItemAge.labels || [],
-                    datasets: dashboardData.charts.workItemAge.states.map((state, index) => {
-                        const colors = ['#4338ca', '#0891b2', '#059669', '#d97706', '#dc2626', '#be185d'];
-                        return {
-                            label: state.name,
-                            data: state.items.map(item => ({ x: state.name, y: item.age, id: item.id, title: item.title })),
-                            backgroundColor: colors[index % colors.length],
-                            pointRadius: 6,
-                            pointHoverRadius: 8
-                        };
-                    })
+                    datasets
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { display: false },
+                        legend: { display: showLegend, position: 'top' },
                         tooltip: {
                             callbacks: {
                                 title: function(items) {
@@ -3747,6 +3784,7 @@
                                     const it = context.raw || {};
                                     const lines = [];
                                     if (it.title) lines.push(`Title: ${it.title}`);
+                                    if (it.workItemType) lines.push(`Type: ${formatWorkItemType(it.workItemType)}`);
                                     if (it.x) lines.push(`Column: ${it.x}`);
                                     lines.push(`Age: ${context.parsed.y} days`);
                                     return lines;
@@ -3800,12 +3838,12 @@
                             }
                         }
                     },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        title: { display: true, text: 'Age (Days)' },
-                        grid: { color: '#e2e8f0' }
-                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Age (Days)' },
+                            grid: { color: '#e2e8f0' }
+                        },
                         x: {
                             type: 'category',
                             labels: dashboardData.charts.workItemAge.labels || [],
@@ -3872,19 +3910,19 @@
 
         // Stale Work Chart - Sort worst offenders first (highest age)
         if (dashboardData.charts.staleWork) {
-            // Create array of items with all their data
-            const staleItems = dashboardData.charts.staleWork.labels.map((label, index) => ({
+            const staleItems = (dashboardData.charts.staleWork.labels || []).map((label, index) => ({
                 label: label,
-                value: dashboardData.charts.staleWork.values[index],
-                id: dashboardData.charts.staleWork.ids[index],
-                title: dashboardData.charts.staleWork.titles[index],
-                blocked: dashboardData.charts.staleWork.blocked[index]
+                value: (dashboardData.charts.staleWork.values || [])[index],
+                id: (dashboardData.charts.staleWork.ids || [])[index],
+                title: (dashboardData.charts.staleWork.titles || [])[index],
+                blocked: (dashboardData.charts.staleWork.blocked || [])[index],
+                workItemType: (dashboardData.charts.staleWork.types && dashboardData.charts.staleWork.types[index])
+                    ? dashboardData.charts.staleWork.types[index]
+                    : ''
             }));
-            
-            // Sort by value descending (worst first)
-            staleItems.sort((a, b) => b.value - a.value);
-            
-            // Extract sorted arrays - include item type in labels; add blocker category indicator when present
+
+            staleItems.sort((a, b) => Number(b.value || 0) - Number(a.value || 0));
+
             const sortedLabels = staleItems.map(item => {
                 if (item.blocked && dashboardData.charts.staleWork.blockerLabels) {
                     const idx = dashboardData.charts.staleWork.ids.indexOf(item.id);
@@ -3893,10 +3931,12 @@
                 }
                 return item.label;
             });
-            const sortedValues = staleItems.map(item => item.value);
+
+            const sortedValues = staleItems.map(item => Number(item.value || 0));
             const sortedIds = staleItems.map(item => item.id);
             const sortedTitles = staleItems.map(item => item.title);
-            const sortedBlocked = staleItems.map(item => item.blocked);
+            const sortedTypes = staleItems.map(item => item.workItemType);
+
             const sortedBlockerColors = staleItems.map(item => {
                 if (item.blocked && dashboardData.charts.staleWork.blockerColors) {
                     const idx = dashboardData.charts.staleWork.ids.indexOf(item.id);
@@ -3911,55 +3951,76 @@
                 }
                 return null;
             });
-            
-            // Create color scale - use blocker category colors for blocked items, gray for others
-            const maxValue = Math.max(...sortedValues);
-            const minValue = Math.min(...sortedValues);
+
+            const maxValue = sortedValues.length ? Math.max(...sortedValues) : 0;
+            const minValue = sortedValues.length ? Math.min(...sortedValues) : 0;
             const colorScale = sortedValues.map((value, index) => {
-                // If has blocker category, use that color
-                if (sortedBlockerColors[index]) {
-                    return sortedBlockerColors[index];
-                }
-                
-                // Normal stale items use amber/yellow gradient (darker for more stale)
+                if (sortedBlockerColors[index]) return sortedBlockerColors[index];
+
                 const normalized = maxValue === minValue ? 1 : (value - minValue) / (maxValue - minValue);
-                if (normalized > 0.66) {
-                    return '#d97706'; // amber-600
-                } else if (normalized > 0.33) {
-                    return '#f59e0b'; // amber-500
-                } else {
-                    return '#fbbf24'; // amber-400
-                }
+                if (normalized > 0.66) return '#d97706';
+                if (normalized > 0.33) return '#f59e0b';
+                return '#fbbf24';
             });
-            
+
+            const typeKey = (t) => {
+                const tt = String(t || '').trim();
+                if (!tt) return 'Other';
+                if (tt === 'Product Backlog Item') return 'PBI';
+                if (tt === 'User Story') return 'Story';
+                return tt;
+            };
+
+            const presentTypes = Array.from(new Set(sortedTypes.map(typeKey))).filter(Boolean);
+            const showLegend = presentTypes.length > 1;
+
+            const buildPoint = (i, xOverride) => ({
+                x: (xOverride !== undefined) ? xOverride : sortedValues[i],
+                y: sortedLabels[i],
+                id: sortedIds[i],
+                title: sortedTitles[i],
+                blockerLabel: sortedBlockerLabels[i],
+                blockerColor: sortedBlockerColors[i],
+                workItemType: sortedTypes[i]
+            });
+
+            const datasets = showLegend
+                ? presentTypes.map(t => {
+                    const data = sortedLabels.map((_, i) => (typeKey(sortedTypes[i]) === t) ? buildPoint(i) : buildPoint(i, 0));
+                    const bg = sortedLabels.map((_, i) => (typeKey(sortedTypes[i]) === t) ? colorScale[i] : 'rgba(0,0,0,0)');
+                    const border = sortedLabels.map((_, i) => (typeKey(sortedTypes[i]) === t)
+                        ? darkenHexColor(colorScale[i], sortedBlockerColors[i] ? 0.22 : 0.18)
+                        : 'rgba(0,0,0,0)');
+                    return {
+                        label: t,
+                        data,
+                        backgroundColor: bg,
+                        borderColor: border,
+                        borderWidth: 2
+                    };
+                })
+                : [{
+                    label: 'Days Since Updated',
+                    data: sortedLabels.map((_, i) => buildPoint(i)),
+                    backgroundColor: colorScale,
+                    borderColor: colorScale.map((color, index) => {
+                        return darkenHexColor(color, sortedBlockerColors[index] ? 0.22 : 0.18);
+                    }),
+                    borderWidth: 2
+                }];
+
             new Chart(document.getElementById('staleWorkChart'), {
                 type: 'bar',
                 data: {
                     labels: sortedLabels,
-                    datasets: [{
-                        label: 'Days Since Updated',
-                        data: staleItems.map((it, i) => ({
-                            x: it.value,
-                            y: sortedLabels[i],
-                            id: it.id,
-                            title: it.title,
-                            blockerLabel: sortedBlockerLabels[i],
-                            blockerColor: sortedBlockerColors[i]
-                        })),
-                        backgroundColor: colorScale,
-                        borderColor: colorScale.map((color, index) => {
-                            // Always use a darker shade of the fill colour
-                            return darkenHexColor(color, sortedBlockerColors[index] ? 0.22 : 0.18);
-                        }),
-                        borderWidth: 2
-                    }]
+                    datasets
                 },
                 options: {
                     indexAxis: 'y',
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { display: false },
+                        legend: { display: showLegend, position: 'top' },
                         tooltip: {
                             callbacks: {
                                 title: function(items) {
@@ -3970,6 +4031,7 @@
                                     const it = context.raw || {};
                                     const lines = [];
                                     if (it.title) lines.push(`Title: ${it.title}`);
+                                    if (it.workItemType) lines.push(`Type: ${formatWorkItemType(it.workItemType)}`);
                                     if (it.blockerLabel) lines.push(`Blocker: ${it.blockerLabel}`);
                                     lines.push(`Days since updated: ${context.parsed.x} days`);
                                     return lines;
@@ -3984,7 +4046,8 @@
                             grid: { color: '#e2e8f0' }
                         },
                         y: {
-                            title: { display: false },
+                            stacked: showLegend,
+                            title: { display: true, text: 'Work Items' },
                             grid: { display: false }
                         }
                     }
@@ -4064,29 +4127,149 @@
 
         // WIP Chart (ordered by age, descending, only concerning items)
         if (dashboardData.charts.wip) {
-            new Chart(document.getElementById('wipChart'), {
+            const wipLabels = dashboardData.charts.wip.labels || [];
+            const wipValues = dashboardData.charts.wip.values || [];
+            const wipIds = dashboardData.charts.wip.ids || [];
+            const wipTitles = dashboardData.charts.wip.titles || [];
+            const wipColors = dashboardData.charts.wip.colors || [];
+            const wipTypes = dashboardData.charts.wip.types || [];
+
+            const typeKey = (t) => {
+                const tt = String(t || '').trim();
+                if (!tt) return 'Other';
+                if (tt === 'Product Backlog Item') return 'PBI';
+                if (tt === 'User Story') return 'Story';
+                return tt;
+            };
+
+            const presentTypes = Array.from(new Set(wipTypes.map(typeKey))).filter(Boolean);
+            const showLegend = presentTypes.length > 1;
+
+            const fullItems = wipLabels.map((label, i) => ({
+                label,
+                value: wipValues[i],
+                id: wipIds[i],
+                title: wipTitles[i],
+                workItemType: wipTypes[i],
+                type: typeKey(wipTypes[i]),
+                color: wipColors[i]
+            }));
+
+            const legendColorByType = presentTypes.reduce((acc, t) => {
+                const first = fullItems.find(it => it.type === t && it.color && it.color !== 'rgba(0,0,0,0)' && it.color !== 'transparent');
+                acc[t] = first ? first.color : '#9ca3af';
+                return acc;
+            }, {});
+
+            const buildPoint = (i, xOverride) => ({
+                x: (xOverride !== undefined) ? xOverride : wipValues[i],
+                y: wipLabels[i],
+                id: wipIds[i],
+                title: wipTitles[i],
+                workItemType: wipTypes[i]
+            });
+
+            const buildPointFromItem = (item, xOverride) => ({
+                x: (xOverride !== undefined) ? xOverride : item.value,
+                y: item.label,
+                id: item.id,
+                title: item.title,
+                workItemType: item.workItemType
+            });
+
+            const datasets = showLegend
+                ? presentTypes.map(t => {
+                    const data = wipLabels.map((_, i) => (typeKey(wipTypes[i]) === t) ? buildPoint(i) : buildPoint(i, 0));
+                    const bg = wipLabels.map((_, i) => (typeKey(wipTypes[i]) === t) ? (wipColors[i] || '#9ca3af') : 'rgba(0,0,0,0)');
+                    const border = wipLabels.map((_, i) => (typeKey(wipTypes[i]) === t) ? '#fff' : 'rgba(0,0,0,0)');
+                    return {
+                        label: t,
+                        data,
+                        backgroundColor: bg,
+                        borderColor: border,
+                        legendColor: legendColorByType[t] || '#9ca3af',
+                        borderWidth: 2
+                    };
+                })
+                : [{
+                    label: 'WIP Age (days)',
+                    data: wipValues.map((_, i) => buildPoint(i)),
+                    backgroundColor: wipColors,
+                    borderColor: '#fff',
+                    borderWidth: 2
+                }];
+
+            const wipChart = new Chart(document.getElementById('wipChart'), {
                 type: 'bar',
                 data: {
-                    labels: dashboardData.charts.wip.labels,
-                    datasets: [{
-                        label: 'WIP Age (days)',
-                        data: dashboardData.charts.wip.values.map((v, i) => ({
-                            x: v,
-                            y: dashboardData.charts.wip.labels[i],
-                            id: dashboardData.charts.wip.ids[i],
-                            title: dashboardData.charts.wip.titles[i]
-                        })),
-                        backgroundColor: dashboardData.charts.wip.colors,
-                        borderColor: '#fff',
-                        borderWidth: 2
-                    }]
+                    labels: wipLabels,
+                    datasets
                 },
                 options: {
                     indexAxis: 'y',
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { display: false },
+                        legend: {
+                            display: showLegend,
+                            position: 'top',
+                            labels: {
+                                generateLabels: function(chart) {
+                                    const base = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+                                    base.forEach((l) => {
+                                        const ds = chart.data.datasets[l.datasetIndex];
+                                        const bg = ds ? ds.backgroundColor : null;
+
+                                        // Prefer a stable per-type swatch (so it doesn't disappear after filtering)
+                                        if (ds && ds.legendColor) {
+                                            l.fillStyle = ds.legendColor;
+                                            l.strokeStyle = ds.legendColor;
+                                        }
+
+                                        if (Array.isArray(bg)) {
+                                            const firstOpaque = bg.find(c => c && c !== 'rgba(0,0,0,0)' && c !== 'transparent');
+                                            if (firstOpaque) {
+                                                l.fillStyle = firstOpaque;
+                                                l.strokeStyle = firstOpaque;
+                                            }
+                                        }
+                                    });
+                                    return base;
+                                }
+                            },
+                            onClick: function(e, legendItem, legend) {
+                                // Default toggle behaviour
+                                Chart.defaults.plugins.legend.onClick.call(this, e, legendItem, legend);
+
+                                const chart = legend.chart;
+                                const visibleTypes = chart.data.datasets
+                                    .map((ds, idx) => ({
+                                        type: ds.label,
+                                        visible: chart.isDatasetVisible(idx)
+                                    }))
+                                    .filter(x => x.visible)
+                                    .map(x => x.type);
+
+                                const filteredItems = fullItems.filter(item => visibleTypes.includes(item.type));
+
+                                chart.data.labels = filteredItems.map(item => item.label);
+
+                                chart.data.datasets.forEach((ds) => {
+                                    const t = ds.label;
+                                    ds.data = filteredItems.map(item => (item.type === t) ? buildPointFromItem(item) : buildPointFromItem(item, 0));
+                                    ds.backgroundColor = filteredItems.map(item => (item.type === t) ? (item.color || '#9ca3af') : 'rgba(0,0,0,0)');
+                                    ds.borderColor = filteredItems.map(item => (item.type === t) ? '#fff' : 'rgba(0,0,0,0)');
+                                });
+
+                                // Keep stacking consistent with legend visibility
+                                if (chart.options && chart.options.scales) {
+                                    if (chart.options.scales.x) chart.options.scales.x.stacked = showLegend;
+                                    if (chart.options.scales.y) chart.options.scales.y.stacked = showLegend;
+                                }
+
+                                chart.update();
+                            }
+                        },
                         tooltip: {
                             callbacks: {
                                 title: function(items) {
@@ -4097,6 +4280,7 @@
                                     const it = context.raw || {};
                                     const lines = [];
                                     if (it.title) lines.push(`Title: ${it.title}`);
+                                    if (it.workItemType) lines.push(`Type: ${formatWorkItemType(it.workItemType)}`);
                                     lines.push(`Age: ${context.parsed.x} days`);
                                     return lines;
                                 }
@@ -4105,11 +4289,13 @@
                     },
                     scales: {
                         x: {
+                            stacked: showLegend,
                             beginAtZero: true,
                             title: { display: true, text: 'Age (days)' },
                             grid: { color: '#e2e8f0' }
                         },
                         y: {
+                            stacked: showLegend,
                             grid: { display: false }
                         }
                     }
@@ -5008,7 +5194,8 @@
         console.log('Dashboard initialized successfully!');
         } catch (error) {
             console.error('Error initializing dashboard:', error);
-            alert('Error loading dashboard: ' + error.message);
+            const details = error && error.stack ? `\n\n${error.stack}` : '';
+            alert('Error loading dashboard: ' + (error && error.message ? error.message : String(error)) + details);
         }
         }); // End of window.load event listener
     </script>
