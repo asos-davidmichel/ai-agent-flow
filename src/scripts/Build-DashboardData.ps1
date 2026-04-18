@@ -1985,6 +1985,116 @@ foreach ($g in $completedTypeGroupsOrdered) {
 $cycleTimes = $completedWithMetrics | ForEach-Object { $_.cycleTime } | Where-Object { $_ -gt 0 }
 $leadTimes = $completedWithMetrics | ForEach-Object { $_.leadTime } | Where-Object { $_ -gt 0 }
 
+function Get-PercentileValue {
+    param(
+        [double[]]$Values,
+        [Parameter(Mandatory = $true)][double]$Percentile
+    )
+
+    if (-not $Values -or $Values.Count -eq 0) { return $null }
+    $p = [Math]::Max(0, [Math]::Min(1, $Percentile))
+    $sorted = @($Values | Sort-Object)
+    $idx = [Math]::Ceiling($sorted.Count * $p) - 1
+    if ($idx -lt 0) { $idx = 0 }
+    if ($idx -ge $sorted.Count) { $idx = $sorted.Count - 1 }
+    return [Math]::Round([double]$sorted[$idx], 1)
+}
+
+function Get-EfficiencyClass {
+    param(
+        [double]$Value,
+        [double]$GoodThreshold,
+        [double]$WarningThreshold
+    )
+
+    if ([double]::IsNaN($Value) -or [double]::IsInfinity($Value)) { return 'trend-neutral' }
+    if ($Value -ge $GoodThreshold) { return 'trend-good' }
+    if ($Value -ge $WarningThreshold) { return 'trend-warning' }
+    return 'trend-warning'
+}
+
+function Test-IsFiniteNumber {
+    param([double]$Value)
+    return (-not ([double]::IsNaN($Value) -or [double]::IsInfinity($Value)))
+}
+
+$invariant = [System.Globalization.CultureInfo]::InvariantCulture
+
+# --- Efficiency metrics (computed from real completed-item data) ---
+$completedCount = [int]$completedWithMetrics.Count
+
+# Work Start Efficiency: Cycle / Lead
+$wseCandidates = @($completedWithMetrics | Where-Object { $_.leadTime -gt 0 -and $_.cycleTime -gt 0 })
+$wseValues = @($wseCandidates | ForEach-Object {
+    $lead = [double]$_.leadTime
+    $cycle = [double]$_.cycleTime
+    $v = ($cycle / $lead) * 100
+    if (Test-IsFiniteNumber $v) { [Math]::Max(0, [Math]::Min(100, $v)) }
+} | Where-Object { $_ -ne $null })
+
+$wseAvgVal = if ($wseValues.Count -gt 0) { [Math]::Round((($wseValues | Measure-Object -Average).Average), 1) } else { $null }
+$wseP50Val = Get-PercentileValue -Values $wseValues -Percentile 0.5
+$wseP85Val = Get-PercentileValue -Values $wseValues -Percentile 0.85
+$wseExcluded = $completedCount - [int]$wseCandidates.Count
+
+$wsePct = if ($wseAvgVal -ne $null) { $wseAvgVal.ToString('0.0', $invariant) } else { 'N/A' }
+$wseClass = if ($wseAvgVal -ne $null) { Get-EfficiencyClass -Value $wseAvgVal -GoodThreshold 70 -WarningThreshold 50 } else { 'trend-neutral' }
+$wseInsight = if ($wseAvgVal -ne $null) {
+    $p50 = if ($wseP50Val -ne $null) { $wseP50Val.ToString('0.0', $invariant) } else { 'N/A' }
+    $p85 = if ($wseP85Val -ne $null) { $wseP85Val.ToString('0.0', $invariant) } else { 'N/A' }
+    "Avg $wsePct% across $($wseCandidates.Count)/$completedCount completed items (P50 $p50%, P85 $p85%). Excluded $wseExcluded item(s) due to missing/zero lead or cycle time."
+} else {
+    "No eligible completed items (requires lead time > 0 and cycle time > 0)."
+}
+
+# Cycle Time Flow Efficiency: Active / Cycle (requires columnTime)
+$ctfeCandidates = @($completedWithMetrics | Where-Object { $_.cycleTime -gt 0 -and $_.activeTime -ge 0 })
+$ctfeValues = @($ctfeCandidates | ForEach-Object {
+    $cycle = [double]$_.cycleTime
+    $active = [double]$_.activeTime
+    $v = ($active / $cycle) * 100
+    if (Test-IsFiniteNumber $v) { [Math]::Max(0, [Math]::Min(100, $v)) }
+} | Where-Object { $_ -ne $null })
+
+$ctfeAvgVal = if ($ctfeValues.Count -gt 0) { [Math]::Round((($ctfeValues | Measure-Object -Average).Average), 1) } else { $null }
+$ctfeP50Val = Get-PercentileValue -Values $ctfeValues -Percentile 0.5
+$ctfeP85Val = Get-PercentileValue -Values $ctfeValues -Percentile 0.85
+$ctfeExcluded = $completedCount - [int]$ctfeCandidates.Count
+
+$ctfePct = if ($ctfeAvgVal -ne $null) { $ctfeAvgVal.ToString('0.0', $invariant) } else { 'N/A' }
+$ctfeClass = if ($ctfeAvgVal -ne $null) { Get-EfficiencyClass -Value $ctfeAvgVal -GoodThreshold 70 -WarningThreshold 50 } else { 'trend-neutral' }
+$ctfeInsight = if ($ctfeAvgVal -ne $null) {
+    $p50 = if ($ctfeP50Val -ne $null) { $ctfeP50Val.ToString('0.0', $invariant) } else { 'N/A' }
+    $p85 = if ($ctfeP85Val -ne $null) { $ctfeP85Val.ToString('0.0', $invariant) } else { 'N/A' }
+    "Avg $ctfePct% across $($ctfeCandidates.Count)/$completedCount completed items (P50 $p50%, P85 $p85%). Excluded $ctfeExcluded item(s) due to missing/zero cycle time (no column-time data)."
+} else {
+    "No eligible completed items (requires cycle time > 0 and column-time data)."
+}
+
+# Lead Time Flow Efficiency: Active / Lead (requires columnTime + lead)
+$ltfeCandidates = @($completedWithMetrics | Where-Object { $_.leadTime -gt 0 -and $_.activeTime -ge 0 -and $_.cycleTime -gt 0 })
+$ltfeValues = @($ltfeCandidates | ForEach-Object {
+    $lead = [double]$_.leadTime
+    $active = [double]$_.activeTime
+    $v = ($active / $lead) * 100
+    if (Test-IsFiniteNumber $v) { [Math]::Max(0, [Math]::Min(100, $v)) }
+} | Where-Object { $_ -ne $null })
+
+$ltfeAvgVal = if ($ltfeValues.Count -gt 0) { [Math]::Round((($ltfeValues | Measure-Object -Average).Average), 1) } else { $null }
+$ltfeP50Val = Get-PercentileValue -Values $ltfeValues -Percentile 0.5
+$ltfeP85Val = Get-PercentileValue -Values $ltfeValues -Percentile 0.85
+$ltfeExcluded = $completedCount - [int]$ltfeCandidates.Count
+
+$ltfePct = if ($ltfeAvgVal -ne $null) { $ltfeAvgVal.ToString('0.0', $invariant) } else { 'N/A' }
+$ltfeClass = if ($ltfeAvgVal -ne $null) { Get-EfficiencyClass -Value $ltfeAvgVal -GoodThreshold 40 -WarningThreshold 25 } else { 'trend-neutral' }
+$ltfeInsight = if ($ltfeAvgVal -ne $null) {
+    $p50 = if ($ltfeP50Val -ne $null) { $ltfeP50Val.ToString('0.0', $invariant) } else { 'N/A' }
+    $p85 = if ($ltfeP85Val -ne $null) { $ltfeP85Val.ToString('0.0', $invariant) } else { 'N/A' }
+    "Avg $ltfePct% across $($ltfeCandidates.Count)/$completedCount completed items (P50 $p50%, P85 $p85%). Excluded $ltfeExcluded item(s) due to missing/zero lead or cycle time (no column-time data)."
+} else {
+    "No eligible completed items (requires lead time > 0 and column-time data)."
+}
+
 $cycleTimeMedian = Get-Median $cycleTimes
 $leadTimeMedian = Get-Median $leadTimes
 
@@ -2610,21 +2720,21 @@ $dashboardData = @{
             trend = Calculate-Trend -values @($leadTimeTrendChart.values) -higherIsBetter $false
         }
         workStartEfficiency = @{
-            percentage = "50.0"
-            class = "trend-warning"
-            insight = "Placeholder - needs calculation"
+            percentage = $wsePct
+            class = $wseClass
+            insight = $wseInsight
             trend = @{ direction = "stable"; isGood = $true }
         }
         cycleTimeFlowEfficiency = @{
-            percentage = "50.0"
-            class = "trend-warning"
-            insight = "Placeholder - needs calculation"
+            percentage = $ctfePct
+            class = $ctfeClass
+            insight = $ctfeInsight
             trend = @{ direction = "stable"; isGood = $true }
         }
         leadTimeFlowEfficiency = @{
-            percentage = "30.0"
-            class = "trend-warning"
-            insight = "Placeholder - needs calculation"
+            percentage = $ltfePct
+            class = $ltfeClass
+            insight = $ltfeInsight
             trend = @{ direction = "stable"; isGood = $true }
         }
         systemStability = $systemStabilityMetric

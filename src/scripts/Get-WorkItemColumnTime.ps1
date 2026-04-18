@@ -87,14 +87,11 @@ foreach ($workItemId in $WorkItemIds) {
         $columnHistory = @()
         
         foreach ($update in $updates.value) {
-            # Skip placeholder dates (9999-01-01 means "no date" in ADO)
+            # Parse revision timestamp (note: ADO sometimes uses 9999-01-01 as a placeholder)
             $revisedDate = [DateTime]$update.revisedDate
-            if ($revisedDate.Year -ge 9999) {
-                Write-Verbose "  Skipping placeholder date: $($update.revisedDate)"
-                continue
-            }
 
-            # Capture explicit ClosedDate if present in this revision
+            # IMPORTANT: even when revisedDate is a placeholder, the update can still contain the REAL ClosedDate
+            # in Microsoft.VSTS.Common.ClosedDate.newValue. We must capture it to cap the final segment.
             if ($update.fields.PSObject.Properties.Name -contains 'Microsoft.VSTS.Common.ClosedDate') {
                 $cd = $update.fields.'Microsoft.VSTS.Common.ClosedDate'.newValue
                 if ($cd) {
@@ -105,6 +102,12 @@ foreach ($workItemId in $WorkItemIds) {
                         # ignore parse failures
                     }
                 }
+            }
+
+            # If revisedDate is a placeholder, ignore it for column transition timestamps.
+            if ($revisedDate.Year -ge 9999) {
+                Write-Verbose "  Skipping placeholder revisedDate for transitions: $($update.revisedDate)"
+                continue
             }
 
             # Fallback: if we see a state transition into a done/closed state, use that revision timestamp
