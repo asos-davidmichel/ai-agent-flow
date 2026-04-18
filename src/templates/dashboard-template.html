@@ -1758,7 +1758,7 @@
                     ? `<img src="${escapeHtml(style.iconUrl)}" alt="${escapeHtml(style.label)}" style="width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px;">`
                     : `<span title="${escapeHtml(style.label)}" style="display:inline-flex; align-items:center; justify-content:center; width: 14px; height: 14px; border-radius: 3px; background: ${style.color}; color: #fff; font-size: 10px; font-weight: 800; margin-right: 6px; border: 1px solid rgba(255,255,255,0.35);">${escapeHtml(style.abbr)}</span>`;
 
-                return `<div style="margin-bottom: 6px; padding-left: 8px; border-left: 2px solid ${style.color};">
+                return `<div style="margin-bottom: 6px;">
                     ${icon}<a href="${url}" target="_blank" style="text-decoration: none; font-weight: 700; color: ${style.color};">#${id}</a>
                     ${title ? `<span style="color: #ddd; font-size: 12px;"> ${title}</span>` : ''}
                 </div>`;
@@ -1787,12 +1787,12 @@
                 tooltipHideTimeout = null;
             }
 
-            const titleText = (tooltipModel.title && tooltipModel.title.length > 0)
+            const rawTitleText = (tooltipModel.title && tooltipModel.title.length > 0)
                 ? tooltipModel.title.map(t => String(t)).join(' • ')
-                : 'Details';
+                : '';
 
-            const bodyLines = (tooltipModel.body && tooltipModel.body.length > 0)
-                ? tooltipModel.body.flatMap(b => b.lines || []).map(l => escapeHtml(String(l)))
+            const rawBodyLines = (tooltipModel.body && tooltipModel.body.length > 0)
+                ? tooltipModel.body.flatMap(b => b.lines || []).map(l => String(l))
                 : [];
 
             // Infer work item(s) for this tooltip when the hovered point represents a work item
@@ -1866,40 +1866,52 @@
             const uniqueStarted = Array.from(new Map(startedItems.filter(it => it && it.id).map(it => [it.id, it])).values());
             const uniqueFinished = Array.from(new Map(finishedItems.filter(it => it && it.id).map(it => [it.id, it])).values());
             const hasGrouped = uniqueStarted.length > 0 || uniqueFinished.length > 0;
-            const singleDirectItem = hasDirectWorkItem && uniqueItems.length === 1;
+
+            const normalizeLine = (line) => {
+                const s = String(line || '').trim();
+                if (!s) return '';
+                // Remove noisy prefixes we don’t want in the unified tooltip
+                if (/^type\s*:/i.test(s)) return '';
+                if (/^work\s*item\b/i.test(s)) return '';
+                // Remove leading separators that sometimes appear in callback formatting
+                return s.replace(/^\|\s*/, '').replace(/^[-–•]\s*/, '').trim();
+            };
+
+            const hasAnyItems = uniqueItems.length > 0 || uniqueStarted.length > 0 || uniqueFinished.length > 0;
+
+            // Axis/value info first
+            const axisLines = [];
+            const titleText = normalizeLine(rawTitleText);
+            if (titleText) axisLines.push(titleText);
+            rawBodyLines.forEach(l => {
+                const nl = normalizeLine(l);
+                if (!nl) return;
+                // If we’re going to show linked items, avoid repeating their title/id in the axis section
+                if (hasAnyItems && /^title\s*:/i.test(nl)) return;
+                axisLines.push(nl);
+            });
 
             let contentHtml = '';
-            if (bodyLines.length > 0) {
-                contentHtml += bodyLines.map(l => `<div style="margin-bottom: 6px;">${l}</div>`).join('');
+            if (axisLines.length > 0) {
+                contentHtml += axisLines.map(l => `<div style="margin-bottom: 6px;">${escapeHtml(l)}</div>`).join('');
             }
 
-            if (!singleDirectItem && hasGrouped) {
+            if (hasGrouped) {
                 if (uniqueFinished.length > 0) {
                     contentHtml += `<div style="margin-top: 10px;"><strong>Finished:</strong><br><br>${buildWorkItemLinksHtml(uniqueFinished)}</div>`;
                 }
                 if (uniqueStarted.length > 0) {
                     contentHtml += `<div style="margin-top: 10px;"><strong>Started:</strong><br><br>${buildWorkItemLinksHtml(uniqueStarted)}</div>`;
                 }
-            } else if (!singleDirectItem && uniqueItems.length > 0) {
-                contentHtml += `<div style="margin-top: 10px;"><strong>Work items:</strong><br><br>${buildWorkItemLinksHtml(uniqueItems)}</div>`;
+            } else if (uniqueItems.length > 0) {
+                contentHtml += `<div style="margin-top: 10px;"><strong>Items:</strong><br><br>${buildWorkItemLinksHtml(uniqueItems)}</div>`;
             }
             if (!contentHtml) {
                 contentHtml = '<div style="color:#9ca3af;">(no details)</div>';
             }
 
-            let titleHtml = escapeHtml(titleText);
-            if (singleDirectItem) {
-                const it = uniqueItems[0];
-                const url = getAdoWorkItemUrl(it.id);
-                const t = it.title ? escapeHtml(String(it.title)) : '';
-                const rawType = it && (it.workItemType || it.type) ? (it.workItemType || it.type) : '';
-                const style = getWorkItemTypeStyle(rawType);
-                const icon = style.iconUrl
-                    ? `<img src="${escapeHtml(style.iconUrl)}" alt="${escapeHtml(style.label)}" style="width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px;">`
-                    : `<span title="${escapeHtml(style.label)}" style="display:inline-flex; align-items:center; justify-content:center; width: 14px; height: 14px; border-radius: 3px; background: ${style.color}; color: #fff; font-size: 10px; font-weight: 800; margin-right: 6px; border: 1px solid rgba(255,255,255,0.35);">${escapeHtml(style.abbr)}</span>`;
-
-                titleHtml = `${icon}Work item <a href="${url}" target="_blank">#${it.id}</a>` + (t ? ` <span style="color:#9ca3af; font-size: 12px; font-weight: 500;">${t}</span>` : '');
-            }
+            // Keep tooltip title generic; axis/value info is in the content section.
+            const titleHtml = 'Details';
 
             tooltipEl.innerHTML = `
                 <div class="tooltip-title">${titleHtml}</div>
