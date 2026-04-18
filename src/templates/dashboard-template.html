@@ -837,18 +837,6 @@
                 <div class="insight-box" id="cfdInsight"></div>
             </div>
 
-            <!-- Transition Rate Ratios -->
-            <div class="chart-card">
-                <h2>🔄 Transition Rate Ratios</h2>
-                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    Shows the arrival-to-departure rate ratio for each workflow transition.
-                </p>
-                <div class="chart-container">
-                    <canvas id="transitionRatesChart"></canvas>
-                </div>
-                <div class="insight-box" id="transitionRatesInsight"></div>
-            </div>
-
             <!-- Net Flow (Sustainability) -->
             <div class="chart-card">
                 <h2>⚖️ Sustainability (Net Flow)</h2>
@@ -859,6 +847,18 @@
                     <canvas id="netFlowChart"></canvas>
                 </div>
                 <div class="insight-box" id="netFlowInsight"></div>
+            </div>
+
+            <!-- Transition Rate Ratios -->
+            <div class="chart-card">
+                <h2>🔄 Transition Rate Ratios</h2>
+                <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
+                    Shows whether each column is building up or draining, based on arrivals vs departures.
+                </p>
+                <div class="chart-container">
+                    <canvas id="transitionRatesChart"></canvas>
+                </div>
+                <div class="insight-box" id="transitionRatesInsight"></div>
             </div>
 
             <!-- Time In Board Column -->
@@ -934,30 +934,28 @@
             <!-- Tab 5: Blockers & Issues -->
             <div id="blocked-items" class="tab-content">
                 <div class="charts-grid">
-            <!-- Blocked Items by Column -->
+            <!-- Stale Work -->
             <div class="chart-card">
-                <h2>🚫 Blocked Items by Column</h2>
+                <h2>⚠️ Stale Work</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    Distribution of blocked items across all workflow columns.
+                    Shows how many days since a work item has been updated.
                 </p>
                 <div class="chart-container">
-                    <canvas id="blockedItemsChart"></canvas>
+                    <canvas id="staleWorkChart"></canvas>
                 </div>
-                <div class="insight-box" id="blockedItemsInsight"></div>
+                <div class="insight-box" id="staleWorkInsight"></div>
             </div>
 
-            <!-- Current Blocked Items -->
+            <!-- Blocking vs Unblocking Rate (Net Flow) -->
             <div class="chart-card">
-                <h2>🔴 Current Blocked Items</h2>
+                <h2>📈 Blocker Flow (Blocked vs Unblocked)</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    Currently blocked items sorted by how long they've been blocked.<br>
-                    Prioritize unblocking these items over starting new work.
+                    Weekly flow of blockers: bars up = items becoming blocked, bars down = items becoming unblocked.
                 </p>
                 <div class="chart-container">
-                    <canvas id="currentBlockedItemsChart"></canvas>
+                    <canvas id="blockerRatesChart"></canvas>
                 </div>
-                <div id="currentBlockedItemsLegend" style="display:flex; flex-wrap:wrap; gap:10px; margin-top:10px;"></div>
-                <div class="insight-box" id="currentBlockedItemsInsight"></div>
+                <div class="insight-box" id="blockerRatesInsight"></div>
             </div>
 
             <!-- Blocker Timeline -->
@@ -972,28 +970,30 @@
                 <div class="insight-box" id="blockedTimelineInsight"></div>
             </div>
 
-            <!-- Blocking vs Unblocking Rate -->
+            <!-- Blocked Items by Column -->
             <div class="chart-card">
-                <h2>📈 Blocker Flow (Blocked vs Unblocked)</h2>
+                <h2>🚫 Blocked Items by Column</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    Weekly flow of blockers: bars up = items becoming blocked, bars down = items becoming unblocked.
+                    Distribution of blocked items across all workflow columns.
                 </p>
                 <div class="chart-container">
-                    <canvas id="blockerRatesChart"></canvas>
+                    <canvas id="blockedItemsChart"></canvas>
                 </div>
-                <div class="insight-box" id="blockerRatesInsight"></div>
+                <div class="insight-box" id="blockedItemsInsight"></div>
             </div>
 
-            <!-- Stale Work -->
-            <div class="chart-card">
-                <h2>⚠️ Stale Work</h2>
+            <!-- Current Blocked Items (Blocker time) -->
+            <div class="chart-card" style="grid-column: 1 / -1;">
+                <h2>🔴 Current Blocked Items</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    Shows how many days since a work item has been updated.
+                    Currently blocked items sorted by how long they've been blocked.<br>
+                    Prioritize unblocking these items over starting new work.
                 </p>
                 <div class="chart-container">
-                    <canvas id="staleWorkChart"></canvas>
+                    <canvas id="currentBlockedItemsChart"></canvas>
                 </div>
-                <div class="insight-box" id="staleWorkInsight"></div>
+                <div id="currentBlockedItemsLegend" style="display:flex; flex-wrap:wrap; gap:10px; margin-top:10px;"></div>
+                <div class="insight-box" id="currentBlockedItemsInsight"></div>
             </div>
         </div>
             </div>
@@ -1617,6 +1617,103 @@
         // Chart.js configuration
         Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif';
         Chart.defaults.color = '#4a5568';
+
+        function getAdoWorkItemUrl(id) {
+            return `https://dev.azure.com/${dashboardData.adoOrg}/${dashboardData.adoProject}/_workitems/edit/${id}`;
+        }
+
+        function buildWorkItemLinksHtml(items) {
+            if (!items || !Array.isArray(items) || items.length === 0) return '';
+
+            const maxItems = 12;
+            const shown = items.slice(0, maxItems);
+            const extraCount = items.length - shown.length;
+
+            const rows = shown.map(item => {
+                const id = item && item.id ? item.id : null;
+                if (!id) return '';
+                const title = item && item.title ? escapeHtml(String(item.title)) : '';
+                const url = getAdoWorkItemUrl(id);
+                return `<div style="margin-bottom: 6px; padding-left: 8px; border-left: 2px solid #667eea;">
+                    <a href="${url}" target="_blank" style="text-decoration: none; font-weight: 600;">#${id}</a>
+                    ${title ? `<span style="color: #ddd; font-size: 12px;"> ${title}</span>` : ''}
+                </div>`;
+            }).filter(Boolean).join('');
+
+            const more = extraCount > 0
+                ? `<div style="color:#9ca3af; font-size: 12px; margin-top: 6px;">+${extraCount} more</div>`
+                : '';
+
+            return rows + more;
+        }
+
+        function defaultExternalTooltip(context) {
+            const tooltipEl = document.getElementById('customTooltip');
+            const tooltipModel = context.tooltip;
+
+            if (tooltipModel.opacity === 0) {
+                if (!isTooltipHovered) {
+                    hideTooltipWithDelay();
+                }
+                return;
+            }
+
+            if (tooltipHideTimeout) {
+                clearTimeout(tooltipHideTimeout);
+                tooltipHideTimeout = null;
+            }
+
+            const title = (tooltipModel.title && tooltipModel.title.length > 0)
+                ? tooltipModel.title.map(t => escapeHtml(String(t))).join('<br>')
+                : 'Details';
+
+            const bodyLines = (tooltipModel.body && tooltipModel.body.length > 0)
+                ? tooltipModel.body.flatMap(b => b.lines || []).map(l => escapeHtml(String(l)))
+                : [];
+
+            // Infer work item(s) for this tooltip when the hovered point represents a work item
+            const items = [];
+            const dataPoints = tooltipModel.dataPoints || [];
+            dataPoints.forEach(dp => {
+                const raw = dp.raw;
+                if (raw && typeof raw === 'object') {
+                    if (raw.id) {
+                        items.push({ id: raw.id, title: raw.title || '' });
+                    } else if (Array.isArray(raw.items)) {
+                        raw.items.forEach(it => {
+                            if (it && it.id) items.push({ id: it.id, title: it.title || '' });
+                        });
+                    }
+                }
+            });
+
+            let contentHtml = '';
+            if (bodyLines.length > 0) {
+                contentHtml += bodyLines.map(l => `<div style="margin-bottom: 6px;">${l}</div>`).join('');
+            }
+            if (items.length > 0) {
+                contentHtml += `<div style="margin-top: 10px;"><strong>Work items:</strong><br><br>${buildWorkItemLinksHtml(items)}</div>`;
+            }
+            if (!contentHtml) {
+                contentHtml = '<div style="color:#9ca3af;">(no details)</div>';
+            }
+
+            tooltipEl.innerHTML = `
+                <div class="tooltip-title">${title}</div>
+                <div class="tooltip-content">${contentHtml}</div>
+                <div class="close-hint">Hover to keep open • Click elsewhere to close</div>
+            `;
+
+            const position = context.chart.canvas.getBoundingClientRect();
+            tooltipEl.classList.add('visible');
+            tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
+            tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
+        }
+
+        // Make custom tooltip the default for all charts (consistent UX)
+        Chart.defaults.plugins.tooltip.enabled = false;
+        Chart.defaults.plugins.tooltip.external = defaultExternalTooltip;
+        Chart.defaults.plugins.tooltip.displayColors = false;
 
         // Throughput Chart with clickable points
         // Calculate linear regression trend line
@@ -4622,13 +4719,16 @@
                                 const status = ratio > 1.2 ? '(Building up)' : 
                                              ratio < 0.8 ? '(Draining)' : 
                                              '(Balanced)';
-                                return `Ratio: ${ratio.toFixed(2)} ${status}`;
+                                const index = context.dataIndex;
+                                const a = dashboardData.charts.transitionRates.arrivals[index];
+                                const d = dashboardData.charts.transitionRates.departures[index];
+                                return `Ratio: ${ratio.toFixed(2)} ${status} | Arrivals: ${a}/wk | Departures: ${d}/wk`;
                             },
                             afterLabel: function(context) {
                                 const index = context.dataIndex;
                                 return [
-                                    `Arrival: ${dashboardData.charts.transitionRates.arrivals[index]}/wk`,
-                                    `Departure: ${dashboardData.charts.transitionRates.departures[index]}/wk`
+                                    `Arrivals into this column: ${dashboardData.charts.transitionRates.arrivals[index]}/wk`,
+                                    `Departures out of this column: ${dashboardData.charts.transitionRates.departures[index]}/wk`
                                 ];
                             }
                         }
@@ -4654,7 +4754,7 @@
                         }
                     },
                     y: {
-                        title: { display: true, text: 'Workflow Transition' },
+                        title: { display: true, text: 'Board Column' },
                         grid: { display: false }
                     }
                 }

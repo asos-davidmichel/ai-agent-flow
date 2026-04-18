@@ -1992,6 +1992,148 @@ for ($i = 0; $i -lt ($boardColumns.Count - 1); $i++) {
     $transitions += "$($boardColumns[$i]) -> $($boardColumns[$i + 1])"
 }
 
+# Transition Rate Ratios (arrival/departure per workflow stage)
+# For each transition A -> B, define:
+# - Arrival rate: moves A -> B per week
+# - Departure rate: moves B -> C per week
+# This highlights where work builds up (arrivals > departures).
+$transitionMoveCounts = if ($boardColumns.Count -ge 2) { @(0) * ($boardColumns.Count - 1) } else { @() }
+
+$transitionCandidates = 0
+$transitionExcluded = 0
+$transitionExclusionReasons = @{}
+
+function Add-TransitionExclusion {
+    param(
+        [string]$Reason
+    )
+    if (-not $transitionExclusionReasons.ContainsKey($Reason)) { $transitionExclusionReasons[$Reason] = 0 }
+    $transitionExclusionReasons[$Reason]++
+    $transitionExcluded++
+}
+
+$allTransitionItems = @($activeItems + $completedItems)
+foreach ($item in $allTransitionItems) {
+    if (-not $item.updates -or $item.updates.Count -eq 0) {
+        Add-TransitionExclusion -Reason 'missingUpdates'
+        continue
+    }
+
+    $sortedUpdates = $item.updates | Sort-Object {
+        $d = [DateTime]$_.revisedDate
+        if ($d.Year -ge 9999) { [DateTime]::MaxValue } else { $d }
+    }
+
+    $sawBoardColumn = $false
+
+    foreach ($update in $sortedUpdates) {
+        $updateDate = [DateTime]$update.revisedDate
+        if ($updateDate.Year -ge 9999) { continue }
+
+        if ($updateDate -lt $analysisStart -or $updateDate -gt $analysisEnd) { continue }
+
+        $bcField = $update.fields.'System.BoardColumn'
+        if (-not $bcField) { continue }
+
+        $sawBoardColumn = $true
+
+        $from = if ($null -ne $bcField.oldValue) { [string]$bcField.oldValue } else { $null }
+        $to = if ($null -ne $bcField.newValue) { [string]$bcField.newValue } else { $null }
+
+        if ([string]::IsNullOrWhiteSpace($from) -or [string]::IsNullOrWhiteSpace($to)) {
+            Add-TransitionExclusion -Reason 'missingOldOrNewColumn'
+            continue
+        }
+
+        if ($from -eq $to) { continue }
+
+        $transitionCandidates++
+
+        $fromIdx = [Array]::IndexOf($boardColumns, $from)
+        $toIdx = [Array]::IndexOf($boardColumns, $to)
+
+        if ($fromIdx -lt 0 -or $toIdx -lt 0) {
+            Add-TransitionExclusion -Reason 'nonBoardColumnHistory'
+            continue
+        }
+
+        if ($toIdx -ne ($fromIdx + 1)) {
+            Add-TransitionExclusion -Reason 'nonAdjacentTransition'
+            continue
+        }
+
+        if ($fromIdx -ge 0 -and $fromIdx -lt $transitionMoveCounts.Count) {
+            $transitionMoveCounts[$fromIdx] = [int]$transitionMoveCounts[$fromIdx] + 1
+        }
+    }
+
+    if (-not $sawBoardColumn) {
+        Add-TransitionExclusion -Reason 'missingBoardColumnHistory'
+    }
+}
+
+$transitionWeeks = [Math]::Max(1, $timelineWeekKeys.Count)
+$transitionRateTransitions = @()
+$transitionRateArrivals = @()
+$transitionRateDepartures = @()
+$transitionRateRatios = @()
+
+if ($boardColumns.Count -ge 3) {
+    for ($i = 0; $i -lt ($boardColumns.Count - 2); $i++) {
+        # Label bars by the target column (the column being measured)
+        $transitionRateTransitions += "$($boardColumns[$i + 1])"
+
+        $arrivalRate = [Math]::Round(([double]$transitionMoveCounts[$i] / $transitionWeeks), 2)
+        $departureRate = [Math]::Round(([double]$transitionMoveCounts[$i + 1] / $transitionWeeks), 2)
+
+        $ratio = if ($departureRate -le 0) {
+            if ($arrivalRate -le 0) { 1.0 } else { 999.0 }
+        } else {
+            [Math]::Round(($arrivalRate / $departureRate), 2)
+        }
+
+        $transitionRateArrivals += $arrivalRate
+        $transitionRateDepartures += $departureRate
+        $transitionRateRatios += $ratio
+    }
+}
+
+$transitionRatesInsightText = if ($transitionRateTransitions.Count -eq 0) {
+    'Not enough board column transition data to compute transition rate ratios.'
+} else {
+    $rows = @()
+    for ($i = 0; $i -lt $transitionRateTransitions.Count; $i++) {
+        $rows += [PSCustomObject]@{
+            Transition = $transitionRateTransitions[$i]
+            Ratio = [double]$transitionRateRatios[$i]
+            Arrival = [double]$transitionRateArrivals[$i]
+            Departure = [double]$transitionRateDepartures[$i]
+        }
+    }
+
+    $building = @($rows | Where-Object { $_.Ratio -gt 1.2 } | Sort-Object -Property Ratio -Descending | Select-Object -First 2)
+    $draining = @($rows | Where-Object { $_.Ratio -lt 0.8 } | Sort-Object -Property Ratio | Select-Object -First 2)
+
+    $tailNote = ''
+    if ($transitionRateTransitions.Count -gt 0) {
+        $lastIdx = $transitionRateTransitions.Count - 1
+        $tailNote = " $($transitionRateTransitions[$lastIdx]): $($transitionRateArrivals[$lastIdx])/wk arriving, $($transitionRateDepartures[$lastIdx])/wk leaving (ratio $($transitionRateRatios[$lastIdx]))."
+    }
+
+    if ($building.Count -eq 0 -and $draining.Count -eq 0) {
+        'Most workflow steps look balanced (arrivals and departures are similar).' + $tailNote
+    } else {
+        $parts = @()
+        if ($building.Count -gt 0) {
+            $parts += ('Build-up at: ' + (($building | ForEach-Object { "$($_.Transition) (ratio $([Math]::Round($_.Ratio,2)))" }) -join '; '))
+        }
+        if ($draining.Count -gt 0) {
+            $parts += ('Draining at: ' + (($draining | ForEach-Object { "$($_.Transition) (ratio $([Math]::Round($_.Ratio,2)))" }) -join '; '))
+        }
+        ($parts -join '. ') + $tailNote
+    }
+}
+
 # Precompute insights for blocker charts (so they can be AI-overridden via JSON)
 $blockedTimelineTotals = @()
 for ($i = 0; $i -lt $timelineWeekKeys.Count; $i++) {
@@ -2451,10 +2593,10 @@ $dashboardData = @{
         }
         transitionRates = @{
             labels = @()
-            ratios = @()
-            arrivals = @()
-            departures = @()
-            transitions = $transitions
+            ratios = $transitionRateRatios
+            arrivals = $transitionRateArrivals
+            departures = $transitionRateDepartures
+            transitions = $transitionRateTransitions
         }
     }
     
@@ -2608,7 +2750,7 @@ $dashboardData = @{
         }
         blockedTimeline = $blockedTimelineInsightText
         blockerRates = $blockerRatesInsightText
-        transitionRates = "Transition analysis"
+        transitionRates = $transitionRatesInsightText
         bugDistribution = if ($activeBugs.Count -gt 0) {
             $totalBugs = $activeBugs.Count
             # Find column with most bugs

@@ -288,6 +288,7 @@ $dashboardData = Get-Content $dataPath -Raw | ConvertFrom-Json
 You need to analyze the following charts and generate brief, actionable insights (1-2 sentences each):
 
 - **cfd**: Use `metricDefinitions.leadTimeMethod` (+ `metricDefinitions.leadTimeStartColumn` when relevant) to state what counts as an arrival. Use `charts.cfd.arrivals` and `charts.cfd.departures` to estimate average arrivals/week and departures/week over the analysis period, and explain what that implies (growing / shrinking / stable) *and why*.
+- **transitionRates**: Use `charts.transitionRates.transitions`, `charts.transitionRates.ratios`, `charts.transitionRates.arrivals`, `charts.transitionRates.departures`. Call out the biggest build-up and/or drain, and include the absolute arrivals/week and departures/week (not just the ratio).
 - **throughput**: Look at `charts.throughput.weeklyCompletedCounts`, `summary.throughput`, coefficient of variation
 - **cycleTime**: Look at `charts.cycleTime.distribution`, `summary.cycleTime.median`, P50/P85/P95
 - **bugRate**: Look at `charts.bugRate.avgWIPBugRate`, `charts.bugRate.avgCompletionBugRate`, current bug count
@@ -317,6 +318,7 @@ $dashboardData.insights.staleWork = "{AI-generated insight}"
 $dashboardData.insights.blockedItems = "{AI-generated insight}"
 $dashboardData.insights.blockedTimeline = "{AI-generated insight}"
 $dashboardData.insights.blockerRates = "{AI-generated insight}"
+$dashboardData.insights.transitionRates = "{AI-generated insight}"
 $dashboardData.insights.bugDistribution = "{AI-generated insight}"
 
 # Save updated JSON
