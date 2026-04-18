@@ -2602,6 +2602,7 @@
                     cycleTime: Number(item.y),
                     leadTime: Number(item.leadTime),
                     type: dataset.label,
+                    workItemType: dataset.workItemType || item.workItemType || item.type || '',
                     columnTime: item.columnTime || {}
                 });
             });
@@ -2898,6 +2899,7 @@
                 .map(it => ({
                     id: it.id,
                     title: it.title,
+                    workItemType: it.workItemType || it.type || '',
                     value: Number(it[valueKey])
                 }))
                 .filter(it => it.id && Number.isFinite(it.value));
@@ -2915,10 +2917,14 @@
                 const rows = list.map(it => {
                     const url = getAdoWorkItemUrl(it.id);
                     const title = it.title ? escapeHtml(String(it.title)) : '';
+                    const style = getWorkItemTypeStyle(it.workItemType);
+                    const icon = style.iconUrl
+                        ? `<img src="${escapeHtml(style.iconUrl)}" alt="${escapeHtml(style.label)}" style="width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px;">`
+                        : `<span title="${escapeHtml(style.label)}" style="display:inline-flex; align-items:center; justify-content:center; width: 14px; height: 14px; border-radius: 3px; background: ${style.color}; color: #fff; font-size: 10px; font-weight: 800; margin-right: 6px; border: 1px solid rgba(255,255,255,0.35);">${escapeHtml(style.abbr)}</span>`;
                     return `
                         <div style="margin-bottom: 10px;">
                             <div style="font-weight: 600;">
-                                <a href="${url}" target="_blank" style="text-decoration: none;">#${it.id}</a>
+                                ${icon}<a href="${url}" target="_blank" style="text-decoration: none; font-weight: 700; color: ${style.color};">#${it.id}</a>
                                 <span style="color:#9ca3af; font-size: 12px; margin-left: 6px;">${it.value.toFixed(1)}%</span>
                             </div>
                             ${title ? `<div style="font-size: 12px; color:#4a5568;">${title}</div>` : ''}
@@ -2947,6 +2953,7 @@
                 .map(it => ({
                     id: it.id,
                     title: it.title,
+                    workItemType: it.workItemType || it.type || '',
                     value: Number(it[valueKey])
                 }))
                 .filter(it => it.id && Number.isFinite(it.value) && it.value >= 0);
@@ -2964,10 +2971,14 @@
                 const rows = list.map(it => {
                     const url = getAdoWorkItemUrl(it.id);
                     const title = it.title ? escapeHtml(String(it.title)) : '';
+                    const style = getWorkItemTypeStyle(it.workItemType);
+                    const icon = style.iconUrl
+                        ? `<img src="${escapeHtml(style.iconUrl)}" alt="${escapeHtml(style.label)}" style="width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px;">`
+                        : `<span title="${escapeHtml(style.label)}" style="display:inline-flex; align-items:center; justify-content:center; width: 14px; height: 14px; border-radius: 3px; background: ${style.color}; color: #fff; font-size: 10px; font-weight: 800; margin-right: 6px; border: 1px solid rgba(255,255,255,0.35);">${escapeHtml(style.abbr)}</span>`;
                     return `
                         <div style="margin-bottom: 10px;">
                             <div style="font-weight: 600;">
-                                <a href="${url}" target="_blank" style="text-decoration: none;">#${it.id}</a>
+                                ${icon}<a href="${url}" target="_blank" style="text-decoration: none; font-weight: 700; color: ${style.color};">#${it.id}</a>
                                 <span style="color:#9ca3af; font-size: 12px; margin-left: 6px;">${it.value.toFixed(1)}d</span>
                             </div>
                             ${title ? `<div style="font-size: 12px; color:#4a5568;">${title}</div>` : ''}
@@ -3490,13 +3501,13 @@
                 value: Number(i.backlogDelay) || 0,
                 id: i.id,
                 title: i.title,
-                type: i.type
+                workItemType: i.workItemType || i.type
             })),
             boardConfig.colors.waitingTime
         );
         renderTopBestWorstDays(
             'wseHistogramTopItems',
-            wseValidItems.map(i => ({ id: i.id, title: i.title, d: Number(i.backlogDelay) || 0 })),
+            wseValidItems.map(i => ({ id: i.id, title: i.title, workItemType: i.workItemType || i.type, d: Number(i.backlogDelay) || 0 })),
             'd'
         );
 
@@ -3513,13 +3524,13 @@
                 value: parseFloat(i.ctfeEfficiency),
                 id: i.id,
                 title: i.title,
-                type: i.type
+                workItemType: i.workItemType || i.type
             })),
             boardConfig.colors.activeTime
         );
         renderTopBestWorst(
             'ctfeHistogramTopItems',
-            ctfeItems.map(i => ({ id: i.id, title: i.title, eff: parseFloat(i.ctfeEfficiency) })),
+            ctfeItems.map(i => ({ id: i.id, title: i.title, workItemType: i.workItemType || i.type, eff: parseFloat(i.ctfeEfficiency) })),
             'eff'
         );
 
@@ -3542,13 +3553,13 @@
                 value: parseFloat(i.ltfeEfficiency),
                 id: i.id,
                 title: i.title,
-                type: i.type
+                workItemType: i.workItemType || i.type
             })),
             boardConfig.colors.leadTimeActiveTime
         );
         renderTopBestWorst(
             'ltfeHistogramTopItems',
-            ltfeItems.map(i => ({ id: i.id, title: i.title, eff: parseFloat(i.ltfeEfficiency) })),
+            ltfeItems.map(i => ({ id: i.id, title: i.title, workItemType: i.workItemType || i.type, eff: parseFloat(i.ltfeEfficiency) })),
             'eff'
         );
 
