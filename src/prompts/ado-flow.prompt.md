@@ -225,6 +225,42 @@ cd src\scripts
 #   -LeadTimeStartColumn "{leadTimeStartColumn}"
 ```
 
+### Step 5.6: Confirm working vs waiting columns (Efficiency tab)
+
+The Efficiency tab needs to know which in-progress columns count as:
+- **Working (active)**: time where work is actively happening
+- **Waiting**: queued time between stages (often "Ready for X")
+
+If a configuration file exists, infer defaults from `config.columns.inProgress`:
+- Waiting columns: names containing "Ready", "Waiting", "Queue", "On Hold", "Blocked" (case-insensitive)
+- Working columns: the remaining in-progress columns
+
+Ask the user:
+
+"For flow efficiency, I need to split your in-progress columns into:
+
+- Working (active)
+- Waiting (queued)
+
+My suggested split is:
+
+- Working: {suggestedWorking}
+- Waiting: {suggestedWaiting}
+
+Reply with:
+- `ok` to accept, or
+- `working: col1, col2` and/or `waiting: col3, col4` to override"
+
+Store the results as:
+- `$effActive = @('...')`
+- `$effWaiting = @('...')`
+
+Pass them to the generator:
+
+```powershell
+-EfficiencyActiveColumns $effActive -EfficiencyWaitingColumns $effWaiting
+```
+
 **Example with configuration:**
 ```powershell
 cd src\scripts

@@ -76,6 +76,19 @@ param(
 
     [Parameter(Mandatory = $false)]
     [string]$LeadTimeStartColumn
+
+    ,
+    [Parameter(Mandatory = $false)]
+    [string[]]$EfficiencyActiveColumns,
+
+    [Parameter(Mandatory = $false)]
+    [string[]]$EfficiencyWaitingColumns,
+
+    [Parameter(Mandatory = $false)]
+    [string[]]$EfficiencyBeforeWorkflowColumns,
+
+    [Parameter(Mandatory = $false)]
+    [string[]]$EfficiencyAfterWorkflowColumns
 )
 
 $ErrorActionPreference = "Stop"
@@ -185,6 +198,19 @@ if ($LeadTimeStartType) {
 }
 if ($LeadTimeStartColumn) {
     $buildParams['LeadTimeStartColumn'] = $LeadTimeStartColumn
+}
+
+if ($EfficiencyActiveColumns) {
+    $buildParams['EfficiencyActiveColumns'] = $EfficiencyActiveColumns
+}
+if ($EfficiencyWaitingColumns) {
+    $buildParams['EfficiencyWaitingColumns'] = $EfficiencyWaitingColumns
+}
+if ($EfficiencyBeforeWorkflowColumns) {
+    $buildParams['EfficiencyBeforeWorkflowColumns'] = $EfficiencyBeforeWorkflowColumns
+}
+if ($EfficiencyAfterWorkflowColumns) {
+    $buildParams['EfficiencyAfterWorkflowColumns'] = $EfficiencyAfterWorkflowColumns
 }
 & (Join-Path $PSScriptRoot "Build-DashboardData.ps1") @buildParams
 

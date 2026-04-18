@@ -30,7 +30,19 @@ param(
     [string]$LeadTimeStartType,
 
     [Parameter(Mandatory = $false)]
-    [string]$LeadTimeStartColumn
+    [string]$LeadTimeStartColumn,
+
+    [Parameter(Mandatory = $false)]
+    [string[]]$EfficiencyActiveColumns,
+
+    [Parameter(Mandatory = $false)]
+    [string[]]$EfficiencyWaitingColumns,
+
+    [Parameter(Mandatory = $false)]
+    [string[]]$EfficiencyBeforeWorkflowColumns,
+
+    [Parameter(Mandatory = $false)]
+    [string[]]$EfficiencyAfterWorkflowColumns
 )
 
 Write-Host "Building dashboard data structure..." -ForegroundColor Yellow
@@ -2179,6 +2191,85 @@ $blockedTrend = if ($netBlocked -gt 0) {
     @{ direction = 'stable'; isGood = $true }
 }
 
+# Efficiency column mapping (working vs waiting)
+$effSource = 'heuristic'
+
+$cfgBefore = if ($config -and $config.columns -and $config.columns.backlog) { @($config.columns.backlog) } else { @() }
+$cfgInProgress = if ($config -and $config.columns -and $config.columns.inProgress) { @($config.columns.inProgress) } else { @() }
+$cfgAfter = if ($config -and $config.columns -and $config.columns.done) { @($config.columns.done) } else { @('Closed', 'Done') }
+
+$effBefore = if ($EfficiencyBeforeWorkflowColumns -and $EfficiencyBeforeWorkflowColumns.Count -gt 0) {
+    $effSource = 'override'
+    @($EfficiencyBeforeWorkflowColumns)
+} elseif ($config -and $config.metrics -and $config.metrics.efficiency -and $config.metrics.efficiency.beforeWorkflowColumns) {
+    $effSource = 'config'
+    @($config.metrics.efficiency.beforeWorkflowColumns)
+} elseif ($cfgBefore.Count -gt 0) {
+    @($cfgBefore)
+} else {
+    @()
+}
+
+$effAfter = if ($EfficiencyAfterWorkflowColumns -and $EfficiencyAfterWorkflowColumns.Count -gt 0) {
+    $effSource = 'override'
+    @($EfficiencyAfterWorkflowColumns)
+} elseif ($config -and $config.metrics -and $config.metrics.efficiency -and $config.metrics.efficiency.afterWorkflowColumns) {
+    $effSource = 'config'
+    @($config.metrics.efficiency.afterWorkflowColumns)
+} elseif ($cfgAfter.Count -gt 0) {
+    @($cfgAfter)
+} else {
+    @('Closed', 'Done', 'Removed')
+}
+
+$effActive = @()
+$effWaiting = @()
+
+if ($EfficiencyActiveColumns -and $EfficiencyActiveColumns.Count -gt 0) {
+    $effSource = 'override'
+    $effActive = @($EfficiencyActiveColumns)
+}
+if ($EfficiencyWaitingColumns -and $EfficiencyWaitingColumns.Count -gt 0) {
+    $effSource = 'override'
+    $effWaiting = @($EfficiencyWaitingColumns)
+}
+
+if ($effActive.Count -eq 0 -and $config -and $config.metrics -and $config.metrics.efficiency -and $config.metrics.efficiency.activeColumns) {
+    $effSource = 'config'
+    $effActive = @($config.metrics.efficiency.activeColumns)
+}
+if ($effWaiting.Count -eq 0 -and $config -and $config.metrics -and $config.metrics.efficiency -and $config.metrics.efficiency.waitingColumns) {
+    $effSource = 'config'
+    $effWaiting = @($config.metrics.efficiency.waitingColumns)
+}
+
+if ($effActive.Count -eq 0 -and $effWaiting.Count -eq 0) {
+    # Heuristic split of in-progress columns: "Ready/Waiting/Queue" => waiting, otherwise active
+    $waitingRegex = '(?i)\bready\b|\bwaiting\b|\bqueue\b|\bon hold\b|\bblocked\b'
+    foreach ($col in $cfgInProgress) {
+        if ([string]::IsNullOrWhiteSpace($col)) { continue }
+        if ($col -match $waitingRegex) {
+            $effWaiting += $col
+        } else {
+            $effActive += $col
+        }
+    }
+}
+
+# Normalise and de-duplicate
+$effActive = @($effActive | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+$effWaiting = @($effWaiting | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+$effBefore = @($effBefore | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+$effAfter = @($effAfter | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+
+$efficiencyMapping = @{
+    source = $effSource
+    activeColumns = $effActive
+    waitingColumns = $effWaiting
+    beforeWorkflowColumns = $effBefore
+    afterWorkflowColumns = $effAfter
+}
+
 # Cumulative Flow Diagram (whole board): arrivals vs departures over time
 # Arrivals uses the same start-point choice as lead time (creation / board entry / specific column)
 # Departures = ClosedDate
@@ -2395,6 +2486,7 @@ $dashboardData = @{
         }
         columns = if ($config -and $config.columns) { $config.columns } else { $null }
         states = if ($config -and $config.states) { $config.states } else { $null }
+        efficiency = $efficiencyMapping
         dataQuality = @{
             warningThresholdPercent = 10
             policy = 'No guessing. If required data is missing, the item is excluded and counted here.'

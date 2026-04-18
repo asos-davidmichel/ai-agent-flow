@@ -611,6 +611,31 @@
                     </div>
                 </div>
 
+                <!-- Efficiency column mapping -->
+                <div style="background: #f7fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 25px; margin-bottom: 30px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);">
+                    <h2 style="margin: 0 0 15px 0; font-size: 20px; font-weight: 700; color: #2d3748;">⚡ Efficiency columns</h2>
+                    <p style="margin: 0 0 20px 0; font-size: 14px; color: #4a5568;">Columns used for flow efficiency calculations.</p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
+                            <div style="font-weight: 700; margin-bottom: 8px;">Working (active)</div>
+                            <div id="effActiveColumnsList" style="font-size: 13px; line-height: 1.6; color: #4a5568;"></div>
+                        </div>
+                        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
+                            <div style="font-weight: 700; margin-bottom: 8px;">Waiting (within workflow)</div>
+                            <div id="effWaitingColumnsList" style="font-size: 13px; line-height: 1.6; color: #4a5568;"></div>
+                        </div>
+                        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
+                            <div style="font-weight: 700; margin-bottom: 8px;">Before workflow</div>
+                            <div id="effBeforeColumnsList" style="font-size: 13px; line-height: 1.6; color: #4a5568;"></div>
+                        </div>
+                        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
+                            <div style="font-weight: 700; margin-bottom: 8px;">After workflow</div>
+                            <div id="effAfterColumnsList" style="font-size: 13px; line-height: 1.6; color: #4a5568;"></div>
+                        </div>
+                    </div>
+                    <div id="effSource" style="margin-top: 12px; font-size: 12px; color: #718096;"></div>
+                </div>
+
                 <!-- Blocker detection rules -->
                 <div style="background: #f7fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 25px; margin-bottom: 30px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);">
                     <h2 style="margin: 0 0 15px 0; font-size: 20px; font-weight: 700; color: #2d3748;">🧱 Blocker detection rules</h2>
@@ -1089,49 +1114,39 @@
         }
 
         // ===== BOARD CONFIGURATION =====
-        // CUSTOMIZE THESE SETTINGS FOR YOUR AZURE DEVOPS BOARD
-        // This configuration determines how cycle time is measured and which columns count as active work
+        // Prefer generator-provided mapping; fall back to template defaults for older dashboards.
+        const efficiencyCfg = (dashboardData.configuration && dashboardData.configuration.efficiency)
+            ? dashboardData.configuration.efficiency
+            : null;
+
         const boardConfig = {
-            // WORKFLOW COLUMN DEFINITIONS
-            // Cycle time starts from the FIRST ACTIVE COLUMN (when work actually begins)
-            
-            // ACTIVE columns: Work is actively being done (In Development, In Review, QA, etc.)
-            activeColumns: ['In Development', 'In Review', 'External Review', 'QA'],
-            
-            // WAITING columns: Work is queued between active stages (Ready for QA, Ready for Release)
-            // These are WITHIN the workflow (after cycle time starts)
-            waitingColumns: ['Ready for QA', 'Ready for Release', 'Ready for release'],
-            
-            // BEFORE WORKFLOW columns: Pre-workflow states before cycle time starts (New, Ready for Dev, etc.)
-            beforeWorkflowColumns: ['New', 'Ready for Dev'],
-            
-            // AFTER WORKFLOW columns: Work is completed (Closed, Done, Removed)
-            afterWorkflowColumns: ['Closed', 'Done', 'Removed'],
-            
-            // COLUMN ICONS for tooltips and visualizations
-            columnIcons: {
-                'New': '⊗',                    // BEFORE WORKFLOW
-                'Ready for Dev': '⊗',          // BEFORE WORKFLOW (cycle time starts from In Development)
-                'In Development': '✓',         // ACTIVE
-                'In Review': '✓',              // ACTIVE
-                'External Review': '✓',        // ACTIVE
-                'Ready for QA': '⏸',           // WAITING (within workflow)
-                'QA': '✓',                     // ACTIVE
-                'Ready for Release': '⏸',     // WAITING (within workflow)
-                'Ready for release': '⏸',     // WAITING (within workflow - ADO case variant)
-                'Closed': '⊗',                 // AFTER WORKFLOW
-                'Done': '⊗'                    // AFTER WORKFLOW
-            },
-            
-            // CHART COLORS
+            activeColumns: (efficiencyCfg && Array.isArray(efficiencyCfg.activeColumns) && efficiencyCfg.activeColumns.length > 0)
+                ? efficiencyCfg.activeColumns
+                : ['In Development', 'In Review', 'External Review', 'QA'],
+            waitingColumns: (efficiencyCfg && Array.isArray(efficiencyCfg.waitingColumns))
+                ? efficiencyCfg.waitingColumns
+                : ['Ready for QA', 'Ready for Release', 'Ready for release'],
+            beforeWorkflowColumns: (efficiencyCfg && Array.isArray(efficiencyCfg.beforeWorkflowColumns))
+                ? efficiencyCfg.beforeWorkflowColumns
+                : ['New', 'Ready for Dev'],
+            afterWorkflowColumns: (efficiencyCfg && Array.isArray(efficiencyCfg.afterWorkflowColumns))
+                ? efficiencyCfg.afterWorkflowColumns
+                : ['Closed', 'Done', 'Removed'],
+            columnIcons: {},
             colors: {
-                activeTime: '#10b981',         // Green for active work
-                cycleTime: '#3b82f6',          // Blue for cycle time
-                leadTimeActiveTime: '#8b5cf6', // Purple/Violet for lead time flow active
-                waitingTime: '#94a3b8',        // Gray for waiting/backlog/non-active time
-                throughput: '#3b82f6'          // Blue for throughput
+                activeTime: '#10b981',
+                cycleTime: '#3b82f6',
+                leadTimeActiveTime: '#8b5cf6',
+                waitingTime: '#94a3b8',
+                throughput: '#3b82f6'
             }
         };
+
+        // Build column icons from the mapping (keeps tooltips consistent)
+        boardConfig.beforeWorkflowColumns.forEach(c => { if (c) boardConfig.columnIcons[c] = '⊗'; });
+        boardConfig.afterWorkflowColumns.forEach(c => { if (c) boardConfig.columnIcons[c] = '⊗'; });
+        boardConfig.waitingColumns.forEach(c => { if (c) boardConfig.columnIcons[c] = '⏸'; });
+        boardConfig.activeColumns.forEach(c => { if (c) boardConfig.columnIcons[c] = '✓'; });
         
         // HOW TO CUSTOMIZE FOR YOUR BOARD:
         // 1. Review your Azure DevOps board columns
@@ -1146,8 +1161,6 @@
         // 4. Update the arrays above with your column names (case-sensitive!)
         // 5. Update column icons if desired
         
-        // IMPORTANT: The Fix-CycleTimesFromColumnTime.ps1 script uses the same column definitions
-        // Make sure to update that script's column arrays to match this configuration
         // ===== END BOARD CONFIGURATION =====
         
         // Helper functions to generate dynamic labels from boardConfig
@@ -1434,6 +1447,32 @@
         document.getElementById('configDoneColumnsList').innerHTML = doneCols.length > 0
             ? doneCols.map(c => `• ${escapeHtml(c)}`).join('<br>')
             : '<span style="color: #718096;">(not provided)</span>';
+
+        // Efficiency columns (from generator)
+        const eff = configSummary && configSummary.efficiency ? configSummary.efficiency : null;
+        const effActiveEl = document.getElementById('effActiveColumnsList');
+        const effWaitingEl = document.getElementById('effWaitingColumnsList');
+        const effBeforeEl = document.getElementById('effBeforeColumnsList');
+        const effAfterEl = document.getElementById('effAfterColumnsList');
+        const effSourceEl = document.getElementById('effSource');
+
+        function renderEffList(el, arr) {
+            if (!el) return;
+            const items = Array.isArray(arr) ? arr.filter(Boolean) : [];
+            el.innerHTML = items.length > 0
+                ? items.map(c => `• ${escapeHtml(c)}`).join('<br>')
+                : '<span style="color: #718096;">(not provided)</span>';
+        }
+
+        renderEffList(effActiveEl, eff ? eff.activeColumns : null);
+        renderEffList(effWaitingEl, eff ? eff.waitingColumns : null);
+        renderEffList(effBeforeEl, eff ? eff.beforeWorkflowColumns : null);
+        renderEffList(effAfterEl, eff ? eff.afterWorkflowColumns : null);
+
+        if (effSourceEl) {
+            const source = eff && eff.source ? eff.source : 'unknown';
+            effSourceEl.textContent = `Source: ${source}`;
+        }
 
         // Blocker detection rules (from config)
         const cfgBlockers = configSummary && configSummary.blockers ? configSummary.blockers : null;
