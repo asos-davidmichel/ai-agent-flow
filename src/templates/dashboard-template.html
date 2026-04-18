@@ -1881,15 +1881,56 @@
 
             // Axis/value info first
             const axisLines = [];
-            const titleText = normalizeLine(rawTitleText);
-            if (titleText) axisLines.push(titleText);
-            rawBodyLines.forEach(l => {
-                const nl = normalizeLine(l);
-                if (!nl) return;
-                // If we’re going to show linked items, avoid repeating their title/id in the axis section
-                if (hasAnyItems && /^title\s*:/i.test(nl)) return;
-                axisLines.push(nl);
-            });
+
+            const isMultiDirect = hasDirectWorkItem && uniqueItems.length > 1;
+            if (isMultiDirect) {
+                const xTitle = (context && context.chart && context.chart.options && context.chart.options.scales && context.chart.options.scales.x && context.chart.options.scales.x.title)
+                    ? context.chart.options.scales.x.title.text
+                    : 'X';
+                const yTitle = (context && context.chart && context.chart.options && context.chart.options.scales && context.chart.options.scales.y && context.chart.options.scales.y.title)
+                    ? context.chart.options.scales.y.title.text
+                    : 'Y';
+
+                const xVals = (dataPoints || [])
+                    .map(dp => (dp && dp.label) ? String(dp.label) : (dp && dp.raw && dp.raw.x ? String(dp.raw.x) : ''))
+                    .filter(Boolean);
+                const xUnique = Array.from(new Set(xVals));
+                if (xUnique.length === 1) {
+                    axisLines.push(`${xTitle}: ${xUnique[0]}`);
+                } else if (xUnique.length > 1) {
+                    axisLines.push(`${xTitle}: ${xUnique.length} values`);
+                }
+
+                const yVals = (dataPoints || [])
+                    .map(dp => {
+                        const raw = dp && dp.raw;
+                        if (raw && typeof raw === 'object' && Number.isFinite(Number(raw.y))) return Number(raw.y);
+                        if (dp && dp.parsed && Number.isFinite(Number(dp.parsed.y))) return Number(dp.parsed.y);
+                        return null;
+                    })
+                    .filter(v => Number.isFinite(v));
+
+                if (yVals.length > 0) {
+                    const yMin = Math.min(...yVals);
+                    const yMax = Math.max(...yVals);
+                    const yText = (yMin === yMax)
+                        ? formatDurationDaysHuman(yMin)
+                        : `${formatDurationDaysHuman(yMin)} – ${formatDurationDaysHuman(yMax)}`;
+                    axisLines.push(`${yTitle}: ${yText}`);
+                }
+
+                axisLines.push(`Items: ${uniqueItems.length}`);
+            } else {
+                const titleText = normalizeLine(rawTitleText);
+                if (titleText) axisLines.push(titleText);
+                rawBodyLines.forEach(l => {
+                    const nl = normalizeLine(l);
+                    if (!nl) return;
+                    // If we’re going to show linked items, avoid repeating their title/id in the axis section
+                    if (hasAnyItems && /^title\s*:/i.test(nl)) return;
+                    axisLines.push(nl);
+                });
+            }
 
             let contentHtml = '';
             if (axisLines.length > 0) {
