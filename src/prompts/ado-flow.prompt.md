@@ -92,12 +92,24 @@ After running setup, restart VS Code and try again.
 
 **CRITICAL: Never skip this step. Always run the interactive configuration workflow.**
 
-The configuration workflow must ask the user to specify:
-1. **Column mappings** (backlog, in-progress, done)
-2. **Cycle time boundaries** (which column starts "active work")
-3. **Lead time measurement** (creation date, board entry, or backlog exit)
+The configuration workflow must discover and ask the user to specify:
+1. **Blocked item patterns** - Run #ado-blocked analysis first to discover how blocked work is reported
+2. **Column mappings** (backlog, in-progress, done)
+3. **Cycle time boundaries** (which column starts "active work")
+4. **Lead time measurement** (creation date, board entry, or backlog exit)
 
-**Always run the interactive configuration script:**
+**Step 4.5a: Discover blocked item patterns (FIRST)**
+
+Before configuring anything else, run the ado-blocked analysis to discover how this board reports blocked work:
+
+```
+#ado-blocked {board-url}
+```
+
+This will analyze actual work items and report only the patterns observed in use (tags, states, columns, etc.).
+Use the findings to configure blocked item handling in the next step.
+
+**Step 4.5b: Run board configuration script**
 
 ```powershell
 cd src\scripts
@@ -113,25 +125,22 @@ This script will:
    - Which columns are backlog vs in-progress vs done
    - Where cycle time starts (e.g., "In Development")
    - How to measure lead time (creation, board entry, or specific column)
-   - Blocked items will be discovered automatically during analysis
+   - Blocked item patterns (based on ado-blocked findings)
 3. Save the configuration to: `output/analysis-YYYY-MM-DD/config/{org}-{project}-{team}.json`
 
 **DO NOT:**
-- ÃƒÂ¢Ã‚ÂÃ…â€™ Auto-copy example configs without user input
-- ÃƒÂ¢Ã‚ÂÃ…â€™ Skip configuration if a file exists from a previous run
-- ÃƒÂ¢Ã‚ÂÃ…â€™ Use default values without asking
-- ÃƒÂ¢Ã‚ÂÃ…â€™ Assume configuration settings
+- ❌ Auto-copy example configs without user input
+- ❌ Skip configuration if a file exists from a previous run
+- ❌ Use default values without asking
+- ❌ Assume configuration settings
 
 **ALWAYS:**
-- ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Run the discovery script every time
-- ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Let the user interactively answer all configuration questions
-- ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Wait for the script to complete and save the configuration
-- ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Use the saved configuration file path in Step 5
+- ✅ Run the discovery script every time
+- ✅ Let the user interactively answer all configuration questions
+- ✅ Wait for the script to complete and save the configuration
+- ✅ Use the saved configuration file path in Step 5
 
 Once configuration is complete, the script will output the config file path. Set `` to this path and proceed to Step 5.
-### Step 5: Run the dashboard generation script
-
-Since board configuration is required (Step 4.5), we always use the configuration file.
 
 Navigate to the src\scripts folder and run the Generate-FlowDashboard.ps1 script:
 
