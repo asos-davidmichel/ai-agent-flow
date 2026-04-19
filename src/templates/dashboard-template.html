@@ -1765,7 +1765,7 @@
             }).filter(Boolean).join('');
 
             const more = extraCount > 0
-                ? `<div style="color:#9ca3af; font-size: 12px; margin-top: 6px;">+${extraCount} more</div>`
+                ? `<div style="color:#9ca3af; font-size: 12px; margin-top: 6px;">More items not shown</div>`
                 : '';
 
             return rows + more;
@@ -1917,7 +1917,6 @@
                     axisLines.push(`${yTitle}: ${yText}`);
                 }
 
-                axisLines.push(`Items: ${uniqueItems.length}`);
             } else {
                 const titleText = normalizeLine(rawTitleText);
                 if (titleText) axisLines.push(titleText);
