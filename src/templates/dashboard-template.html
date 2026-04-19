@@ -908,6 +908,7 @@
                 <div class="chart-container">
                     <canvas id="wipChart"></canvas>
                 </div>
+                <div id="wipTypeToggles" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;"></div>
                 <div class="insight-box" id="wipInsight"></div>
             </div>
 
@@ -983,6 +984,7 @@
                     Currently blocked items sorted by how long they've been blocked.<br>
                     Prioritize unblocking these items over starting new work.
                 </p>
+                <div id="currentBlockedItemsCategoryLegend" style="margin: 0 0 10px 0;"></div>
                 <div class="chart-container">
                     <canvas id="currentBlockedItemsChart"></canvas>
                 </div>
@@ -4735,6 +4737,90 @@
                     borderWidth: 2
                 }];
 
+            const renderWipTypeToggles = (chart) => {
+                const el = document.getElementById('wipTypeToggles');
+                if (!el) return;
+
+                if (!showLegend) {
+                    el.innerHTML = '';
+                    return;
+                }
+
+                const visibleTypes = chart.data.datasets
+                    .map((ds, idx) => ({ type: ds.label, visible: chart.isDatasetVisible(idx) }))
+                    .filter(x => x.visible)
+                    .map(x => x.type);
+
+                const measureTextWidth = (text) => {
+                    try {
+                        const c = document.createElement('canvas');
+                        const ctx = c.getContext('2d');
+                        if (!ctx) return 0;
+                        ctx.font = '600 12px sans-serif';
+                        return ctx.measureText(String(text || '')).width || 0;
+                    } catch {
+                        return 0;
+                    }
+                };
+
+                const maxLabelW = presentTypes.reduce((m, t) => Math.max(m, measureTextWidth(t)), 0);
+                const chipMinWidth = Math.ceil(20 + 10 + 6 + maxLabelW);
+
+                const parts = presentTypes.map(t => {
+                    const style = getWorkItemTypeStyle(t);
+                    const color = (style && style.color) ? style.color : (legendColorByType[t] || '#9ca3af');
+                    const isOn = visibleTypes.includes(t);
+                    const border = isOn ? darkenHexColor(color, 0.18) : '#e5e7eb';
+                    const opacity = isOn ? 1 : 0.35;
+
+                    return (
+                        `<button type="button" data-wiptype="${escapeHtml(t)}" style="display:inline-flex; align-items:center; gap:6px; height:28px; padding:0 10px; min-width:${chipMinWidth}px; justify-content:center; border-radius:9999px; border:1px solid ${border}; background:#fff; cursor:pointer; opacity:${opacity}; box-sizing:border-box; white-space:nowrap;">` +
+                        `<span style="width:10px; height:10px; border-radius:9999px; background:${color}; border:1px solid ${darkenHexColor(color, 0.18)};"></span>` +
+                        `<span style="color:#4b5563; font-size:12px; font-weight:600;">${escapeHtml(t)}</span>` +
+                        `</button>`
+                    );
+                });
+
+                el.innerHTML = parts.join('');
+
+                el.querySelectorAll('button[data-wiptype]').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const t = btn.getAttribute('data-wiptype');
+                        if (!t) return;
+
+                        // Toggle dataset visibility for the type
+                        const idx = chart.data.datasets.findIndex(ds => ds.label === t);
+                        if (idx < 0) return;
+                        const isVisible = chart.isDatasetVisible(idx);
+
+                        // Keep at least one type enabled
+                        const visibleCount = chart.data.datasets.reduce((cnt, ds, i) => cnt + (chart.isDatasetVisible(i) ? 1 : 0), 0);
+                        if (isVisible && visibleCount <= 1) return;
+
+                        chart.setDatasetVisibility(idx, !isVisible);
+
+                        const nextVisibleTypes = chart.data.datasets
+                            .map((ds, i) => ({ t: ds.label, v: chart.isDatasetVisible(i) }))
+                            .filter(x => x.v)
+                            .map(x => x.t);
+
+                        const filteredItems = fullItems.filter(item => nextVisibleTypes.includes(item.type));
+                        currentItems = filteredItems.slice();
+
+                        chart.data.labels = filteredItems.map(item => item.label);
+                        chart.data.datasets.forEach((ds) => {
+                            const tt = ds.label;
+                            ds.data = filteredItems.map(item => (item.type === tt) ? buildPointFromItem(item) : buildPointFromItem(item, 0));
+                            ds.backgroundColor = filteredItems.map(item => (item.type === tt) ? (item.color || '#9ca3af') : 'rgba(0,0,0,0)');
+                            ds.borderColor = filteredItems.map(item => (item.type === tt) ? '#fff' : 'rgba(0,0,0,0)');
+                        });
+
+                        chart.update();
+                        renderWipTypeToggles(chart);
+                    });
+                });
+            };
+
             const wipChart = new Chart(document.getElementById('wipChart'), {
                 type: 'bar',
                 data: {
@@ -4747,7 +4833,7 @@
                     maintainAspectRatio: false,
                     plugins: {
                         legend: {
-                            display: showLegend,
+                            display: false,
                             position: 'top',
                             labels: {
                                 generateLabels: function(chart) {
@@ -4851,6 +4937,9 @@
                     }
                 }
             });
+
+            // External type toggles (instead of legend)
+            renderWipTypeToggles(wipChart);
         }
 
         // Bug Rate Trend Chart (WIP + Completion)
@@ -5406,11 +5495,27 @@
             let filteredDetails = applyFilters(details);
 
             // Build a legend: type toggles (colour-coded by work item type), plus category toggles (colour-coded by category)
-            const legendEl = document.getElementById('currentBlockedItemsLegend');
-            if (legendEl) {
+            const typeLegendEl = document.getElementById('currentBlockedItemsLegend');
+            const categoryLegendEl = document.getElementById('currentBlockedItemsCategoryLegend');
+            if (typeLegendEl || categoryLegendEl) {
                 const categoryConfig = (dashboardData.charts.blockedItems.current.categories || {});
                 const presentKeys = new Set(details.map(d => d.category).filter(Boolean));
                 const renderLegend = () => {
+                    // Make all chips the same visual size by computing a shared min-width
+                    // based on the longest label we render.
+                    const labelFont = '600 12px sans-serif';
+                    const measureTextWidth = (text) => {
+                        try {
+                            const c = document.createElement('canvas');
+                            const ctx = c.getContext('2d');
+                            if (!ctx) return 0;
+                            ctx.font = labelFont;
+                            return ctx.measureText(String(text || '')).width || 0;
+                        } catch {
+                            return 0;
+                        }
+                    };
+
                     const typeParts = [];
                     if (presentTypeKeys.length > 1) {
                         for (const k of presentTypeKeys) {
@@ -5421,7 +5526,7 @@
                             const border = isOn ? darkenHexColor(color, 0.18) : '#e5e7eb';
                             const opacity = isOn ? 1 : 0.35;
                             typeParts.push(
-                                `<button type="button" data-typekey="${escapeHtml(k)}" style="display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:9999px; border:1px solid ${border}; background:#fff; cursor:pointer; opacity:${opacity};">` +
+                                `<button type="button" data-typekey="${escapeHtml(k)}" data-chiplabel="${escapeHtml(k)}" style="display:inline-flex; align-items:center; gap:6px; height:28px; padding:0 10px; border-radius:9999px; border:1px solid ${border}; background:#fff; cursor:pointer; opacity:${opacity}; box-sizing:border-box; white-space:nowrap;">` +
                                 `<span style="width:10px; height:10px; border-radius:9999px; background:${color}; border:1px solid ${darkenHexColor(color, 0.18)};"></span>` +
                                 `<span style="color:#4b5563; font-size:12px; font-weight:600;">${escapeHtml(k)}</span>` +
                                 `</button>`
@@ -5440,59 +5545,81 @@
                             const label = cfg.label || key;
                             const color = cfg.color || '#3b82f6';
                             const isOn = visibleCategoryKeys.has(key);
-                            const border = isOn ? darkenHexColor(color, 0.18) : '#e5e7eb';
                             const opacity = isOn ? 1 : 0.35;
+                            const borderColor = darkenHexColor(color, 0.18);
+                            const textDeco = isOn ? 'none' : 'line-through';
+
+                            // Match the Chart.js legend look used elsewhere (swatch + label)
                             categoryParts.push(
-                                `<button type="button" data-catkey="${escapeHtml(key)}" style="display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:9999px; border:1px solid ${border}; background:#fff; cursor:pointer; opacity:${opacity};">` +
-                                `<span style="width:10px; height:10px; border-radius:9999px; background:${color}; border:1px solid ${darkenHexColor(color, 0.18)};"></span>` +
-                                `<span style="color:#4b5563; font-size:12px; font-weight:600;">${escapeHtml(label)}</span>` +
+                                `<button type="button" data-catkey="${escapeHtml(key)}" style="display:inline-flex; align-items:center; gap:8px; padding:2px 4px; border:none; background:transparent; cursor:pointer; opacity:${opacity};">` +
+                                `<span style="width:32px; height:12px; border-radius:2px; background:${color}; border:1px solid ${borderColor}; box-sizing:border-box; flex:0 0 auto;"></span>` +
+                                `<span style="color:#4a5568; font-size:12px; font-weight:600; line-height:1; text-decoration:${textDeco};">${escapeHtml(label)}</span>` +
                                 `</button>`
                             );
                         }
                     }
 
+                    const typeChipLabels = (typeParts.length ? presentTypeKeys : []);
+                    const maxLabelW = typeChipLabels.reduce((m, t) => Math.max(m, measureTextWidth(t)), 0);
+                    // min-width = padding(20) + dot(10) + gap(6) + text
+                    const chipMinWidth = Math.ceil(20 + 10 + 6 + maxLabelW);
+
                     const typeRow = typeParts.length ? `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px;">${typeParts.join('')}</div>` : '';
-                    const catRow = categoryParts.length ? `<div style="display:flex; flex-wrap:wrap; gap:8px;">${categoryParts.join('')}</div>` : '';
-                    legendEl.innerHTML = `${typeRow}${catRow}`;
+                    const catRow = categoryParts.length ? `<div style="display:flex; width:100%; flex-wrap:wrap; gap:16px; justify-content:center; align-items:center;">${categoryParts.join('')}</div>` : '';
 
-                    // Wire up toggle handlers
-                    if (typeParts.length) {
-                        legendEl.querySelectorAll('button[data-typekey]').forEach(btn => {
-                            btn.addEventListener('click', () => {
-                                const k = btn.getAttribute('data-typekey');
-                                if (!k) return;
-                                if (visibleTypeKeys.has(k)) {
-                                    // Keep at least one enabled
-                                    if (visibleTypeKeys.size <= 1) return;
-                                    visibleTypeKeys.delete(k);
-                                } else {
-                                    visibleTypeKeys.add(k);
-                                }
+                    // Render type chips below the chart
+                    if (typeLegendEl) {
+                        typeLegendEl.innerHTML = typeRow;
 
-                                filteredDetails = applyFilters(details);
-                                updateBlockedChart();
-                                renderLegend();
-                            });
+                        // Apply consistent min-width to all type chips
+                        typeLegendEl.querySelectorAll('button[data-typekey]').forEach(btn => {
+                            btn.style.minWidth = `${chipMinWidth}px`;
+                            btn.style.justifyContent = 'center';
                         });
+
+                        if (typeParts.length) {
+                            typeLegendEl.querySelectorAll('button[data-typekey]').forEach(btn => {
+                                btn.addEventListener('click', () => {
+                                    const k = btn.getAttribute('data-typekey');
+                                    if (!k) return;
+                                    if (visibleTypeKeys.has(k)) {
+                                        // Keep at least one enabled
+                                        if (visibleTypeKeys.size <= 1) return;
+                                        visibleTypeKeys.delete(k);
+                                    } else {
+                                        visibleTypeKeys.add(k);
+                                    }
+
+                                    filteredDetails = applyFilters(details);
+                                    updateBlockedChart();
+                                    renderLegend();
+                                });
+                            });
+                        }
                     }
 
-                    if (categoryParts.length) {
-                        legendEl.querySelectorAll('button[data-catkey]').forEach(btn => {
-                            btn.addEventListener('click', () => {
-                                const k = btn.getAttribute('data-catkey');
-                                if (!k) return;
-                                if (visibleCategoryKeys.has(k)) {
-                                    if (visibleCategoryKeys.size <= 1) return;
-                                    visibleCategoryKeys.delete(k);
-                                } else {
-                                    visibleCategoryKeys.add(k);
-                                }
+                    // Render category legend above the chart
+                    if (categoryLegendEl) {
+                        categoryLegendEl.innerHTML = catRow;
 
-                                filteredDetails = applyFilters(details);
-                                updateBlockedChart();
-                                renderLegend();
+                        if (categoryParts.length) {
+                            categoryLegendEl.querySelectorAll('button[data-catkey]').forEach(btn => {
+                                btn.addEventListener('click', () => {
+                                    const k = btn.getAttribute('data-catkey');
+                                    if (!k) return;
+                                    if (visibleCategoryKeys.has(k)) {
+                                        if (visibleCategoryKeys.size <= 1) return;
+                                        visibleCategoryKeys.delete(k);
+                                    } else {
+                                        visibleCategoryKeys.add(k);
+                                    }
+
+                                    filteredDetails = applyFilters(details);
+                                    updateBlockedChart();
+                                    renderLegend();
+                                });
                             });
-                        });
+                        }
                     }
                 };
 
