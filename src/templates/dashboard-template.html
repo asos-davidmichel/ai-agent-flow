@@ -3224,7 +3224,7 @@
                         tooltip: {
                             callbacks: {
                                 title: (items) => (items && items[0] ? items[0].label : ''),
-                                label: (context) => `Count: ${context.parsed.y}`
+                                label: () => null
                             }
                         }
                     },
@@ -3411,7 +3411,7 @@
                         tooltip: {
                             callbacks: {
                                 title: (items) => (items && items[0] ? items[0].label : ''),
-                                label: (context) => `Count: ${context.parsed.y}`
+                                label: () => null
                             }
                         }
                     },
