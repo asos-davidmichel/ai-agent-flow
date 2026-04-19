@@ -4218,32 +4218,96 @@
                 const REC_GREEN = '#10b981';
                 const CURRENT_BLUE = '#1e40af';
 
-                const labelPlugin = {
-                    id: 'wipLevelDistributionLabels',
+                const renderPlugin = {
+                    id: 'wipLevelDistributionRender',
                     afterDatasetsDraw(chart) {
                         const ctx = chart.ctx;
-                        const meta = chart.getDatasetMeta(0);
-                        if (!meta || !meta.data) return;
+                        const xScale = chart.scales.x;
+                        const yScale = chart.scales.y;
+                        if (!ctx || !xScale || !yScale) return;
+
+                        const getCategoryWidth = () => {
+                            if (columns.length < 2) return 80;
+                            const p0 = xScale.getPixelForValue(columns[0]);
+                            const p1 = xScale.getPixelForValue(columns[1]);
+                            const w = Math.abs(p1 - p0);
+                            return Number.isFinite(w) && w > 0 ? w : 80;
+                        };
+
+                        const catW = getCategoryWidth();
+                        const maxBarW = Math.max(16, catW * 0.82);
+
+                        const roundRect = (x, y, w, h, r) => {
+                            const radius = Math.max(0, Math.min(r, Math.min(w, h) / 2));
+                            ctx.beginPath();
+                            if (typeof ctx.roundRect === 'function') {
+                                ctx.roundRect(x, y, w, h, radius);
+                            } else {
+                                ctx.moveTo(x + radius, y);
+                                ctx.lineTo(x + w - radius, y);
+                                ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+                                ctx.lineTo(x + w, y + h - radius);
+                                ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+                                ctx.lineTo(x + radius, y + h);
+                                ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+                                ctx.lineTo(x, y + radius);
+                                ctx.quadraticCurveTo(x, y, x + radius, y);
+                            }
+                        };
 
                         ctx.save();
+                        ctx.fillStyle = BAR_BLUE;
+
+                        (chart.data.datasets[0].data || []).forEach(raw => {
+                            if (!raw || !raw.x || !raw.y || !Array.isArray(raw.y)) return;
+                            const pct = Number(raw.percentage);
+                            if (!Number.isFinite(pct) || pct <= 0) return;
+
+                            const lvl0 = Number(raw.y[0]);
+                            const lvl1 = Number(raw.y[1]);
+                            if (!Number.isFinite(lvl0) || !Number.isFinite(lvl1)) return;
+
+                            const centerX = xScale.getPixelForValue(raw.x);
+                            const yTop = yScale.getPixelForValue(lvl1);
+                            const yBottom = yScale.getPixelForValue(lvl0);
+                            const h = Math.abs(yBottom - yTop);
+                            if (!Number.isFinite(centerX) || !Number.isFinite(yTop) || !Number.isFinite(yBottom) || h <= 0) return;
+
+                            const w = Math.max(2, maxBarW * (pct / 100));
+                            const left = centerX - (w / 2);
+                            const top = Math.min(yTop, yBottom);
+                            const height = h;
+
+                            roundRect(left, top + 1, w, Math.max(0, height - 2), 3);
+                            ctx.fill();
+                        });
+
+                        // Labels (>=10%)
                         ctx.font = 'bold 12px sans-serif';
                         ctx.fillStyle = '#ffffff';
                         ctx.textAlign = 'center';
                         ctx.textBaseline = 'middle';
 
-                        meta.data.forEach((el, idx) => {
-                            const raw = chart.data.datasets[0].data[idx];
-                            const pct = raw && Number.isFinite(Number(raw.percentage)) ? Number(raw.percentage) : 0;
-                            if (pct < 10) return;
+                        (chart.data.datasets[0].data || []).forEach(raw => {
+                            if (!raw || !raw.x || !raw.y || !Array.isArray(raw.y)) return;
+                            const pct = Number(raw.percentage);
+                            if (!Number.isFinite(pct) || pct < 10) return;
+                            const lvl0 = Number(raw.y[0]);
+                            const lvl1 = Number(raw.y[1]);
+                            if (!Number.isFinite(lvl0) || !Number.isFinite(lvl1)) return;
 
-                            const props = el.getProps(['x', 'y', 'base', 'width', 'height'], true);
-                            const x = props.x;
-                            const y = props.y + (props.base - props.y) / 2;
-                            const h = Math.abs(props.base - props.y);
+                            const centerX = xScale.getPixelForValue(raw.x);
+                            const yTop = yScale.getPixelForValue(lvl1);
+                            const yBottom = yScale.getPixelForValue(lvl0);
+                            const h = Math.abs(yBottom - yTop);
                             if (h < 18) return;
 
+                            const w = Math.max(2, maxBarW * (pct / 100));
+                            if (w < 32) return;
+
+                            const yMid = Math.min(yTop, yBottom) + (h / 2);
                             const text = (Math.round(pct * 10) / 10).toString() + '%';
-                            ctx.fillText(text, x, y);
+                            ctx.fillText(text, centerX, yMid);
                         });
 
                         ctx.restore();
@@ -4326,8 +4390,8 @@
                                 xAxisKey: 'x',
                                 yAxisKey: 'y'
                             },
-                            backgroundColor: BAR_BLUE,
-                            borderColor: BAR_BLUE,
+                            backgroundColor: 'rgba(0,0,0,0)',
+                            borderColor: 'rgba(0,0,0,0)',
                             borderWidth: 0,
                             borderSkipped: false,
                             borderRadius: 2,
@@ -4377,7 +4441,7 @@
                             }
                         }
                     },
-                    plugins: [labelPlugin]
+                    plugins: [renderPlugin]
                 });
             }
         }
