@@ -3301,7 +3301,7 @@
             });
         }
 
-        function renderHistogramChartDays(canvasId, titleText, values, barColor) {
+        function renderHistogramChartDays(canvasId, titleText, values, barColor, xAxisTitleOverride) {
             const canvas = document.getElementById(canvasId);
             if (!canvas) return;
 
@@ -3472,7 +3472,7 @@
                     },
                     scales: {
                         x: {
-                            title: { display: true, text: 'Start delay bucket (days)' },
+                            title: { display: true, text: xAxisTitleOverride || 'Start delay bucket (days)' },
                             grid: { display: false },
                             ticks: { maxRotation: 0, autoSkip: true }
                         },
@@ -4134,168 +4134,32 @@
             });
         }
 
-        // Stale Work Chart - Sort worst offenders first (highest age)
+        // Stale Work Chart - Distribution of days since last update
         if (dashboardData.charts.staleWork) {
-            const staleItems = (dashboardData.charts.staleWork.labels || []).map((label, index) => ({
-                label: label,
-                value: (dashboardData.charts.staleWork.values || [])[index],
-                id: (dashboardData.charts.staleWork.ids || [])[index],
-                title: (dashboardData.charts.staleWork.titles || [])[index],
-                blocked: (dashboardData.charts.staleWork.blocked || [])[index],
-                workItemType: (dashboardData.charts.staleWork.types && dashboardData.charts.staleWork.types[index])
-                    ? dashboardData.charts.staleWork.types[index]
-                    : ''
-            }));
+            const values = (dashboardData.charts.staleWork.values || [])
+                .map(v => Number(v))
+                .map(v => (Number.isFinite(v) ? Math.max(0, v) : null));
 
-            staleItems.sort((a, b) => Number(b.value || 0) - Number(a.value || 0));
+            const ids = (dashboardData.charts.staleWork.ids || []);
+            const titles = (dashboardData.charts.staleWork.titles || []);
+            const types = (dashboardData.charts.staleWork.types || []);
 
-            const sortedLabels = staleItems.map(item => {
-                if (item.blocked && dashboardData.charts.staleWork.blockerLabels) {
-                    const idx = dashboardData.charts.staleWork.ids.indexOf(item.id);
-                    const blockerLabel = dashboardData.charts.staleWork.blockerLabels[idx];
-                    return blockerLabel ? `[${blockerLabel}] ${item.label}` : item.label;
-                }
-                return item.label;
-            });
+            const points = values
+                .map((v, i) => ({
+                    value: v,
+                    id: ids[i],
+                    title: titles[i],
+                    workItemType: types[i] || ''
+                }))
+                .filter(p => Number.isFinite(p.value) && p.id);
 
-            const sortedValues = staleItems.map(item => Number(item.value || 0));
-            const sortedIds = staleItems.map(item => item.id);
-            const sortedTitles = staleItems.map(item => item.title);
-            const sortedTypes = staleItems.map(item => item.workItemType);
-
-            const sortedBlockerColors = staleItems.map(item => {
-                if (item.blocked && dashboardData.charts.staleWork.blockerColors) {
-                    const idx = dashboardData.charts.staleWork.ids.indexOf(item.id);
-                    return dashboardData.charts.staleWork.blockerColors[idx] || null;
-                }
-                return null;
-            });
-            const sortedBlockerLabels = staleItems.map(item => {
-                if (item.blocked && dashboardData.charts.staleWork.blockerLabels) {
-                    const idx = dashboardData.charts.staleWork.ids.indexOf(item.id);
-                    return dashboardData.charts.staleWork.blockerLabels[idx] || null;
-                }
-                return null;
-            });
-
-            const maxValue = sortedValues.length ? Math.max(...sortedValues) : 0;
-            const minValue = sortedValues.length ? Math.min(...sortedValues) : 0;
-            const colorScale = sortedValues.map((value, index) => {
-                if (sortedBlockerColors[index]) return sortedBlockerColors[index];
-
-                const normalized = maxValue === minValue ? 1 : (value - minValue) / (maxValue - minValue);
-                if (normalized > 0.66) return '#d97706';
-                if (normalized > 0.33) return '#f59e0b';
-                return '#fbbf24';
-            });
-
-            const typeKey = (t) => {
-                const tt = String(t || '').trim();
-                if (!tt) return 'Other';
-                if (tt === 'Product Backlog Item') return 'PBI';
-                if (tt === 'User Story') return 'Story';
-                return tt;
-            };
-
-            const presentTypes = Array.from(new Set(sortedTypes.map(typeKey))).filter(Boolean);
-            const showLegend = presentTypes.length > 1;
-
-            const buildPoint = (i, xOverride) => ({
-                x: (xOverride !== undefined) ? xOverride : sortedValues[i],
-                y: sortedLabels[i],
-                id: sortedIds[i],
-                title: sortedTitles[i],
-                blockerLabel: sortedBlockerLabels[i],
-                blockerColor: sortedBlockerColors[i],
-                workItemType: sortedTypes[i]
-            });
-
-            const datasets = showLegend
-                ? presentTypes.map(t => {
-                    const data = sortedLabels.map((_, i) => (typeKey(sortedTypes[i]) === t) ? buildPoint(i) : buildPoint(i, 0));
-                    const bg = sortedLabels.map((_, i) => (typeKey(sortedTypes[i]) === t) ? colorScale[i] : 'rgba(0,0,0,0)');
-                    const border = sortedLabels.map((_, i) => (typeKey(sortedTypes[i]) === t)
-                        ? darkenHexColor(colorScale[i], sortedBlockerColors[i] ? 0.22 : 0.18)
-                        : 'rgba(0,0,0,0)');
-                    return {
-                        label: t,
-                        data,
-                        backgroundColor: bg,
-                        borderColor: border,
-                        legendColor: (getWorkItemTypeStyle(t) && getWorkItemTypeStyle(t).color) ? getWorkItemTypeStyle(t).color : '#9ca3af',
-                        borderWidth: 2
-                    };
-                })
-                : [{
-                    label: 'Days Since Updated',
-                    data: sortedLabels.map((_, i) => buildPoint(i)),
-                    backgroundColor: colorScale,
-                    borderColor: colorScale.map((color, index) => {
-                        return darkenHexColor(color, sortedBlockerColors[index] ? 0.22 : 0.18);
-                    }),
-                    borderWidth: 2
-                }];
-
-            new Chart(document.getElementById('staleWorkChart'), {
-                type: 'bar',
-                data: {
-                    labels: sortedLabels,
-                    datasets
-                },
-                options: {
-                    indexAxis: 'y',
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: showLegend,
-                            position: 'top',
-                            labels: {
-                                generateLabels: function(chart) {
-                                    const base = Chart.defaults.plugins.legend.labels.generateLabels(chart);
-                                    base.forEach((l) => {
-                                        const ds = chart.data.datasets[l.datasetIndex];
-                                        if (ds && ds.legendColor) {
-                                            l.fillStyle = ds.legendColor;
-                                            l.strokeStyle = ds.legendColor;
-                                        }
-                                    });
-                                    return base;
-                                }
-                            }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                title: function(items) {
-                                    const raw = items && items[0] ? items[0].raw : null;
-                                    return raw && raw.id ? `Work item #${raw.id}` : 'Work item';
-                                },
-                                label: function(context) {
-                                    const it = context.raw || {};
-                                    const lines = [];
-                                    if (it.title) lines.push(`Title: ${it.title}`);
-                                    if (it.workItemType) lines.push(`Type: ${formatWorkItemType(it.workItemType)}`);
-                                    if (it.blockerLabel) lines.push(`Blocker: ${it.blockerLabel}`);
-                                    lines.push(`Days since updated: ${context.parsed.x} days`);
-                                    return lines;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            beginAtZero: true,
-                            title: { display: true, text: 'Days Since Last Update' },
-                            grid: { color: '#e2e8f0' }
-                        },
-                        y: {
-                            stacked: showLegend,
-                            title: { display: true, text: 'Work Items' },
-                            grid: { display: false }
-                        }
-                    }
-                }
-            });
+            renderHistogramChartDays(
+                'staleWorkChart',
+                'Days since last update',
+                points,
+                boardConfig.colors.waitingTime,
+                'Days since last update bucket (days)'
+            );
         }
 
         // Daily WIP x Work Item Age (Stacked)
