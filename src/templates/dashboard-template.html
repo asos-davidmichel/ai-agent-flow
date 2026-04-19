@@ -1295,30 +1295,9 @@
 
         // Render insights (static insights from JSON - efficiency insights are generated dynamically below)
         document.getElementById('throughputInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(dashboardData.insights.throughput)}</p>`;
-        
-        // Generate dynamic cycle time insight
-        const cycleTimeAvg = dashboardData.charts.cycleTime.average;  // Use overall average from chart data (weighted by count)
-        const cycleTimeMedian = dashboardData.metrics.cycleTime.median;
-        const cycleTime85th = dashboardData.metrics.cycleTime.p85;
-        
-        const cycleTimeByType = dashboardData.metrics.cycleTime.byType || null;
-        const cycleTimeTypeText = (cycleTimeByType && Object.keys(cycleTimeByType).length > 0)
-            ? `By type: ${Object.entries(cycleTimeByType).map(([k, v]) => `${k}: ${v}d`).join(', ')}. `
-            : '';
 
-        const cycleTimeInsight = `Cycle time (from ${getCycleStartColumn()} to completion) averages ${cycleTimeAvg} days (median: ${cycleTimeMedian} days, 85th percentile: ${cycleTime85th} days). ${cycleTimeTypeText}This measures time actively in workflow columns, excluding time before workflow starts (${getBeforeWorkflowLabel()}).`;
-        document.getElementById('cycleTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(cycleTimeInsight)}</p>`;
-        
-        // Generate dynamic lead time insight
-        const leadTimeAvg = dashboardData.metrics.leadTime.avg;
-        const leadTimeMedian = dashboardData.metrics.leadTime.median;
-        const leadTime85th = dashboardData.metrics.leadTime.p85;
-        const backlogTime = (leadTimeAvg - cycleTimeAvg).toFixed(1);
-
-        const leadTimeByType = dashboardData.metrics.leadTime.byType || null;
-        const leadTimeTypeText = (leadTimeByType && Object.keys(leadTimeByType).length > 0)
-            ? `By type: ${Object.entries(leadTimeByType).map(([k, v]) => `${k}: ${v}d`).join(', ')}. `
-            : '';
+        // Use builder-provided insights (aims to highlight patterns/anomalies/actions, not just describe the chart)
+        document.getElementById('cycleTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(dashboardData.insights.cycleTime)}</p>`;
         
         // Populate cycle time description
         const cycleStartColumn = dashboardData.metricDefinitions ? dashboardData.metricDefinitions.cycleTimeStartColumn : getCycleStartColumn();
@@ -1341,15 +1320,11 @@
             document.getElementById('leadTimeDescription').innerText = descriptionText;
             
             // Update the insight to reflect the actual method
-            const leadTimeInsight = leadTimeMethod === 'creation' 
-                ? `Lead time averages ${leadTimeAvg} days (median: ${leadTimeMedian} days, 85th percentile: ${leadTime85th} days) from creation to completion. ${leadTimeTypeText}This includes both pre-workflow time in ${getBeforeWorkflowLabel()} (~${backlogTime} days) and cycle time (${cycleTimeAvg} days). ${leadTimeAvg > cycleTimeAvg * 1.5 ? 'Items wait significantly before development starts.' : 'Items move relatively quickly into development.'}`
-                : `Lead time averages ${leadTimeAvg} days (median: ${leadTimeMedian} days, 85th percentile: ${leadTime85th} days) from board entry to completion. ${leadTimeTypeText}This includes both pre-workflow time in ${getBeforeWorkflowLabel()} (~${backlogTime} days) and cycle time (${cycleTimeAvg} days). ${leadTimeAvg > cycleTimeAvg * 1.5 ? 'Items wait significantly before development starts.' : 'Items move relatively quickly into development.'}`;
-            document.getElementById('leadTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(leadTimeInsight)}</p>`;
+            document.getElementById('leadTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(dashboardData.insights.leadTime)}</p>`;
         } else {
             // Fallback for old dashboards without metricDefinitions
             document.getElementById('leadTimeDescription').innerText = 'Overall time an individual item takes from creation to completion (closed). [Legacy calculation]';
-            const leadTimeInsight = `Lead time averages ${leadTimeAvg} days (median: ${leadTimeMedian} days, 85th percentile: ${leadTime85th} days) from creation to completion. ${leadTimeTypeText}This includes both pre-workflow time in ${getBeforeWorkflowLabel()} (~${backlogTime} days) and cycle time from ${getCycleStartColumn()} onwards (${cycleTimeAvg} days). ${leadTimeAvg > cycleTimeAvg * 1.5 ? 'Items wait significantly before workflow starts.' : 'Items move relatively quickly into workflow.'}`; 
-            document.getElementById('leadTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(leadTimeInsight)}</p>`;
+            document.getElementById('leadTimeInsight').innerHTML = `<p><strong>Insight:</strong> ${escapeHtml(dashboardData.insights.leadTime)}</p>`;
         }
         const configSummary = dashboardData.configuration || null;
 

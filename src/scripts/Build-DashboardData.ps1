@@ -3135,7 +3135,21 @@ $bestIdx = if ($netFlowValues.Count -gt 0) { $netFlowValues.IndexOf($netBestValu
 $worstWeekLabel = if ($worstIdx -ge 0) { $throughputLabels[$worstIdx] } else { 'N/A' }
 $bestWeekLabel = if ($bestIdx -ge 0) { $throughputLabels[$bestIdx] } else { 'N/A' }
 
-$netFlowInsightText = "Across $($weekStarts.Count) weeks: started $netTotalStarted, finished $netTotalFinished. Net flow (finished - started): $netDelta. Best week: $bestWeekLabel ($netBestValue). Worst week: $worstWeekLabel ($netWorstValue)."
+$netFlowDirectionText = if ($netDelta -gt 0) {
+    'Finished outpaced started (backlog likely shrinking).'
+} elseif ($netDelta -lt 0) {
+    'Started outpaced finished (backlog likely growing).'
+} else {
+    'Started and finished were balanced.'
+}
+
+$netFlowVolatilityText = if ([Math]::Abs($netWorstValue) -ge 2 * [Math]::Abs($netDelta) -and [Math]::Abs($netWorstValue) -ge 5) {
+    'Large week-to-week swings suggest batch intake/release.'
+} else {
+    'Week-to-week net flow looks relatively steady.'
+}
+
+$netFlowInsightText = "Across $($weekStarts.Count) weeks: started $netTotalStarted, finished $netTotalFinished. Net flow (finished - started): $netDelta. $netFlowDirectionText Best week: $bestWeekLabel ($netBestValue). Worst week: $worstWeekLabel ($netWorstValue). $netFlowVolatilityText"
 
 # Time in column chart (completed items only)
 # Exclude items whose columnTime contains columns not present in the configured board.
@@ -3263,9 +3277,34 @@ $timeInColumnInsightText = if ($timeInColumnLabels.Count -eq 0) {
     if ($rowsWithData.Count -eq 0) {
         "No columnTime data available to compute time in column."
     } else {
-        $top = @($rowsWithData | Sort-Object -Property Avg -Descending | Select-Object -First 3)
-        $topText = ($top | ForEach-Object { "$($_.Column): $($_.Avg)d avg (across $($_.Count) items)" }) -join "; "
-        "Longest average time is in: $topText."
+        $sorted = @($rowsWithData | Sort-Object -Property Avg -Descending)
+        $top1 = $sorted | Select-Object -First 1
+        $top2 = $sorted | Select-Object -Skip 1 -First 1
+        $top3 = $sorted | Select-Object -Skip 2 -First 1
+
+        $topText = @(
+            @($top1, $top2, $top3) |
+                Where-Object { $_ } |
+                ForEach-Object { "$($_.Column): $($_.Avg)d avg (across $($_.Count) items)" }
+        ) -join "; "
+
+        $bottleneckText = ''
+        if ($top1 -and $top2 -and $top2.Avg -gt 0) {
+            $ratio = [Math]::Round(($top1.Avg / $top2.Avg), 1)
+            if ($ratio -ge 1.6 -or ($top1.Avg - $top2.Avg) -ge 3) {
+                $bottleneckText = " Bottleneck signal: '$($top1.Column)' is ~$ratio× slower than the next column ('$($top2.Column)')."
+            } elseif ($ratio -ge 1.3 -or ($top1.Avg - $top2.Avg) -ge 2) {
+                $bottleneckText = " Mild bottleneck signal: '$($top1.Column)' is ~$ratio× slower than '$($top2.Column)'."
+            }
+        }
+
+        $actionText = if ($bottleneckText) {
+            " Consider reducing WIP into '$($top1.Column)' and checking handoff/queue policies and capacity."
+        } else {
+            " No single dominant bottleneck by average time-in-column."
+        }
+
+        "Top time-in-column: $topText.$bottleneckText$actionText"
     }
 }
 
@@ -3397,6 +3436,18 @@ $transitionRatesInsightText = if ($transitionRateTransitions.Count -eq 0) {
     $building = @($rows | Where-Object { $_.Ratio -gt 1.2 } | Sort-Object -Property Ratio -Descending | Select-Object -First 2)
     $draining = @($rows | Where-Object { $_.Ratio -lt 0.8 } | Sort-Object -Property Ratio | Select-Object -First 2)
 
+    $strongest = @($rows | Sort-Object -Property Ratio -Descending | Select-Object -First 1)
+    $strongestText = if ($strongest) {
+        $r = [double]$strongest.Ratio
+        if ($r -ge 999) {
+            "Strongest build-up: $($strongest.Transition) has arrivals but near-zero departures (ratio ~∞)."
+        } elseif ($r -ge 2) {
+            "Strongest build-up: $($strongest.Transition) ratio $([Math]::Round($r,2)) (arrivals $($strongest.Arrival)/wk, departures $($strongest.Departure)/wk)."
+        } else {
+            ''
+        }
+    } else { '' }
+
     $tailNote = ''
     if ($transitionRateTransitions.Count -gt 0) {
         $lastIdx = $transitionRateTransitions.Count - 1
@@ -3413,7 +3464,13 @@ $transitionRatesInsightText = if ($transitionRateTransitions.Count -eq 0) {
         if ($draining.Count -gt 0) {
             $parts += ('Draining at: ' + (($draining | ForEach-Object { "$($_.Transition) (ratio $([Math]::Round($_.Ratio,2)))" }) -join '; '))
         }
-        ($parts -join '. ') + $tailNote
+        $action = if ($building.Count -gt 0) {
+            ' Where arrivals exceed departures, queues build — consider reducing WIP into that step or increasing capacity downstream.'
+        } else {
+            ''
+        }
+
+        ($parts -join '. ') + $tailNote + " $strongestText" + $action
     }
 }
 
@@ -3476,6 +3533,7 @@ $cfdLabels = @($blockedTimelineLabels)
 $cfdWeekCount = $timelineWeekKeys.Count
 $cfdWeeklyArrivals = @(0) * $cfdWeekCount
 $cfdWeeklyDepartures = @(0) * $cfdWeekCount
+$cfdBaselineArrivals = 0
 
 $cfdCandidates = [int]($activeItems.Count + $completedItems.Count)
 $cfdExcludedCount = 0
@@ -3514,6 +3572,14 @@ foreach ($item in $allCfdItems) {
         continue
     }
 
+    # Baseline: items that started before the analysis window still exist in the system.
+    # Without this, departures (items finishing now) can exceed arrivals (items starting now),
+    # which breaks the cumulative meaning of the CFD.
+    if ($startDate -lt $analysisStart) {
+        $cfdBaselineArrivals++
+        continue
+    }
+
     if ($startDate -ge $analysisStart -and $startDate -le $analysisEnd) {
         $wkKey = (Get-WeekStartMonday $startDate).ToString('yyyy-MM-dd')
         if ($weekKeyToIndex.ContainsKey($wkKey)) {
@@ -3526,6 +3592,23 @@ foreach ($item in $allCfdItems) {
 }
 
 foreach ($item in $completedItems) {
+    # Keep departures aligned to the same item population as arrivals.
+    # If we can't determine the start date for an item, we can't place its arrival baseline,
+    # so we also exclude it from departures to avoid departures exceeding arrivals.
+    $startDate = Get-ItemStartDateStrict -Item $item -StartType $cfdArrivalStartType -StartColumn $cfdArrivalStartColumn
+    if (-not $startDate) {
+        $reason = if ($cfdArrivalStartType -eq 'creation') {
+            'missingCreatedDate'
+        } elseif ($cfdArrivalStartType -eq 'boardEntry') {
+            'missingBoardEntryDate'
+        } else {
+            'missingColumnEntryDate'
+        }
+
+        Add-CfdExclusion -Reason $reason -Id ([int]$item.id)
+        continue
+    }
+
     $closedRaw = $item.fields.'Microsoft.VSTS.Common.ClosedDate'
     if (-not $closedRaw) {
         Add-CfdExclusion -Reason 'missingClosedDate' -Id ([int]$item.id)
@@ -3552,7 +3635,7 @@ foreach ($item in $completedItems) {
 
 $cfdCumulativeArrivals = @()
 $cfdCumulativeDepartures = @()
-$runA = 0
+$runA = [int]$cfdBaselineArrivals
 $runD = 0
 for ($i = 0; $i -lt $cfdWeekCount; $i++) {
     $runA += [int]$cfdWeeklyArrivals[$i]
@@ -3575,6 +3658,7 @@ $cfdChart = @{
     labels = $cfdLabels
     arrivals = $cfdCumulativeArrivals
     departures = $cfdCumulativeDepartures
+    baselineArrivals = [int]$cfdBaselineArrivals
     excluded = $cfdExcludedObject
 }
 
@@ -3966,7 +4050,12 @@ $dashboardData = @{
     }
     
     insights = @{
-        cfd = "$($completedWithMetrics.Count) items completed, $($activeItems.Count) in progress"
+        cfd = (
+            "$($completedWithMetrics.Count) items completed; $($activeItems.Count) currently active (tracked types). " +
+            "Backlog Growth: $($systemStabilityMetric.text) ($($systemStabilityMetric.ratio) items/week). " +
+            "Daily WIP trend is $dailyWipTrendText (avg $dailyWipAvg, range $dailyWipMin-$dailyWipMax). " +
+            "Use this to spot sustained growth (arrivals>departures) vs a stable system."
+        )
         throughput = if ($throughputCV -gt 0.5) {
             $maxWeek = ($throughputValues | Measure-Object -Maximum).Maximum
             $minWeek = ($throughputValues | Measure-Object -Minimum).Minimum
@@ -3976,8 +4065,61 @@ $dashboardData = @{
         } else {
             "Throughput averages $throughputTotal items/week with consistent, predictable delivery."
         }
-        cycleTime = "Median cycle time: $cycleTimeMedian days"
-        leadTime = "Median lead time: $leadTimeMedian days"
+        cycleTime = if ($cycleTimes -and $cycleTimes.Count -gt 0) {
+            $avg = [Math]::Round(($cycleTimes | Measure-Object -Average).Average, 1)
+            $p85 = ($cycleTimes | Sort-Object)[([Math]::Ceiling($cycleTimes.Count * 0.85) - 1)]
+
+            $tailRatio = if ($cycleTimeMedian -gt 0) { [Math]::Round(([double]$p85 / [double]$cycleTimeMedian), 1) } else { 0 }
+            $tailText = if ($tailRatio -ge 2) {
+                "Long tail detected (P85 is ~$tailRatio× the median)."
+            } elseif ($tailRatio -ge 1.5) {
+                "Moderate tail (P85 is ~$tailRatio× the median)."
+            } else {
+                "Low tail (P85 close to median)."
+            }
+
+            $trendObj = Calculate-Trend -values @($cycleTimeTrendChart.values) -higherIsBetter $false
+            $trendText = if ($trendObj.direction -eq 'up') { 'getting slower' } elseif ($trendObj.direction -eq 'down') { 'getting faster' } else { 'stable' }
+
+            $typeNote = ''
+            if ($cycleTimeAvgByType -and $cycleTimeAvgByType.Contains('Bugs') -and $cycleTimeAvgByType.Contains('PBIs')) {
+                $b = [double]$cycleTimeAvgByType['Bugs']
+                $p = [double]$cycleTimeAvgByType['PBIs']
+                if ($b -gt 0 -and $p -gt 0) {
+                    $diffPct = [Math]::Round((([Math]::Abs($b - $p)) / [Math]::Max($b, $p)) * 100, 0)
+                    if ($diffPct -ge 30) {
+                        $typeNote = " By type, Bugs vs PBIs differ materially ($diffPct%)."
+                    }
+                }
+            }
+
+            "Avg $avg days (median $cycleTimeMedian, P85 $p85). $tailText Trend is $trendText. Consider using WIP limits and smaller batches to pull the tail down.$typeNote"
+        } else {
+            'No completed items with cycle time available.'
+        }
+
+        leadTime = if ($leadTimes -and $leadTimes.Count -gt 0) {
+            $avg = [Math]::Round(($leadTimes | Measure-Object -Average).Average, 1)
+            $p85 = ($leadTimes | Sort-Object)[([Math]::Ceiling($leadTimes.Count * 0.85) - 1)]
+
+            $cycleAvg = if ($cycleTimes -and $cycleTimes.Count -gt 0) { [Math]::Round(($cycleTimes | Measure-Object -Average).Average, 1) } else { 0 }
+            $waitAvg = [Math]::Max(0, [Math]::Round(($avg - $cycleAvg), 1))
+            $waitPct = if ($avg -gt 0) { [Math]::Round(($waitAvg / $avg) * 100, 0) } else { 0 }
+            $waitText = if ($waitPct -ge 50) {
+                "Waiting dominates lead time (~$waitAvg days, $waitPct%)."
+            } elseif ($waitPct -ge 30) {
+                "Material waiting before/around workflow (~$waitAvg days, $waitPct%)."
+            } else {
+                "Most lead time is spent in workflow (~$cycleAvg days; waiting ~$waitAvg days)."
+            }
+
+            $trendObj = Calculate-Trend -values @($leadTimeTrendChart.values) -higherIsBetter $false
+            $trendText = if ($trendObj.direction -eq 'up') { 'getting slower' } elseif ($trendObj.direction -eq 'down') { 'getting faster' } else { 'stable' }
+
+            "Avg $avg days (median $leadTimeMedian, P85 $p85). $waitText Trend is $trendText. If waiting is high, tighten intake/WIP and improve readiness before starting work."
+        } else {
+            'No completed items with lead time available.'
+        }
         workItemAge = $workItemAgeInsightText
         dailyWip = $dailyWipInsightText
         timeInColumn = $timeInColumnInsightText
