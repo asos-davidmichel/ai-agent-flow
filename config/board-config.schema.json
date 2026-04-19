@@ -64,6 +64,14 @@
         }
       }
     },
+    "wipLimits": {
+      "type": "object",
+      "description": "WIP (Work In Progress) limits for each board column",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 1
+      }
+    },
     "states": {
       "type": "object",
       "required": ["active", "completed"],

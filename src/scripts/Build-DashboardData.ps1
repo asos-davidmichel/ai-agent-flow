@@ -808,6 +808,286 @@ function Get-WeeklyWIPSnapshot($completedItems, $activeItems, $startDate, $endDa
     return $weeks
 }
 
+# Helper: Calculate per-column WIP level distribution over time (board columns)
+function Get-ColumnWIPDistribution {
+    param(
+        $CompletedItems,
+        $ActiveItems,
+        [DateTime]$StartDate,
+        [DateTime]$EndDate,
+        [string[]]$ColumnNames,
+        $WIPLimits
+    )
+
+    $allItems = @($CompletedItems) + @($ActiveItems)
+    $colSet = New-Object 'System.Collections.Generic.HashSet[string]'
+    foreach ($c in @($ColumnNames)) {
+        if ([string]::IsNullOrWhiteSpace($c)) { continue }
+        [void]$colSet.Add([string]$c)
+    }
+
+    $itemInfoById = @{}
+    foreach ($it in $allItems) {
+        $itemInfoById[[int]$it.id] = @{
+            id = [int]$it.id
+            title = [string]$it.fields.'System.Title'
+            workItemType = [string]$it.fields.'System.WorkItemType'
+        }
+    }
+
+    $eventsByColumn = @{}
+    foreach ($c in $colSet) {
+        $eventsByColumn[$c] = New-Object System.Collections.ArrayList
+    }
+
+    $parseDate = {
+        param($raw)
+        if (-not $raw) { return $null }
+        try {
+            $dt = [DateTime]$raw
+            if ($dt.Year -ge 9999) { return $null }
+            return $dt
+        } catch {
+            return $null
+        }
+    }
+
+    foreach ($item in $allItems) {
+        $itemId = [int]$item.id
+
+        $createdDt = & $parseDate $item.fields.'System.CreatedDate'
+        $closedDt = & $parseDate $item.fields.'Microsoft.VSTS.Common.ClosedDate'
+
+        $itemStart = if ($createdDt -and $createdDt -gt $StartDate) { $createdDt } else { $StartDate }
+        $itemEnd = if ($closedDt -and $closedDt -lt $EndDate) { $closedDt } else { $EndDate }
+        if ($itemEnd -le $StartDate) { continue }
+        if ($itemStart -ge $EndDate) { continue }
+
+        $boardColTransitions = @()
+        $stateTransitions = @()
+
+        if ($item.updates -and $item.updates.Count -gt 0) {
+            $sortedUpdates = $item.updates | Sort-Object {
+                $d = & $parseDate $_.revisedDate
+                if ($d) { $d } else { [DateTime]::MaxValue }
+            }
+
+            foreach ($u in $sortedUpdates) {
+                $t = & $parseDate $u.revisedDate
+                if (-not $t) { continue }
+
+                if ($u.fields.'System.BoardColumn') {
+                    $f = $u.fields.'System.BoardColumn'
+                    $newVal = if ($f.newValue) { [string]$f.newValue } else { $null }
+                    $oldVal = if ($f.oldValue) { [string]$f.oldValue } else { $null }
+                    if (-not [string]::IsNullOrWhiteSpace($newVal)) {
+                        $boardColTransitions += [PSCustomObject]@{ time = $t; old = $oldVal; new = $newVal }
+                    }
+                } elseif ($u.fields.'System.State') {
+                    $f = $u.fields.'System.State'
+                    $newVal = if ($f.newValue) { [string]$f.newValue } else { $null }
+                    $oldVal = if ($f.oldValue) { [string]$f.oldValue } else { $null }
+                    if (-not [string]::IsNullOrWhiteSpace($newVal)) {
+                        $stateTransitions += [PSCustomObject]@{ time = $t; old = $oldVal; new = $newVal }
+                    }
+                }
+            }
+        }
+
+        $transitions = if ($boardColTransitions.Count -gt 0) { $boardColTransitions } else { $stateTransitions }
+        $transitions = @($transitions | Sort-Object time)
+
+        # Determine column at itemStart
+        $currentCol = $null
+        if ($transitions.Count -gt 0) {
+            $lastBefore = @($transitions | Where-Object { $_.time -le $itemStart } | Sort-Object time -Descending | Select-Object -First 1)
+            if ($lastBefore) {
+                $currentCol = [string]$lastBefore.new
+            } else {
+                $first = $transitions[0]
+                if ($first.old -and -not [string]::IsNullOrWhiteSpace($first.old)) {
+                    $currentCol = [string]$first.old
+                } else {
+                    $currentCol = [string]$first.new
+                }
+            }
+        }
+        if ([string]::IsNullOrWhiteSpace($currentCol)) {
+            $currentCol = [string]$item.fields.'System.BoardColumn'
+        }
+        if ([string]::IsNullOrWhiteSpace($currentCol)) {
+            $currentCol = [string]$item.fields.'System.State'
+        }
+        if ([string]::IsNullOrWhiteSpace($currentCol)) { continue }
+
+        $curStart = $itemStart
+        $forward = @($transitions | Where-Object { $_.time -gt $itemStart -and $_.time -lt $itemEnd } | Sort-Object time)
+        foreach ($tr in $forward) {
+            $t = [DateTime]$tr.time
+            if ($t -le $curStart) { continue }
+
+            $segStart = $curStart
+            $segEnd = $t
+            if ($segStart -lt $StartDate) { $segStart = $StartDate }
+            if ($segEnd -gt $EndDate) { $segEnd = $EndDate }
+            if ($segEnd -gt $segStart -and $colSet.Contains([string]$currentCol)) {
+                [void]$eventsByColumn[[string]$currentCol].Add([PSCustomObject]@{ time = $segStart; action = 'enter'; id = $itemId })
+                [void]$eventsByColumn[[string]$currentCol].Add([PSCustomObject]@{ time = $segEnd; action = 'exit'; id = $itemId })
+            }
+
+            $currentCol = [string]$tr.new
+            $curStart = $t
+        }
+
+        # Final segment
+        $segStart = $curStart
+        $segEnd = $itemEnd
+        if ($segStart -lt $StartDate) { $segStart = $StartDate }
+        if ($segEnd -gt $EndDate) { $segEnd = $EndDate }
+        if ($segEnd -gt $segStart -and $colSet.Contains([string]$currentCol)) {
+            [void]$eventsByColumn[[string]$currentCol].Add([PSCustomObject]@{ time = $segStart; action = 'enter'; id = $itemId })
+            [void]$eventsByColumn[[string]$currentCol].Add([PSCustomObject]@{ time = $segEnd; action = 'exit'; id = $itemId })
+        }
+    }
+
+    $totalSeconds = ($EndDate - $StartDate).TotalSeconds
+    if ($totalSeconds -le 0) { $totalSeconds = 1 }
+
+    $byColumn = @{}
+    foreach ($col in @($ColumnNames)) {
+        if ([string]::IsNullOrWhiteSpace($col)) { continue }
+
+        $events = if ($eventsByColumn.ContainsKey($col)) { @($eventsByColumn[$col]) } else { @() }
+        $events = @($events | Where-Object { $_.time -ge $StartDate -and $_.time -le $EndDate } | Sort-Object time)
+
+        $activeSet = New-Object 'System.Collections.Generic.HashSet[int]'
+        $levelSeconds = @{}
+        $levelItems = @{}
+
+        $addSlice = {
+            param([DateTime]$from, [DateTime]$to, [int]$level)
+            $sec = ($to - $from).TotalSeconds
+            if ($sec -le 0) { return }
+
+            if (-not $levelSeconds.ContainsKey($level)) { $levelSeconds[$level] = 0.0 }
+            $levelSeconds[$level] = [double]$levelSeconds[$level] + [double]$sec
+
+            if (-not $levelItems.ContainsKey($level)) {
+                $levelItems[$level] = New-Object 'System.Collections.Generic.HashSet[int]'
+            }
+            foreach ($id in $activeSet) {
+                [void]$levelItems[$level].Add([int]$id)
+            }
+        }
+
+        $prev = $StartDate
+        $i = 0
+        while ($i -lt $events.Count) {
+            $t = [DateTime]$events[$i].time
+            if ($t -gt $EndDate) { break }
+
+            & $addSlice $prev $t ([int]$activeSet.Count)
+
+            # Apply all events at time t (exit first, then enter)
+            $sameTime = @()
+            while ($i -lt $events.Count -and ([DateTime]$events[$i].time) -eq $t) {
+                $sameTime += $events[$i]
+                $i++
+            }
+
+            foreach ($e in @($sameTime | Where-Object { $_.action -eq 'exit' })) {
+                [void]$activeSet.Remove([int]$e.id)
+            }
+            foreach ($e in @($sameTime | Where-Object { $_.action -eq 'enter' })) {
+                [void]$activeSet.Add([int]$e.id)
+            }
+
+            $prev = $t
+        }
+
+        & $addSlice $prev $EndDate ([int]$activeSet.Count)
+
+        if (-not $levelSeconds.ContainsKey(0)) {
+            $levelSeconds[0] = 0.0
+        }
+
+        # Ensure time sums to total (float drift): assign remainder to level 0
+        $sumSec = 0.0
+        foreach ($k in $levelSeconds.Keys) { $sumSec += [double]$levelSeconds[$k] }
+        $rem = [double]$totalSeconds - [double]$sumSec
+        if ($rem -gt 0.0001) {
+            $levelSeconds[0] = [double]$levelSeconds[0] + $rem
+        }
+
+        $levels = @($levelSeconds.Keys | ForEach-Object { [int]$_ } | Sort-Object)
+        $pcts = @()
+        $itemsByLevelOut = @{}
+
+        foreach ($lvl in $levels) {
+            $pct = ([double]$levelSeconds[$lvl] / [double]$totalSeconds) * 100
+            $pcts += [Math]::Round($pct, 1)
+
+            $ids = if ($levelItems.ContainsKey($lvl)) { @($levelItems[$lvl]) } else { @() }
+            $items = @(
+                $ids |
+                    Select-Object -Unique |
+                    Select-Object -First 40 |
+                    ForEach-Object {
+                        $id = [int]$_
+                        if ($itemInfoById.ContainsKey($id)) { $itemInfoById[$id] }
+                    } |
+                    Where-Object { $_ }
+            )
+
+            $itemsByLevelOut["$lvl"] = $items
+        }
+
+        # Recommended WIP = most common non-zero level
+        $rec = 0
+        $bestPct = -1
+        for ($idx = 0; $idx -lt $levels.Count; $idx++) {
+            $lvl = [int]$levels[$idx]
+            if ($lvl -lt 1) { continue }
+            $pct = [double]$pcts[$idx]
+            if ($pct -gt $bestPct) {
+                $bestPct = $pct
+                $rec = $lvl
+            }
+        }
+
+        $maxObserved = if ($levels.Count -gt 0) { ($levels | Measure-Object -Maximum).Maximum } else { 0 }
+        $maxLimit = $null
+        if ($WIPLimits) {
+            try {
+                if ($WIPLimits.PSObject.Properties.Name -contains $col) {
+                    $maxLimit = [int]$WIPLimits.$col
+                }
+            } catch { $maxLimit = $null }
+        }
+        if (-not $maxLimit -or $maxLimit -le 0) { $maxLimit = [int]$maxObserved }
+
+        $currentWip = @(
+            $ActiveItems | Where-Object {
+                ([string]$_.fields.'System.BoardColumn' -eq $col) -or ([string]$_.fields.'System.State' -eq $col)
+            }
+        ).Count
+
+        $byColumn[$col] = @{
+            wipLevels = $levels
+            timePercentages = $pcts
+            recommendedWip = $rec
+            maxWip = $maxLimit
+            currentWip = $currentWip
+            itemsByLevel = $itemsByLevelOut
+        }
+    }
+
+    return @{
+        columns = @($ColumnNames)
+        byColumn = $byColumn
+    }
+}
+
 # Helper: Calculate cycle time from state transitions (time in active states)
 function Get-CycleTimeFromUpdates($item) {
     $activeStates = @('Active', 'In Progress')
@@ -1112,6 +1392,43 @@ $boardColumns = @(
         Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
         Select-Object -Unique
 )
+
+# WIP level distribution (per column)
+$wipLevelDistributionChart = $null
+$wipLevelDistributionDebug = $null
+try {
+    $configuredWipColumns = @()
+    if ($config -and $config.columns) {
+        if ($config.columns.backlog) { $configuredWipColumns += @($config.columns.backlog) }
+        if ($config.columns.inProgress) { $configuredWipColumns += @($config.columns.inProgress) }
+    }
+
+    $wipColumns = if ($configuredWipColumns.Count -gt 0) {
+        @(
+            $configuredWipColumns |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+                Select-Object -Unique |
+                Where-Object { $boardColumns -contains $_ }
+        )
+    } else {
+        @($boardColumns)
+    }
+
+    $wipLimits = if ($config -and $config.wipLimits) { $config.wipLimits } else { @{} }
+
+    if ($wipColumns.Count -gt 0) {
+        $wipLevelDistributionChart = Get-ColumnWIPDistribution `
+            -CompletedItems $completedItems `
+            -ActiveItems $activeItems `
+            -StartDate $analysisStart `
+            -EndDate $analysisEnd `
+            -ColumnNames $wipColumns `
+            -WIPLimits $wipLimits
+    }
+} catch {
+    $wipLevelDistributionChart = $null
+    $wipLevelDistributionDebug = $_.Exception.Message
+}
 
 # Current bug breakdown by board column (for pie chart)
 $bugColumnBreakdown = @{}
@@ -3353,6 +3670,7 @@ $dashboardData = @{
             columns = if ($config -and $config.blockers -and $config.blockers.columns) { @($config.blockers.columns) } else { @() }
             categories = $blockerCategories
         }
+        wipLevelDistributionDebug = $wipLevelDistributionDebug
     }
     
     metrics = @{
@@ -3477,6 +3795,7 @@ $dashboardData = @{
             values = $dailyWipValues
             trend = $dailyWipTrend
         }
+        wipLevelDistribution = $wipLevelDistributionChart
         staleWork = @{
             labels = $staleWorkLabels
             values = $staleWorkValues
