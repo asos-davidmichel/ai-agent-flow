@@ -23,6 +23,8 @@ Given an Azure DevOps board:
 
 ## Workflow
 
+**IMPORTANT: Follow steps sequentially. Do not skip ahead or combine steps. Wait for user confirmation/response at each step before proceeding to the next.**
+
 ### Step 1: Get the board link
 
 If not provided, ask:
@@ -88,6 +90,8 @@ Ask the user to categorize each **column** (not states) into one of three workfl
 
 **Important:** You are categorizing **columns**, not states. The states will be automatically derived from the columns you categorize.
 
+**STOP HERE and wait for the user's column categorization. Do not proceed to Step 5 until they respond.**
+
 ### Step 5: Automatically derive state filters
 
 Once the user categorizes columns, automatically determine the state filters:
@@ -117,23 +121,24 @@ Based on your column categorization:
 Based on the categorization, explain how metrics will be calculated:
 
 **Cycle Time** - Time from first "In Progress" to "Done"
-- Start: When work enters **first In Progress column/state**
+- Start: When work enters **first In Progress column**
 - End: When work reaches **Done state**
 - Measures: How long active work takes
 
+Ask the user: "Is [{first_in_progress_column}] the correct starting point for cycle time, or would you prefer to start measuring from a different column?"
+
+**STOP HERE and wait for the user's response about cycle time. Do not proceed until they confirm.**
+
+After cycle time is confirmed, ask about **Lead Time**:
+
 **Lead Time** - Time from work creation/commitment to completion
-- Options (ask user to choose):
+
+Ask user to choose:
   1. **From creation**: `System.CreatedDate` → Done (total time in system)
   2. **From board entry**: When item enters **first board column** → Done (time on board)
   3. **From backlog exit**: When item leaves **last Backlog column** → Done (time from commitment)
 
-**Active Items** - Work currently on the board
-- States: Everything EXCEPT Done states
-- Special handling: States like "Resolved" should be categorized by user
-
-**Completed Items** - Finished work for throughput
-- States: Only Done states
-- Date filter: Based on close/completion date
+**STOP HERE and wait for the user's lead time choice. Do not proceed to Step 7 until they respond.**
 
 ### Step 7: Discover blocker reporting patterns
 
