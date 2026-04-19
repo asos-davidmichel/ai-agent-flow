@@ -302,6 +302,106 @@ function Get-AdoWorkItemTypeStyles {
     }
 }
 
+function Get-AdoBoardColumnWipLimits {
+    param(
+        [Parameter(Mandatory = $true)][string]$Organization,
+        [Parameter(Mandatory = $true)][string]$Project,
+        [Parameter(Mandatory = $true)][string]$Team,
+        [string]$BoardName = 'Backlog items',
+        [int]$CacheMaxAgeHours = 24
+    )
+
+    $pat = Get-AdoPatFromEnv
+    if ([string]::IsNullOrWhiteSpace($pat)) { return @{} }
+
+    $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
+    $cacheDir = Join-Path (Join-Path $repoRoot 'output') '_cache'
+    if (-not (Test-Path $cacheDir)) {
+        New-Item -ItemType Directory -Path $cacheDir | Out-Null
+    }
+    $cacheFile = Join-Path $cacheDir (
+        "ado-board-wiplimits-{0}-{1}-{2}.json" -f (Get-SafeFileNameFragment -Text $Organization), (Get-SafeFileNameFragment -Text $Project), (Get-SafeFileNameFragment -Text $Team)
+    )
+
+    if (Test-Path $cacheFile) {
+        try {
+            $cacheObj = Get-Content $cacheFile -Raw | ConvertFrom-Json
+            $fetchedAt = $null
+            if ($cacheObj -and $cacheObj.meta -and $cacheObj.meta.fetchedAt) {
+                try { $fetchedAt = [DateTime]$cacheObj.meta.fetchedAt } catch { $fetchedAt = $null }
+            }
+
+            $isFresh = $false
+            if ($fetchedAt) {
+                $ageHours = (New-TimeSpan -Start $fetchedAt -End (Get-Date)).TotalHours
+                $isFresh = ($ageHours -ge 0 -and $ageHours -le [double]$CacheMaxAgeHours)
+            }
+
+            if ($isFresh -and $cacheObj -and $cacheObj.wipLimits) {
+                $limits = @{}
+                foreach ($p in $cacheObj.wipLimits.PSObject.Properties) {
+                    try { $limits[$p.Name] = [int]$p.Value } catch { }
+                }
+                return $limits
+            }
+        } catch { }
+    }
+
+    try {
+        $base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$pat"))
+        $headers = @{ Authorization = "Basic $base64AuthInfo"; Accept = "application/json" }
+
+        $teamEsc = [uri]::EscapeDataString($Team)
+        $boardsUri = "https://dev.azure.com/$Organization/$Project/$teamEsc/_apis/work/boards?api-version=7.1-preview.1"
+        $boards = Invoke-RestMethod -Uri $boardsUri -Headers $headers -Method Get -ErrorAction Stop
+        if ($boards -is [string]) { $boards = $boards | ConvertFrom-Json }
+        $boardValues = if ($boards -and $boards.value) { @($boards.value) } else { @() }
+        if (-not $boardValues -or $boardValues.Count -eq 0) { return @{} }
+
+        $board = $null
+        if (-not [string]::IsNullOrWhiteSpace($BoardName)) {
+            $board = @($boardValues | Where-Object { $_.name -eq $BoardName } | Select-Object -First 1)
+        }
+        if (-not $board) { $board = $boardValues[0] }
+
+        $boardUrl = [string]$board.url
+        if ([string]::IsNullOrWhiteSpace($boardUrl)) { return @{} }
+
+        $colsUri = "$boardUrl/columns?api-version=7.1-preview.1"
+        $cols = Invoke-RestMethod -Uri $colsUri -Headers $headers -Method Get -ErrorAction Stop
+        if ($cols -is [string]) { $cols = $cols | ConvertFrom-Json }
+        $colValues = if ($cols -and $cols.value) { @($cols.value) } else { @() }
+
+        $limits = @{}
+        foreach ($c in $colValues) {
+            $name = if ($c.name) { [string]$c.name } else { $null }
+            if ([string]::IsNullOrWhiteSpace($name)) { continue }
+
+            $limit = 0
+            try { $limit = [int]$c.itemLimit } catch { $limit = 0 }
+            if ($limit -gt 0) {
+                $limits[$name] = $limit
+            }
+        }
+
+        $cacheObj = [PSCustomObject]@{
+            meta = @{
+                organization = $Organization
+                project = $Project
+                team = $Team
+                boardName = $board.name
+                fetchedAt = (Get-Date).ToString('o')
+            }
+            wipLimits = $limits
+        }
+        $cacheObj | ConvertTo-Json -Depth 8 | Set-Content -Path $cacheFile -Encoding utf8
+
+        return $limits
+    } catch {
+        return @{}
+    }
+}
+
 $adoTypeStyleResult = Get-AdoWorkItemTypeStyles -Organization $rawData.metadata.organization -Project $rawData.metadata.project -WorkItemTypes @($observedTrackedTypes)
 $adoWorkItemTypeStyles = if ($adoTypeStyleResult -and $adoTypeStyleResult.styles) { $adoTypeStyleResult.styles } else { @{} }
 $adoWorkItemTypeStylesDebug = @{
@@ -1055,16 +1155,11 @@ function Get-ColumnWIPDistribution {
             }
         }
 
-        $maxObserved = if ($levels.Count -gt 0) { ($levels | Measure-Object -Maximum).Maximum } else { 0 }
         $maxLimit = $null
-        if ($WIPLimits) {
-            try {
-                if ($WIPLimits.PSObject.Properties.Name -contains $col) {
-                    $maxLimit = [int]$WIPLimits.$col
-                }
-            } catch { $maxLimit = $null }
+        if ($WIPLimits -and $WIPLimits.ContainsKey($col)) {
+            try { $maxLimit = [int]$WIPLimits[$col] } catch { $maxLimit = $null }
         }
-        if (-not $maxLimit -or $maxLimit -le 0) { $maxLimit = [int]$maxObserved }
+        if (-not $maxLimit -or $maxLimit -le 0) { $maxLimit = $null }
 
         $currentWip = @(
             $ActiveItems | Where-Object {
@@ -1420,7 +1515,13 @@ try {
             Where-Object { $_ -and ([string]$_).Trim().ToLowerInvariant() -ne 'new' }
     )
 
-    $wipLimits = if ($config -and $config.wipLimits) { $config.wipLimits } else { @{} }
+    $wipLimits = @{}
+    $wipOrg = if ($config -and $config.organization) { [string]$config.organization } else { [string]$rawData.metadata.organization }
+    $wipProject = if ($config -and $config.project) { [string]$config.project } else { [string]$rawData.metadata.project }
+    $wipTeam = if ($config -and $config.team) { [string]$config.team } else { [string]$rawData.metadata.team }
+    if (-not [string]::IsNullOrWhiteSpace($wipOrg) -and -not [string]::IsNullOrWhiteSpace($wipProject) -and -not [string]::IsNullOrWhiteSpace($wipTeam)) {
+        $wipLimits = Get-AdoBoardColumnWipLimits -Organization $wipOrg -Project $wipProject -Team $wipTeam -BoardName 'Backlog items'
+    }
 
     if ($wipColumns.Count -gt 0) {
         $wipLevelDistributionChart = Get-ColumnWIPDistribution `

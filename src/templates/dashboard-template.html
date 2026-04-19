@@ -859,11 +859,12 @@
             <div class="chart-card chart-card-full">
                 <h2>📊 WIP Level Distribution by Column</h2>
                 <p style="color: #718096; font-size: 14px; margin: -10px 0 15px 0;">
-                    Shows how often each column sits at each WIP level over the analysis period. Orange <strong>max</strong> = configured WIP limit (or highest observed if no limit is configured). Green <strong>rec</strong> = most common non-zero WIP level during the period. Solid blue line = current WIP right now.
+                    Shows how often each column sits at each WIP level over the analysis period. Orange <strong>max</strong> = WIP limit configured on the board. Blue <strong>now</strong> = current WIP right now.
                 </p>
                 <div class="chart-container chart-container-tall">
                     <canvas id="wipLevelDistributionChart"></canvas>
                 </div>
+                <div class="insight-box" id="wipLevelDistributionInsight"></div>
             </div>
 
         </div>
@@ -4180,16 +4181,17 @@
             const byColumn = (cfg && cfg.byColumn) ? cfg.byColumn : {};
 
             if (columns.length > 0) {
-                let maxY = 0;
+                // We'll compute maxY from the actually-rendered bars (levels with pct > 0 after rounding)
+                // so that extremely rare WIP levels that round to 0.0% don't inflate the axis.
+                let maxLimitAny = 0;
+                let maxCurrentAny = 0;
                 columns.forEach(c => {
                     const cd = byColumn[c] || {};
                     const maxWip = Number(cd.maxWip);
-                    const maxLevel = (cd.wipLevels && cd.wipLevels.length > 0)
-                        ? Math.max(...cd.wipLevels.map(n => Number(n)))
-                        : 0;
-                    maxY = Math.max(maxY, Number.isFinite(maxWip) ? maxWip : 0, Number.isFinite(maxLevel) ? maxLevel : 0, Number(cd.currentWip) || 0);
+                    const curWip = Number(cd.currentWip);
+                    if (Number.isFinite(maxWip) && maxWip > 0) maxLimitAny = Math.max(maxLimitAny, maxWip);
+                    if (Number.isFinite(curWip) && curWip > 0) maxCurrentAny = Math.max(maxCurrentAny, curWip);
                 });
-                maxY = Math.max(4, Math.ceil(maxY + 1));
 
                 const points = [];
                 columns.forEach(c => {
@@ -4213,9 +4215,25 @@
                     }
                 });
 
+                // Determine the max Y from the rendered points + current WIP
+                let maxRenderedLevel = 0;
+                points.forEach(p => {
+                    if (!p) return;
+                    const lvl = Number(p.wipLevel);
+                    if (Number.isFinite(lvl)) {
+                        maxRenderedLevel = Math.max(maxRenderedLevel, lvl + 1);
+                    }
+                });
+
+                let maxY = Math.max(maxRenderedLevel, maxCurrentAny);
+                // Only include max limits when they are close; otherwise keep the chart readable.
+                if (Number.isFinite(maxLimitAny) && maxLimitAny > 0 && maxLimitAny <= (maxY + 2)) {
+                    maxY = Math.max(maxY, maxLimitAny);
+                }
+                maxY = Math.max(4, Math.ceil(maxY + 1));
+
                 const BAR_BLUE = boardConfig.colors.cycleTime || '#3b82f6';
                 const LIMIT_ORANGE = '#f59e0b';
-                const REC_GREEN = '#10b981';
                 const CURRENT_BLUE = '#1e40af';
 
                 const renderPlugin = {
@@ -4225,6 +4243,9 @@
                         const xScale = chart.scales.x;
                         const yScale = chart.scales.y;
                         if (!ctx || !xScale || !yScale) return;
+
+                        const chartArea = chart.chartArea;
+                        if (!chartArea) return;
 
                         const getCategoryWidth = () => {
                             if (columns.length < 2) return 80;
@@ -4311,6 +4332,120 @@
                         });
 
                         ctx.restore();
+
+                        // Marker labels (max/now) — draw ourselves so text can't overlap across columns.
+                        const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+                        const yFor = v => yScale.getPixelForValue(v);
+
+                        ctx.save();
+                        ctx.font = '700 11px sans-serif';
+                        ctx.textBaseline = 'middle';
+
+                        const drawTag = (text, x, y, opts) => {
+                            const { align, color, clipL, clipR } = opts;
+                            ctx.textAlign = align;
+                            ctx.fillStyle = color;
+
+                            const metrics = ctx.measureText(text);
+                            const w = Math.ceil((metrics && metrics.width ? metrics.width : 0) + 10);
+                            const h = 16;
+
+                            let rectX = align === 'right' ? (x - w) : x;
+                            rectX = clamp(rectX, clipL, clipR - w);
+                            const rectY = clamp(y - (h / 2), chartArea.top, chartArea.bottom - h);
+
+                            ctx.save();
+                            ctx.globalAlpha = 0.88;
+                            ctx.fillStyle = '#ffffff';
+                            ctx.fillRect(rectX, rectY, w, h);
+                            ctx.restore();
+
+                            // Re-apply text style after backing
+                            ctx.textAlign = align;
+                            ctx.fillStyle = color;
+                            const textX = align === 'right' ? (rectX + w - 5) : (rectX + 5);
+                            const textY = rectY + (h / 2);
+                            ctx.fillText(text, textX, textY);
+                        };
+
+                        columns.forEach(col => {
+                            const cd = byColumn[col] || {};
+                            const maxWip = Number(cd.maxWip);
+                            const curWip = Number(cd.currentWip);
+
+                            const centerX = xScale.getPixelForValue(col);
+                            if (!Number.isFinite(centerX)) return;
+
+                            // Clip drawing to this column so text never overlaps adjacent columns.
+                            const clipW = maxBarW;
+                            const clipL = centerX - (clipW / 2);
+                            const clipR = clipL + clipW;
+
+                            ctx.save();
+                            ctx.beginPath();
+                            ctx.rect(clipL, chartArea.top, clipW, chartArea.bottom - chartArea.top);
+                            ctx.clip();
+
+                            const hasMax = Number.isFinite(maxWip) && maxWip > 0 && maxWip <= maxY;
+                            const hasNow = Number.isFinite(curWip) && curWip > 0 && curWip <= maxY;
+
+                            if (hasMax) {
+                                const y = yFor(maxWip);
+                                if (Number.isFinite(y)) {
+                                    const yLabel = clamp(y - 10, chartArea.top + 8, chartArea.bottom - 8);
+                                    drawTag(`max ${Math.round(maxWip)}`, clipR - 4, yLabel, {
+                                        align: 'right',
+                                        color: LIMIT_ORANGE,
+                                        clipL,
+                                        clipR
+                                    });
+                                }
+                            }
+
+                            if (hasNow) {
+                                const y = yFor(curWip);
+                                if (Number.isFinite(y)) {
+                                    // If now is on/near max, push the now label below for readability.
+                                    let yLabel = y + 10;
+                                    if (hasMax) {
+                                        const yMax = yFor(maxWip);
+                                        if (Number.isFinite(yMax) && Math.abs(yMax - yLabel) < 16) {
+                                            yLabel = y + 16;
+                                        }
+                                    }
+
+                                    yLabel = clamp(yLabel, chartArea.top + 8, chartArea.bottom - 8);
+                                    drawTag(`now ${Math.round(curWip)}`, clipL + 4, yLabel, {
+                                        align: 'left',
+                                        color: CURRENT_BLUE,
+                                        clipL,
+                                        clipR
+                                    });
+                                }
+                            }
+
+                            ctx.restore();
+                        });
+
+                        ctx.restore();
+
+                        // Custom Y-axis labels in the middle of each WIP band (between gridlines).
+                        // We hide the default tick labels and draw these ourselves.
+                        ctx.save();
+                        ctx.font = '600 11px sans-serif';
+                        ctx.fillStyle = '#6b7280';
+                        ctx.textAlign = 'right';
+                        ctx.textBaseline = 'middle';
+
+                        const xLabel = chartArea.left - 10;
+                        for (let lvl = 0; lvl < maxY; lvl++) {
+                            const yMid = yScale.getPixelForValue(lvl + 0.5);
+                            if (!Number.isFinite(yMid)) continue;
+                            if (yMid < chartArea.top || yMid > chartArea.bottom) continue;
+                            ctx.fillText(String(lvl), xLabel, yMid);
+                        }
+
+                        ctx.restore();
                     }
                 };
 
@@ -4318,13 +4453,12 @@
                 columns.forEach((c, idx) => {
                     const cd = byColumn[c] || {};
                     const maxWip = Number(cd.maxWip);
-                    const recWip = Number(cd.recommendedWip);
                     const curWip = Number(cd.currentWip);
 
                     const xMin = idx - 0.45;
                     const xMax = idx + 0.45;
 
-                    if (Number.isFinite(maxWip) && maxWip > 0) {
+                    if (Number.isFinite(maxWip) && maxWip > 0 && maxWip <= maxY) {
                         annotations[`max_${idx}`] = {
                             type: 'line',
                             yMin: maxWip,
@@ -4334,50 +4468,82 @@
                             borderColor: LIMIT_ORANGE,
                             borderWidth: 2,
                             borderDash: [6, 4],
-                            label: {
-                                display: true,
-                                content: `max: ${Math.round(maxWip)}`,
-                                position: 'end',
-                                color: LIMIT_ORANGE,
-                                backgroundColor: 'rgba(0,0,0,0)',
-                                font: { size: 11, weight: '700' }
-                            }
+                            drawTime: 'afterDraw'
                         };
                     }
 
-                    if (Number.isFinite(recWip) && recWip > 0) {
-                        annotations[`rec_${idx}`] = {
-                            type: 'line',
-                            yMin: recWip,
-                            yMax: recWip,
-                            xMin,
-                            xMax,
-                            borderColor: REC_GREEN,
-                            borderWidth: 2,
-                            borderDash: [6, 4],
-                            label: {
-                                display: true,
-                                content: `rec: ${Math.round(recWip)}`,
-                                position: 'start',
-                                color: REC_GREEN,
-                                backgroundColor: 'rgba(0,0,0,0)',
-                                font: { size: 11, weight: '700' }
-                            }
-                        };
-                    }
-
-                    if (Number.isFinite(curWip) && curWip > 0) {
-                        annotations[`cur_${idx}`] = {
-                            type: 'line',
-                            xMin: idx,
-                            xMax: idx,
-                            yMin: 0,
-                            yMax: maxY,
-                            borderColor: CURRENT_BLUE,
-                            borderWidth: 3
-                        };
+                    if (Number.isFinite(curWip) && curWip > 0 && curWip <= maxY) {
+                        const overlapsMax = (Number.isFinite(maxWip) && maxWip > 0 && Math.abs(maxWip - curWip) < 0.0001);
+                        if (!overlapsMax) {
+                            annotations[`cur_${idx}`] = {
+                                type: 'line',
+                                yMin: curWip,
+                                yMax: curWip,
+                                xMin,
+                                xMax,
+                                borderColor: CURRENT_BLUE,
+                                borderWidth: 2,
+                                borderDash: [6, 4],
+                                drawTime: 'afterDraw'
+                            };
+                        }
                     }
                 });
+
+                // Insight box
+                const insightEl = document.getElementById('wipLevelDistributionInsight');
+                if (insightEl) {
+                    const pctAtLevel = (colName, lvl) => {
+                        const cd = byColumn[colName] || {};
+                        const levels = Array.isArray(cd.wipLevels) ? cd.wipLevels.map(n => Number(n)) : [];
+                        const pcts = Array.isArray(cd.timePercentages) ? cd.timePercentages.map(n => Number(n)) : [];
+                        const i = levels.findIndex(x => Number.isFinite(x) && x === lvl);
+                        const v = i >= 0 ? pcts[i] : 0;
+                        return Number.isFinite(v) ? v : 0;
+                    };
+
+                    let emptiest = null;
+                    let emptiestPct = -1;
+                    let mostPacked = null;
+                    let mostPackedPct = -1;
+                    let overLimitCols = [];
+
+                    columns.forEach(col => {
+                        const cd = byColumn[col] || {};
+                        const zeroPct = pctAtLevel(col, 0);
+                        if (zeroPct > emptiestPct) {
+                            emptiestPct = zeroPct;
+                            emptiest = col;
+                        }
+
+                        const packedPct = 100 - zeroPct;
+                        if (packedPct > mostPackedPct) {
+                            mostPackedPct = packedPct;
+                            mostPacked = col;
+                        }
+
+                        const maxWip = Number(cd.maxWip);
+                        const curWip = Number(cd.currentWip);
+                        if (Number.isFinite(maxWip) && maxWip > 0 && Number.isFinite(curWip) && curWip > maxWip) {
+                            overLimitCols.push(col);
+                        }
+                    });
+
+                    const fmtPct = v => (Math.round((Number(v) || 0) * 10) / 10).toFixed(1);
+                    const lines = [];
+                    if (emptiest) {
+                        lines.push(`Emptiest column: <strong>${escapeHtml(emptiest)}</strong> (${fmtPct(emptiestPct)}% of time at WIP 0).`);
+                    }
+                    if (mostPacked) {
+                        lines.push(`Most consistently occupied: <strong>${escapeHtml(mostPacked)}</strong> (${fmtPct(mostPackedPct)}% of time at WIP ≥ 1).`);
+                    }
+                    if (overLimitCols.length > 0) {
+                        lines.push(`Currently over the board WIP limit: <strong>${escapeHtml(overLimitCols.join(', '))}</strong>.`);
+                    }
+
+                    const text = lines.length > 0 ? lines.join(' ') : 'No WIP distribution insight available.';
+                    insightEl.innerHTML = `<p><strong>Insight:</strong> ${text}</p>`;
+                }
 
                 window.dashboardCharts.wipLevelDistributionChart = new Chart(document.getElementById('wipLevelDistributionChart'), {
                     type: 'bar',
@@ -4415,12 +4581,14 @@
                                 max: maxY,
                                 ticks: {
                                     stepSize: 1,
-                                    color: '#6b7280',
-                                    callback: (v) => String(Math.round(v))
+                                    display: false
                                 },
                                 title: { display: true, text: 'WIP', font: { size: 12, weight: '700' } },
                                 grid: { color: '#e5e7eb' }
                             }
+                        },
+                        layout: {
+                            padding: { left: 26 }
                         },
                         plugins: {
                             legend: { display: false },
