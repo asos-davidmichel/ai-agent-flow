@@ -114,31 +114,23 @@ else { $configFile = $legacyConfigPath }
 - Skip to Step 5 (run dashboard generation with config file)
 
 **If configuration DOES NOT exist:**
-- ❌ Stop and inform user:
+- ℹ️ Inform user: "Board configuration not found. Creating configuration now..."
+- Automatically run the board configuration workflow:
 
-```
-⚠️ Board configuration required
+**Run the Discover-BoardStates.ps1 script:**
 
-No configuration file found for this board. Board configuration is required to:
-- Categorize columns into backlog/in-progress/done
-- Define cycle time and lead time boundaries  
-- Discover and configure blocker reporting patterns
-- Set metric thresholds appropriate for your workflow
-
-To create a board configuration, run:
-    /ado-board-config https://dev.azure.com/{organization}/{project}/_boards/board/t/{team}/
-
-This will:
-1. Analyze your board structure and states
-2. Guide you through categorizing columns
-3. Discover how your team reports blocked work
-4. Save the configuration to: output/analysis-{yyyy-MM-dd}/config/{org}-{project}-{team-slug}.json
-
-After creating the configuration, run this prompt again to generate your dashboard.
+```powershell
+cd src\scripts
+.\Discover-BoardStates.ps1 `
+  -Organization "{organization}" `
+  -Project "{project}" `
+  -Team "{team}"
 ```
 
-- **Stop the workflow here** - do not proceed with dashboard generation
-- User must run `/ado-board-config` first, then return to run `/ado-flow` again
+This will discover the board's columns, states, work item types, and blocker patterns, then guide the user through an interactive configuration process.
+
+- Once the configuration is saved, the script will output the config file path
+- Set `$configFile` to this path and proceed to Step 5
 
 ### Step 5: Run the dashboard generation script
 
