@@ -736,7 +736,7 @@ function Calculate-Trend($values, $higherIsBetter = $true) {
     
     if ([Math]::Abs($slope) -lt $threshold) {
         return @{ direction = "stable"; isGood = $true }
-    } elseif ($slope > 0) {
+    } elseif ($slope -gt 0) {
         return @{ 
             direction = "up"
             isGood = $higherIsBetter
@@ -3301,9 +3301,9 @@ $timeInColumnInsightText = if ($timeInColumnLabels.Count -eq 0) {
         if ($top1 -and $top2 -and $top2.Avg -gt 0) {
             $ratio = [Math]::Round(($top1.Avg / $top2.Avg), 1)
             if ($ratio -ge 1.6 -or ($top1.Avg - $top2.Avg) -ge 3) {
-                $bottleneckText = " Bottleneck signal: '$($top1.Column)' is ~$ratio× slower than the next column ('$($top2.Column)')."
+                $bottleneckText = " Bottleneck signal: '$($top1.Column)' is ~$ratioÃ— slower than the next column ('$($top2.Column)')."
             } elseif ($ratio -ge 1.3 -or ($top1.Avg - $top2.Avg) -ge 2) {
-                $bottleneckText = " Mild bottleneck signal: '$($top1.Column)' is ~$ratio× slower than '$($top2.Column)'."
+                $bottleneckText = " Mild bottleneck signal: '$($top1.Column)' is ~$ratioÃ— slower than '$($top2.Column)'."
             }
         }
 
@@ -3449,7 +3449,7 @@ $transitionRatesInsightText = if ($transitionRateTransitions.Count -eq 0) {
     $strongestText = if ($strongest) {
         $r = [double]$strongest.Ratio
         if ($r -ge 999) {
-            "Strongest build-up: $($strongest.Transition) has arrivals but near-zero departures (ratio ~∞)."
+            "Strongest build-up: $($strongest.Transition) has arrivals but near-zero departures (ratio ~âˆž)."
         } elseif ($r -ge 2) {
             "Strongest build-up: $($strongest.Transition) ratio $([Math]::Round($r,2)) (arrivals $($strongest.Arrival)/wk, departures $($strongest.Departure)/wk)."
         } else {
@@ -3474,7 +3474,7 @@ $transitionRatesInsightText = if ($transitionRateTransitions.Count -eq 0) {
             $parts += ('Draining at: ' + (($draining | ForEach-Object { "$($_.Transition) (ratio $([Math]::Round($_.Ratio,2)))" }) -join '; '))
         }
         $action = if ($building.Count -gt 0) {
-            ' Where arrivals exceed departures, queues build — consider reducing WIP into that step or increasing capacity downstream.'
+            ' Where arrivals exceed departures, queues build â€” consider reducing WIP into that step or increasing capacity downstream.'
         } else {
             ''
         }
@@ -4080,9 +4080,9 @@ $dashboardData = @{
 
             $tailRatio = if ($cycleTimeMedian -gt 0) { [Math]::Round(([double]$p85 / [double]$cycleTimeMedian), 1) } else { 0 }
             $tailText = if ($tailRatio -ge 2) {
-                "Long tail detected (P85 is ~$tailRatio× the median)."
+                "Long tail detected (P85 is ~$tailRatioÃ— the median)."
             } elseif ($tailRatio -ge 1.5) {
-                "Moderate tail (P85 is ~$tailRatio× the median)."
+                "Moderate tail (P85 is ~$tailRatioÃ— the median)."
             } else {
                 "Low tail (P85 close to median)."
             }
@@ -4171,7 +4171,7 @@ $dashboardData = @{
             # Build insight with patterns
             $baseMessage = "$count stale items (not updated recently). Worst: #$($worstItem.id) at $($worstItem.daysSinceChanged) days (avg: $avgStale). "
             $patternMessage = "Pattern: $typePattern, $columnPattern. "
-            $blockedMessage = if ($blockedCount -gt 0) { "⚠️ $blockedCount tagged as BLOCKED. " } else { "No items currently blocked or on hold. " }
+            $blockedMessage = if ($blockedCount -gt 0) { "âš ï¸ $blockedCount tagged as BLOCKED. " } else { "No items currently blocked or on hold. " }
             
             # Action message based on actual state
             $actionMessage = if ($blockedCount -gt 0 -and $worstItem.daysSinceChanged -gt 30) {
