@@ -88,36 +88,17 @@ This will:
 After running setup, restart VS Code and try again.
 ```
 
-### Step 4.5: Verify board configuration (Required)
+### Step 4.5: Board Configuration (MANDATORY - Always Interactive)
 
-**Check if a board configuration file exists:**
+**CRITICAL: Never skip this step. Always run the interactive configuration workflow.**
 
-```powershell
-$dateStamp = Get-Date -Format 'yyyy-MM-dd'
-$configPath = ".\output\analysis-$dateStamp\config\{org}-{project}-{team-slug}.json"
-$legacyConfigPath = ".\config\{org}-{project}-{team-slug}.json"
+The configuration workflow must ask the user to specify:
+1. **Column mappings** (backlog, in-progress, done)
+2. **Cycle time boundaries** (which column starts "active work")
+3. **Lead time measurement** (creation date, board entry, or backlog exit)
+4. **Blocked item handling** (tag name, how blockers are managed)
 
-if (Test-Path $configPath) { $true }
-elseif (Test-Path $legacyConfigPath) { $true }
-else { $false }
-```
-
-**If configuration EXISTS:**
-- ✅ Inform user: "Found board configuration: {configPath}" (or legacy path if present)
-- Set `$configFile` to the path that exists:
-
-```powershell
-if (Test-Path $configPath) { $configFile = $configPath }
-else { $configFile = $legacyConfigPath }
-```
-
-- Skip to Step 5 (run dashboard generation with config file)
-
-**If configuration DOES NOT exist:**
-- ℹ️ Inform user: "Board configuration not found. Creating configuration now..."
-- Automatically run the board configuration workflow:
-
-**Run the Discover-BoardStates.ps1 script:**
+**Always run the interactive configuration script:**
 
 ```powershell
 cd src\scripts
@@ -127,11 +108,28 @@ cd src\scripts
   -Team "{team}"
 ```
 
-This will discover the board's columns, states, work item types, and blocker patterns, then guide the user through an interactive configuration process.
+This script will:
+1. Discover board columns and states by analyzing recent work items
+2. **Interactively prompt the user** to configure:
+   - Which columns are backlog vs in-progress vs done
+   - Where cycle time starts (e.g., "In Development")
+   - How to measure lead time (creation, board entry, or specific column)
+   - How blocked items are identified (tag name, categories)
+3. Save the configuration to: `output/analysis-YYYY-MM-DD/config/{org}-{project}-{team}.json`
 
-- Once the configuration is saved, the script will output the config file path
-- Set `$configFile` to this path and proceed to Step 5
+**DO NOT:**
+- ❌ Auto-copy example configs without user input
+- ❌ Skip configuration if a file exists from a previous run
+- ❌ Use default values without asking
+- ❌ Assume configuration settings
 
+**ALWAYS:**
+- ✅ Run the discovery script every time
+- ✅ Let the user interactively answer all configuration questions
+- ✅ Wait for the script to complete and save the configuration
+- ✅ Use the saved configuration file path in Step 5
+
+Once configuration is complete, the script will output the config file path. Set `` to this path and proceed to Step 5.
 ### Step 5: Run the dashboard generation script
 
 Since board configuration is required (Step 4.5), we always use the configuration file.
