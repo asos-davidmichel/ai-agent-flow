@@ -4,7 +4,7 @@
 Write-Host "=== Updating VS Code Prompts ===" -ForegroundColor Cyan
 Write-Host ""
 
-$promptsSourceDir = Join-Path $PSScriptRoot "prompts"
+$promptsSourceDir = Join-Path $PSScriptRoot "src\prompts"
 $promptsDestDir = Join-Path $env:APPDATA "Code\User\prompts"
 
 if (-not (Test-Path $promptsDestDir)) {

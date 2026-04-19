@@ -59,7 +59,7 @@ Write-Host ""
 # Step 4: Copy Prompt Files
 Write-Host "Step 4: Copying Prompt Files to VS Code" -ForegroundColor Yellow
 
-$promptsSourceDir = Join-Path $PSScriptRoot "prompts"
+$promptsSourceDir = Join-Path $PSScriptRoot "src\prompts"
 $promptsDestDir = Join-Path $env:APPDATA "Code\User\prompts"
 
 if (Test-Path $promptsSourceDir) {
