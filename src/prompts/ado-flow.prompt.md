@@ -38,7 +38,7 @@ Expected URL format:
 Parse the URL to extract:
 - **Organization** (e.g., "asos")
 - **Project** (e.g., "Customer")
-- **Team** (e.g., "Analytics%20and%20Experimentation" ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ "Analytics and Experimentation")
+- **Team** (e.g., "Analytics%20and%20Experimentation" ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ "Analytics and Experimentation")
 
 URL decode the team name if necessary (replace %20 with spaces, %2B with +, etc.)
 
@@ -53,10 +53,10 @@ Would you like to:
 - Specify a different period (e.g., 1 month, 6 months)"
 
 Wait for user confirmation. Convert their response to months:
-- "4 weeks" ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ 1 month
-- "8 weeks" ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ 2 months  
-- "12 weeks" ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ 3 months
-- "6 months" ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ 6 months
+- "4 weeks" ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ 1 month
+- "8 weeks" ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ 2 months  
+- "12 weeks" ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ 3 months
+- "6 months" ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ 6 months
 
 ### Step 4: Verify ADO Authentication
 
@@ -67,13 +67,13 @@ $env:ADO_PAT
 ```
 
 **If PAT is available:**
-- ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Proceed with dashboard generation
+- ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ Proceed with dashboard generation
 
 **If PAT is NOT available:**
-- ÃƒÂ¢Ã‚ÂÃ…â€™ Stop and inform the user:
+- ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Stop and inform the user:
 
 ```
-ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â Azure DevOps authentication not configured.
+ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â Azure DevOps authentication not configured.
 
 The ADO_PAT environment variable is not set. This is required to fetch work item data from Azure DevOps.
 
@@ -129,16 +129,16 @@ This script will:
 3. Save the configuration to: `output/analysis-YYYY-MM-DD/config/{org}-{project}-{team}.json`
 
 **DO NOT:**
-- ❌ Auto-copy example configs without user input
-- ❌ Skip configuration if a file exists from a previous run
-- ❌ Use default values without asking
-- ❌ Assume configuration settings
+- Ã¢ÂÅ’ Auto-copy example configs without user input
+- Ã¢ÂÅ’ Skip configuration if a file exists from a previous run
+- Ã¢ÂÅ’ Use default values without asking
+- Ã¢ÂÅ’ Assume configuration settings
 
 **ALWAYS:**
-- ✅ Run the discovery script every time
-- ✅ Let the user interactively answer all configuration questions
-- ✅ Wait for the script to complete and save the configuration
-- ✅ Use the saved configuration file path in Step 5
+- Ã¢Å“â€¦ Run the discovery script every time
+- Ã¢Å“â€¦ Let the user interactively answer all configuration questions
+- Ã¢Å“â€¦ Wait for the script to complete and save the configuration
+- Ã¢Å“â€¦ Use the saved configuration file path in Step 5
 
 Once configuration is complete, the script will output the config file path. Set `` to this path and proceed to Step 5.
 
@@ -266,7 +266,7 @@ The dashboard will display interactive charts showing:
 After the dashboard is generated and opened, provide a brief summary:
 
 ```
-ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Dashboard Generated Successfully
+ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ Dashboard Generated Successfully
 
 **Team:** {Team Name}
 **Period:** {DD MMM YYYY - DD MMM YYYY}
@@ -280,10 +280,10 @@ The dashboard has been opened in your browser with interactive charts and AI-gen
 ## Success Criteria
 
 The workflow is complete when:
-1. ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Script runs without errors
-2. ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Dashboard HTML file is generated  
-3. ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Dashboard opens in browser showing all charts
-4. ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ All metrics are populated with real ADO data (no placeholders)
+1. ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ Script runs without errors
+2. ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ Dashboard HTML file is generated  
+3. ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ Dashboard opens in browser showing all charts
+4. ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ All metrics are populated with real ADO data (no placeholders)
 
 ## Error Handling
 
@@ -294,10 +294,10 @@ The workflow is complete when:
 - Check terminal output for specific error messages
 
 **Common issues:**
-- "PAT not found" ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Run `.\setup.ps1` to configure authentication
-- "Project not found" ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Verify project name matches ADO exactly (case-sensitive)
-- "Team not found" ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Check team name URL encoding (spaces, special characters)
-- "No work items found" ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Check date range or team area path
+- "PAT not found" ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ Run `.\setup.ps1` to configure authentication
+- "Project not found" ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ Verify project name matches ADO exactly (case-sensitive)
+- "Team not found" ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ Check team name URL encoding (spaces, special characters)
+- "No work items found" ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ Check date range or team area path
 
 ## Insight Generation Guidelines
 
@@ -306,7 +306,7 @@ When generating or modifying insight text for dashboard charts, follow these pri
 ### Workflow rule (insight text changes)
 When the user asks to change how an insight is worded or what it must include, implement the change by updating the AI insight-generation instructions in this prompt (Step 6.5 + rules below) so future dashboards generate the improved insight automatically.
 
-Do not ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œfixÃƒÂ¢Ã¢â€šÂ¬Ã‚Â insight wording only by changing hardcoded strings in the HTML template.
+Do not ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œfixÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â insight wording only by changing hardcoded strings in the HTML template.
 - If the template has a fallback/default insight, you may update it too, but only in addition to updating this prompt.
 
 ### Plain language (no jargon)
@@ -334,11 +334,11 @@ Insight text should identify **remarkable patterns** in the data:
 
 **Be careful with wild interpretation.** Instead of making definitive claims:
 
-ÃƒÂ¢Ã‚ÂÃ…â€™ **Bad:** "The team is struggling with quality issues."
-ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ **Good:** "High bug rates suggest the team may be experiencing quality challenges."
+ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ **Bad:** "The team is struggling with quality issues."
+ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ **Good:** "High bug rates suggest the team may be experiencing quality challenges."
 
-ÃƒÂ¢Ã‚ÂÃ…â€™ **Bad:** "Developers are lazy in Q1."
-ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ **Good:** "Low throughput in Q1 suggests potential capacity constraints or increased complexity."
+ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ **Bad:** "Developers are lazy in Q1."
+ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ **Good:** "Low throughput in Q1 suggests potential capacity constraints or increased complexity."
 
 **Use tentative language:**
 - "This suggests that..."
