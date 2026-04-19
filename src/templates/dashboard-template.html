@@ -4689,6 +4689,8 @@
                 color: wipColors[i]
             }));
 
+            let currentItems = fullItems.slice();
+
             const legendColorByType = presentTypes.reduce((acc, t) => {
                 // Keep legend swatches consistent (type-based), even though bars are age-coloured.
                 acc[t] = (getWorkItemTypeStyle(t) && getWorkItemTypeStyle(t).color) ? getWorkItemTypeStyle(t).color : '#9ca3af';
@@ -4760,11 +4762,14 @@
                                             l.strokeStyle = ds.legendColor;
                                         }
 
-                                        if (Array.isArray(bg)) {
-                                            const firstOpaque = bg.find(c => c && c !== 'rgba(0,0,0,0)' && c !== 'transparent');
-                                            if (firstOpaque) {
-                                                l.fillStyle = firstOpaque;
-                                                l.strokeStyle = firstOpaque;
+                                        // Don't override the stable swatch with an age-colour.
+                                        if (!ds || !ds.legendColor) {
+                                            if (Array.isArray(bg)) {
+                                                const firstOpaque = bg.find(c => c && c !== 'rgba(0,0,0,0)' && c !== 'transparent');
+                                                if (firstOpaque) {
+                                                    l.fillStyle = firstOpaque;
+                                                    l.strokeStyle = firstOpaque;
+                                                }
                                             }
                                         }
                                     });
@@ -4785,6 +4790,8 @@
                                     .map(x => x.type);
 
                                 const filteredItems = fullItems.filter(item => visibleTypes.includes(item.type));
+
+                                currentItems = filteredItems.slice();
 
                                 chart.data.labels = filteredItems.map(item => item.label);
 
@@ -4830,7 +4837,16 @@
                         },
                         y: {
                             stacked: showLegend,
-                            grid: { display: false }
+                            grid: { display: false },
+                            ticks: {
+                                color: (ctx) => {
+                                    const idx = (ctx && Number.isFinite(ctx.index)) ? ctx.index : null;
+                                    const item = (idx !== null && currentItems && currentItems[idx]) ? currentItems[idx] : null;
+                                    const wt = item ? item.workItemType : null;
+                                    const s = getWorkItemTypeStyle(wt);
+                                    return (s && s.color) ? s.color : '#6b7280';
+                                }
+                            }
                         }
                     }
                 }
@@ -5365,30 +5381,155 @@
             const barColors = details.map(item => item.categoryColor || '#3b82f6');
             const borderColors = details.map(item => item.categoryColor || '#2563eb');
 
-            // Build a legend showing blocker category colours
+            // Type toggle state
+            const typeKeyFor = (t) => normalizeWorkItemTypeKey(t);
+            const typeKeyToRaw = {};
+            details.forEach(d => {
+                const k = typeKeyFor(d.workItemType);
+                if (!typeKeyToRaw[k]) typeKeyToRaw[k] = d.workItemType;
+            });
+            const presentTypeKeys = Object.keys(typeKeyToRaw);
+            let visibleTypeKeys = new Set(presentTypeKeys);
+
+            // Category toggle state (discover dynamically)
+            const categoryKeyFor = (d) => String((d && d.category) ? d.category : '').trim();
+            const presentCategoryKeys = Array.from(new Set(details.map(d => categoryKeyFor(d)).filter(Boolean)));
+            let visibleCategoryKeys = new Set(presentCategoryKeys);
+
+            const applyFilters = (allDetails) => allDetails.filter(d => {
+                const tk = typeKeyFor(d.workItemType);
+                const ck = categoryKeyFor(d);
+                const typeOk = visibleTypeKeys.has(tk);
+                const catOk = (presentCategoryKeys.length === 0) ? true : visibleCategoryKeys.has(ck);
+                return typeOk && catOk;
+            });
+            let filteredDetails = applyFilters(details);
+
+            // Build a legend: type toggles (colour-coded by work item type), plus category toggles (colour-coded by category)
             const legendEl = document.getElementById('currentBlockedItemsLegend');
             if (legendEl) {
                 const categoryConfig = (dashboardData.charts.blockedItems.current.categories || {});
                 const presentKeys = new Set(details.map(d => d.category).filter(Boolean));
-                const items = [];
+                const renderLegend = () => {
+                    const typeParts = [];
+                    if (presentTypeKeys.length > 1) {
+                        for (const k of presentTypeKeys) {
+                            const raw = typeKeyToRaw[k];
+                            const style = getWorkItemTypeStyle(raw);
+                            const color = (style && style.color) ? style.color : '#9ca3af';
+                            const isOn = visibleTypeKeys.has(k);
+                            const border = isOn ? darkenHexColor(color, 0.18) : '#e5e7eb';
+                            const opacity = isOn ? 1 : 0.35;
+                            typeParts.push(
+                                `<button type="button" data-typekey="${escapeHtml(k)}" style="display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:9999px; border:1px solid ${border}; background:#fff; cursor:pointer; opacity:${opacity};">` +
+                                `<span style="width:10px; height:10px; border-radius:9999px; background:${color}; border:1px solid ${darkenHexColor(color, 0.18)};"></span>` +
+                                `<span style="color:#4b5563; font-size:12px; font-weight:600;">${escapeHtml(k)}</span>` +
+                                `</button>`
+                            );
+                        }
+                    }
 
-                for (const [key, cfg] of Object.entries(categoryConfig)) {
-                    if (presentKeys.size > 0 && !presentKeys.has(key)) continue;
-                    const label = cfg.label || key;
-                    const color = cfg.color || '#3b82f6';
-                    items.push(`<span style="display:inline-flex; align-items:center; gap:6px; margin-right:8px;"><span style="width:10px; height:10px; border-radius:9999px; background:${color}; border:1px solid ${darkenHexColor(color, 0.18)};"></span><span style="color:#4b5563; font-size:12px;">${escapeHtml(label)}</span></span>`);
-                }
+                    const categoryParts = [];
+                    const categoryEntries = Object.entries(categoryConfig);
+                    const shouldShowCategoryToggles = presentCategoryKeys.length > 1;
 
-                legendEl.innerHTML = items.length ? items.join('') : '';
+                    // Only show toggles when multiple categories exist; otherwise show nothing (avoid redundant legend row)
+                    if (shouldShowCategoryToggles) {
+                        for (const [key, cfg] of categoryEntries) {
+                            if (presentKeys.size > 0 && !presentKeys.has(key)) continue;
+                            const label = cfg.label || key;
+                            const color = cfg.color || '#3b82f6';
+                            const isOn = visibleCategoryKeys.has(key);
+                            const border = isOn ? darkenHexColor(color, 0.18) : '#e5e7eb';
+                            const opacity = isOn ? 1 : 0.35;
+                            categoryParts.push(
+                                `<button type="button" data-catkey="${escapeHtml(key)}" style="display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:9999px; border:1px solid ${border}; background:#fff; cursor:pointer; opacity:${opacity};">` +
+                                `<span style="width:10px; height:10px; border-radius:9999px; background:${color}; border:1px solid ${darkenHexColor(color, 0.18)};"></span>` +
+                                `<span style="color:#4b5563; font-size:12px; font-weight:600;">${escapeHtml(label)}</span>` +
+                                `</button>`
+                            );
+                        }
+                    }
+
+                    const typeRow = typeParts.length ? `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px;">${typeParts.join('')}</div>` : '';
+                    const catRow = categoryParts.length ? `<div style="display:flex; flex-wrap:wrap; gap:8px;">${categoryParts.join('')}</div>` : '';
+                    legendEl.innerHTML = `${typeRow}${catRow}`;
+
+                    // Wire up toggle handlers
+                    if (typeParts.length) {
+                        legendEl.querySelectorAll('button[data-typekey]').forEach(btn => {
+                            btn.addEventListener('click', () => {
+                                const k = btn.getAttribute('data-typekey');
+                                if (!k) return;
+                                if (visibleTypeKeys.has(k)) {
+                                    // Keep at least one enabled
+                                    if (visibleTypeKeys.size <= 1) return;
+                                    visibleTypeKeys.delete(k);
+                                } else {
+                                    visibleTypeKeys.add(k);
+                                }
+
+                                filteredDetails = applyFilters(details);
+                                updateBlockedChart();
+                                renderLegend();
+                            });
+                        });
+                    }
+
+                    if (categoryParts.length) {
+                        legendEl.querySelectorAll('button[data-catkey]').forEach(btn => {
+                            btn.addEventListener('click', () => {
+                                const k = btn.getAttribute('data-catkey');
+                                if (!k) return;
+                                if (visibleCategoryKeys.has(k)) {
+                                    if (visibleCategoryKeys.size <= 1) return;
+                                    visibleCategoryKeys.delete(k);
+                                } else {
+                                    visibleCategoryKeys.add(k);
+                                }
+
+                                filteredDetails = applyFilters(details);
+                                updateBlockedChart();
+                                renderLegend();
+                            });
+                        });
+                    }
+                };
+
+                // Render once (and again after chart init via updateBlockedChart)
+                renderLegend();
             }
+
+            const updateBlockedChart = () => {
+                const d = filteredDetails;
+                const newLabels = d.map(item => `${shortType(item.workItemType)} #${item.id}`);
+                const newBarColors = d.map(item => item.categoryColor || '#3b82f6');
+                const newBorderColors = d.map(item => item.categoryColor || '#2563eb');
+
+                const ds = blockedChart.data.datasets[0];
+                blockedChart.data.labels = newLabels;
+                ds.data = d.map(it => ({
+                    x: it.daysSinceChanged,
+                    y: `${shortType(it.workItemType)} #${it.id}`,
+                    id: it.id,
+                    title: it.title,
+                    column: it.column,
+                    workItemType: it.workItemType,
+                    categoryLabel: it.categoryLabel,
+                    categoryColor: it.categoryColor
+                }));
+                ds.backgroundColor = newBarColors;
+                ds.borderColor = newBorderColors;
+                blockedChart.update();
+            };
             
-            new Chart(document.getElementById('currentBlockedItemsChart'), {
+            const blockedChart = new Chart(document.getElementById('currentBlockedItemsChart'), {
                 type: 'bar',
                 data: {
-                    labels: labels,
+                    labels: filteredDetails.map(item => `${shortType(item.workItemType)} #${item.id}`),
                     datasets: [{
                         label: 'Days Blocked',
-                        data: details.map(it => ({
+                        data: filteredDetails.map(it => ({
                             x: it.daysSinceChanged,
                             y: `${shortType(it.workItemType)} #${it.id}`,
                             id: it.id,
@@ -5398,8 +5539,8 @@
                             categoryLabel: it.categoryLabel,
                             categoryColor: it.categoryColor
                         })),
-                        backgroundColor: barColors,
-                        borderColor: borderColors,
+                        backgroundColor: filteredDetails.map(item => item.categoryColor || '#3b82f6'),
+                        borderColor: filteredDetails.map(item => item.categoryColor || '#2563eb'),
                         borderWidth: 2
                     }]
                 },
@@ -5438,11 +5579,27 @@
                         },
                         y: {
                             title: { display: false },
-                            grid: { display: false }
+                            grid: { display: false },
+                            ticks: {
+                                color: (ctx) => {
+                                    try {
+                                        const chart = ctx && ctx.chart ? ctx.chart : null;
+                                        const ds = chart && chart.data && chart.data.datasets && chart.data.datasets[0] ? chart.data.datasets[0] : null;
+                                        const raw = ds && Array.isArray(ds.data) && Number.isFinite(ctx.index) ? ds.data[ctx.index] : null;
+                                        const s = getWorkItemTypeStyle(raw ? raw.workItemType : null);
+                                        return (s && s.color) ? s.color : '#6b7280';
+                                    } catch {
+                                        return '#6b7280';
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             });
+
+            // Apply initial filter state (keeps chart + legend in sync)
+            updateBlockedChart();
         } else {
             // No blocked items
             const ctx = document.getElementById('currentBlockedItemsChart').getContext('2d');
