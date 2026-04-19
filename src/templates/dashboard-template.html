@@ -1891,12 +1891,67 @@
                     ? context.chart.options.scales.y.title.text
                     : 'Y';
 
-                const xVals = (dataPoints || [])
-                    .map(dp => (dp && dp.label) ? String(dp.label) : (dp && dp.raw && dp.raw.x ? String(dp.raw.x) : ''))
-                    .filter(Boolean);
-                const xUnique = Array.from(new Set(xVals));
-                if (xUnique.length === 1) {
-                    axisLines.push(`${xTitle}: ${xUnique[0]}`);
+                const MONTHS = {
+                    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+                    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+                };
+                const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+                const parseDdMmmYyyy = (s) => {
+                    const m = String(s || '').trim().match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/);
+                    if (!m) return null;
+                    const d = Number(m[1]);
+                    const mon = MONTHS[m[2].toLowerCase()];
+                    const y = Number(m[3]);
+                    if (!Number.isFinite(d) || mon === undefined || !Number.isFinite(y)) return null;
+                    return new Date(y, mon, d);
+                };
+
+                const parseDdMmm = (s, year) => {
+                    const m = String(s || '').trim().match(/^(\d{1,2})\s+([A-Za-z]{3})$/);
+                    if (!m) return null;
+                    const d = Number(m[1]);
+                    const mon = MONTHS[m[2].toLowerCase()];
+                    const y = Number(year);
+                    if (!Number.isFinite(d) || mon === undefined || !Number.isFinite(y)) return null;
+                    return new Date(y, mon, d);
+                };
+
+                const formatDdMmmYyyy = (dt) => {
+                    if (!(dt instanceof Date) || Number.isNaN(dt.getTime())) return '';
+                    const dd = String(dt.getDate()).padStart(2, '0');
+                    const mmm = MONTH_NAMES[dt.getMonth()] || '';
+                    const yyyy = dt.getFullYear();
+                    return `${dd} ${mmm} ${yyyy}`;
+                };
+
+                const yearNow = (new Date()).getFullYear();
+                const xDates = (dataPoints || [])
+                    .map(dp => {
+                        const raw = dp && dp.raw && typeof dp.raw === 'object' ? dp.raw : null;
+                        const s = (raw && raw.completedDate) ? String(raw.completedDate)
+                            : (raw && raw.x) ? String(raw.x)
+                            : (dp && dp.label) ? String(dp.label)
+                            : '';
+                        return parseDdMmmYyyy(s) || parseDdMmm(s, yearNow);
+                    })
+                    .filter(d => d instanceof Date && !Number.isNaN(d.getTime()));
+
+                if (xDates.length > 0) {
+                    const minX = new Date(Math.min(...xDates.map(d => d.getTime())));
+                    const maxX = new Date(Math.max(...xDates.map(d => d.getTime())));
+                    const xText = (minX.getTime() === maxX.getTime())
+                        ? formatDdMmmYyyy(minX)
+                        : `${formatDdMmmYyyy(minX)} – ${formatDdMmmYyyy(maxX)}`;
+                    if (xText) axisLines.push(`${xTitle}: ${xText}`);
+                } else {
+                    const xVals = (dataPoints || [])
+                        .map(dp => (dp && dp.label) ? String(dp.label) : (dp && dp.raw && dp.raw.x ? String(dp.raw.x) : ''))
+                        .filter(Boolean);
+                    const xUnique = Array.from(new Set(xVals));
+                    if (xUnique.length === 1) {
+                        axisLines.push(`${xTitle}: ${xUnique[0]}`);
+                    }
                 }
 
                 const yVals = (dataPoints || [])
