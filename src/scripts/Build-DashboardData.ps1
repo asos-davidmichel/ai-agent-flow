@@ -1414,6 +1414,12 @@ try {
         @($boardColumns)
     }
 
+    # Exclude the initial intake column from this visualization
+    $wipColumns = @(
+        $wipColumns |
+            Where-Object { $_ -and ([string]$_).Trim().ToLowerInvariant() -ne 'new' }
+    )
+
     $wipLimits = if ($config -and $config.wipLimits) { $config.wipLimits } else { @{} }
 
     if ($wipColumns.Count -gt 0) {
