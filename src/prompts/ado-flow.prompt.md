@@ -84,7 +84,7 @@ This will:
 After running setup, restart VS Code and try again.
 ```
 
-### Step 4.5: Check for board configuration (Optional)
+### Step 4.5: Verify board configuration (Required)
 
 **Check if a board configuration file exists:**
 
@@ -100,7 +100,6 @@ else { $false }
 
 **If configuration EXISTS:**
 - ✅ Inform user: "Found board configuration: {configPath}" (or legacy path if present)
-- Use this configuration for state categorization and metric boundaries
 - Set `$configFile` to the path that exists:
 
 ```powershell
@@ -108,119 +107,41 @@ if (Test-Path $configPath) { $configFile = $configPath }
 else { $configFile = $legacyConfigPath }
 ```
 
+- Skip to Step 5 (run dashboard generation with config file)
+
 **If configuration DOES NOT exist:**
-- Ask user: "No board configuration found. Would you like to:
-  1. **Generate configuration first** (recommended for new boards) - I'll analyze your board structure and create a config file
-  2. **Use defaults** - Proceed with sensible defaults (Closed/Done = complete, others = active)
-  3. **Skip for now** - Generate dashboard with defaults, configure later"
+- ❌ Stop and inform user:
 
-**If user chooses Option 1 (Generate configuration):**
-- Inform: "Let's configure your board first. I'll use the `/ado-board-config` prompt to analyze your workflow."
-- **Suggest:** "After this conversation, start a new chat and run `/ado-board-config` with your board URL, or I can help you now by switching context."
-- **Important:** Configuration requires thoughtful categorization of columns/states, so it's best done separately
-- **Pause:** Wait for user to configure board, then return to dashboard generation
+```
+⚠️ Board configuration required
 
-**If user chooses Option 2 or 3:**
-- Proceed without configuration file
-- Note: Defaults assume:
-  - Active items: NOT IN ('Closed', 'Done', 'Removed')
-  - Completed items: IN ('Closed', 'Done')
-  - Cycle time: From first column change to closed
+No configuration file found for this board. Board configuration is required to:
+- Categorize columns into backlog/in-progress/done
+- Define cycle time and lead time boundaries  
+- Discover and configure blocker reporting patterns
+- Set metric thresholds appropriate for your workflow
 
-### Step 5: Determine workflow start column (Cycle Time calculation)
+To create a board configuration, run:
+    /ado-board-config https://dev.azure.com/{organization}/{project}/_boards/board/t/{team}/
 
-**If using a configuration file:**
-- Read the cycle time start column from config: `$config.metrics.cycleTime.startColumn`
-- Show user: "Using configured cycle time start: {startColumn}"
-- Set `$workflowStartColumn = $config.metrics.cycleTime.startColumn`
-- Skip the rest of this step
+This will:
+1. Analyze your board structure and states
+2. Guide you through categorizing columns
+3. Discover how your team reports blocked work
+4. Save the configuration to: output/analysis-{yyyy-MM-dd}/config/{org}-{project}-{team-slug}.json
 
-**If NOT using configuration:**
-
-Before running the dashboard generation, you need to determine which board column marks the start of "active work" (where cycle time begins).
-
-**Run a quick query to get the board columns:**
-
-```powershell
-cd src\scripts
-$env:ADO_PAT = [System.Environment]::GetEnvironmentVariable('ADO_PAT', 'User')
-& ".\\Fetch-TeamFlowData.ps1" -Organization "{organization}" -Project "{project}" -Team "{team}" -Months 1 -Verbose | Select-String "Board columns:"
+After creating the configuration, run this prompt again to generate your dashboard.
 ```
 
-This will show the board columns like:
-```
-Board columns: New > Ready for Dev > In Development > In Review > External Review > Ready for QA > QA > Ready for release > Closed
-```
+- **Stop the workflow here** - do not proceed with dashboard generation
+- User must run `/ado-board-config` first, then return to run `/ado-flow` again
 
-**Ask the user:**
+### Step 5: Run the dashboard generation script
 
-"I can see your board has these columns:
-New > Ready for Dev > In Development > In Review > External Review > Ready for QA > QA > Ready for release > Closed
+Since board configuration is required (Step 4.5), we always use the configuration file.
 
-**Which column marks the START of active work **(where cycle time begins)?
-This is typically when work moves from backlog/planning into development.
+Navigate to the src\scripts folder and run the Generate-FlowDashboard.ps1 script:
 
-Based on common patterns, I suggest: **In Development**
-
-Options:
-- Type the column name to use a different one
-- Press Enter to use the suggestion: **In Development**
-- Type 'auto' to let me infer it automatically"
-
-**Handle the response:**
-- If user confirms or presses Enter: Use the suggested column
-- If user types a column name: Validate it exists in the board columns and use it
-- If user types 'auto': Let the script infer (look for columns with "Dev", "Development", "Progress" in the name)
-
-Store this as `$workflowStartColumn`
-
-### Step 5.5: Confirm lead time + CFD arrival start point
-
-Ask the user to confirm what we consider an item "arriving" (the start point).
-
-This choice is used consistently for:
-- Lead time start point
-- CFD "Arrivals" line (and the Backlog Growth metric)
-
-Ask:
-
-"I need to confirm what counts as the *start* of an item for this dashboard.
-
-Choose one:
-
-**Option 1: Created date**
-- Start: When the item was created in Azure DevOps (`System.CreatedDate`)
-
-**Option 2: Entered the board (recommended)**
-- Start: When the item first appears on the board (first `System.BoardColumn` change)
-
-**Option 3: Entered a specific column**
-- Start: When the item first enters a specific board column (first `System.BoardColumn == <column>`)
-
-Reply with:
-- `1` / `created`
-- `2` / `board`
-- `3` / `column`"
-
-Handle the response:
-- If Option 1: set `$leadTimeStartType = 'creation'`
-- If Option 2 (or blank): set `$leadTimeStartType = 'boardEntry'`
-- If Option 3: ask "Which column name should be treated as the start?" then set:
-  - `$leadTimeStartType = 'column'`
-  - `$leadTimeStartColumn = '<exact column name>'`
-
-If a configuration file exists, you may also show the current configured value to the user as a suggested default:
-
-```powershell
-$cfg = Get-Content "{configPath}" -Raw | ConvertFrom-Json
-$cfg.metrics.leadTime
-```
-
-### Step 6: Run the dashboard generation script
-
-Navigate to the src\scripts folder and run the Generate-FlowDashboard.ps1 script with the extracted parameters.
-
-**If using a configuration file:**
 ```powershell
 cd src\scripts
 .\Generate-FlowDashboard.ps1 `
@@ -228,84 +149,19 @@ cd src\scripts
   -Project "{project}" `
   -Team "{team}" `
   -Months {months} `
-  -ConfigFile "{configPath}" `
-  -LeadTimeStartType "{leadTimeStartType}"
-
-# If (and only if) LeadTimeStartType is 'column', also pass:
-#   -LeadTimeStartColumn "{leadTimeStartColumn}"
+  -ConfigFile "{configPath}"
 ```
 
-### Step 5.6: Confirm working vs waiting columns (Efficiency tab)
-
-The Efficiency tab needs to know which in-progress columns count as:
-- **Working (active)**: time where work is actively happening
-- **Waiting**: queued time between stages (often "Ready for X")
-
-If a configuration file exists, infer defaults from `config.columns.inProgress`:
-- Waiting columns: names containing "Ready", "Waiting", "Queue", "On Hold", "Blocked" (case-insensitive)
-- Working columns: the remaining in-progress columns
-
-Ask the user:
-
-"For flow efficiency, I need to split your in-progress columns into:
-
-- Working (active)
-- Waiting (queued)
-
-My suggested split is:
-
-- Working: {suggestedWorking}
-- Waiting: {suggestedWaiting}
-
-Reply with:
-- `ok` to accept, or
-- `working: col1, col2` and/or `waiting: col3, col4` to override"
-
-Store the results as:
-- `$effActive = @('...')`
-- `$effWaiting = @('...')`
-
-Pass them to the generator:
-
-```powershell
--EfficiencyActiveColumns $effActive -EfficiencyWaitingColumns $effWaiting
-```
-
-**Example with configuration:**
+**Example:**
 ```powershell
 cd src\scripts
+$dateStamp = Get-Date -Format 'yyyy-MM-dd'
 .\Generate-FlowDashboard.ps1 `
   -Organization "asos" `
   -Project "Customer" `
   -Team "Analytics and Experimentation" `
   -Months 3 `
   -ConfigFile ".\output\analysis-$dateStamp\config\asos-customer-analytics-experimentation.json"
-```
-
-**If NOT using configuration (defaults):**
-```powershell
-cd src\scripts
-.\Generate-FlowDashboard.ps1 `
-  -Organization "{organization}" `
-  -Project "{project}" `
-  -Team "{team}" `
-  -Months {months} `
-  -WorkflowStartColumn "{workflowStartColumn}" `
-  -LeadTimeStartType "{leadTimeStartType}"
-
-# If (and only if) LeadTimeStartType is 'column', also pass:
-#   -LeadTimeStartColumn "{leadTimeStartColumn}"
-```
-
-**Example with defaults:**
-```powershell
-cd src\scripts
-.\Generate-FlowDashboard.ps1 `
-  -Organization "asos" `
-  -Project "Customer" `
-  -Team "Analytics and Experimentation" `
-  -Months 3 `
-  -WorkflowStartColumn "In Development"
 ```
 
 **This master script will:**
@@ -318,7 +174,7 @@ cd src\scripts
 
 Monitor the script output for any errors. The script will create a dated output folder: `output/analysis-YYYY-MM-DD/`
 
-### Step 6.5: Generate AI Insights
+### Step 6: Generate AI Insights
 
 After the dashboard data is generated, enhance it with AI-generated insights based on the actual metrics.
 
@@ -333,7 +189,7 @@ $dashboardData = Get-Content $dataPath -Raw | ConvertFrom-Json
 
 You need to analyze the following charts and generate brief, actionable insights (1-2 sentences each):
 
-- **cfd**: Use `metricDefinitions.leadTimeMethod` (+ `metricDefinitions.leadTimeStartColumn` when relevant) to state what counts as an arrival. Use `charts.cfd.arrivals` and `charts.cfd.departures` to estimate average arrivals/week and departures/week over the analysis period, and explain what that implies (growing / shrinking / stable) *and why*.
+- **cfd**: Use `metricDefinitions.leadTimeMethod` (+ `metricDefinitions.leadTimeStartColumn` when relevant) to state what counts as an arrival. The `charts.cfd.arrivals` and `charts.cfd.departures` arrays contain **cumulative** values (not weekly). Calculate rates as: `(endValue - startValue) / (weekCount - 1)`. Use `metrics.systemStability.ratio` to see the net rate (positive = growing, negative = shrinking). Explain what that implies *and why* in plain language.
 - **transitionRates**: Use `charts.transitionRates.transitions`, `charts.transitionRates.ratios`, `charts.transitionRates.arrivals`, `charts.transitionRates.departures`. Call out the biggest build-up and/or drain, and include the absolute arrivals/week and departures/week (not just the ratio).
 - **throughput**: Look at `charts.throughput.weeklyCompletedCounts`, `summary.throughput`, coefficient of variation
 - **cycleTime**: Look at `charts.cycleTime.distribution`, `summary.cycleTime.median`, P50/P85/P95

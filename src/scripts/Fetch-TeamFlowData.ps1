@@ -50,7 +50,7 @@ param(
     [int]$Months = 3,
     
     [Parameter(Mandatory = $false)]
-    [string]$OutputPath = (Join-Path $PSScriptRoot "flow-data-$(Get-Date -Format 'yyyy-MM-dd').json"),
+    [string]$OutputPath = $null,
     
     [Parameter(Mandatory = $false)]
     [string]$ConfigFile = $null,
@@ -59,15 +59,32 @@ param(
     [switch]$IncludeActiveHistory
 )
 
-# Load configuration if provided
-$config = $null
-if ($ConfigFile -and (Test-Path $ConfigFile)) {
-    Write-Host "Loading board configuration from: $ConfigFile" -ForegroundColor Cyan
-    $config = Get-Content $ConfigFile -Raw | ConvertFrom-Json
-    Write-Host "  [OK] Configuration loaded" -ForegroundColor Green
-} else {
-    Write-Host "Using default configuration (no config file provided)" -ForegroundColor Gray
+# Set up output directory and path
+$dateStamp = Get-Date -Format 'yyyy-MM-dd'
+$workspaceRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$outputDir = Join-Path $workspaceRoot "output\analysis-$dateStamp"
+
+if (-not (Test-Path $outputDir)) {
+    New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
 }
+
+if (-not $OutputPath) {
+    $OutputPath = Join-Path $outputDir "flow-data.json"
+}
+
+# Load configuration (required)
+$config = $null
+if (-not $ConfigFile -or -not (Test-Path $ConfigFile)) {
+    Write-Error "Configuration file is required but not found: $ConfigFile"
+    Write-Host "" -ForegroundColor Yellow
+    Write-Host "Board configuration is required to determine which states represent completed/active work." -ForegroundColor Yellow
+    Write-Host "Run the board configuration workflow first to generate this file." -ForegroundColor Yellow
+    exit 1
+}
+
+Write-Host "Loading board configuration from: $ConfigFile" -ForegroundColor Cyan
+$config = Get-Content $ConfigFile -Raw | ConvertFrom-Json
+Write-Host "  [OK] Configuration loaded" -ForegroundColor Green
 
 # Check for PAT
 $pat = $env:ADO_PAT
@@ -110,14 +127,13 @@ Write-Host "`nStep 2: Querying completed work items..." -ForegroundColor Yellow
 $startDateStr = $startDate.ToString('yyyy-MM-dd')
 $endDateStr = $endDate.ToString('yyyy-MM-dd')
 
-# Determine completed states from config or use defaults
-if ($config -and $config.states.completed.includeStates) {
-    $completedStates = $config.states.completed.includeStates
-    Write-Host "  Using configured completed states: $($completedStates -join ', ')" -ForegroundColor Gray
-} else {
-    $completedStates = @('Closed', 'Done')
-    Write-Host "  Using default completed states: $($completedStates -join ', ')" -ForegroundColor Gray
+# Get completed states from config
+if (-not $config.states.completed.includeStates) {
+    Write-Error "Configuration file is missing 'states.completed.includeStates'"
+    exit 1
 }
+$completedStates = $config.states.completed.includeStates
+Write-Host "  Using configured completed states: $($completedStates -join ', ')" -ForegroundColor Gray
 
 $completedStatesClause = ($completedStates | ForEach-Object { "'$_'" }) -join ', '
 $wiqlQuery = "SELECT [System.Id], [System.WorkItemType], [System.Title], [System.State], [System.CreatedDate], [Microsoft.VSTS.Common.ClosedDate], [Microsoft.VSTS.Common.ActivatedDate], [System.BoardColumn], [System.Tags] FROM WorkItems WHERE [System.TeamProject] = '$Project' AND [System.AreaPath] UNDER '$teamAreaPath' AND [System.State] IN ($completedStatesClause) AND [System.WorkItemType] NOT IN ('Task', 'Epic') AND [Microsoft.VSTS.Common.ClosedDate] >= '$startDateStr' AND [Microsoft.VSTS.Common.ClosedDate] <= '$endDateStr' ORDER BY [Microsoft.VSTS.Common.ClosedDate] DESC"
@@ -137,14 +153,13 @@ try {
 # Step 3: Query for current active work items
 Write-Host "`nStep 3: Querying active work items..." -ForegroundColor Yellow
 
-# Determine excluded states from config or use defaults
-if ($config -and $config.states.active.excludeStates) {
-    $excludedStates = $config.states.active.excludeStates
-    Write-Host "  Using configured excluded states: $($excludedStates -join ', ')" -ForegroundColor Gray
-} else {
-    $excludedStates = @('Closed', 'Done', 'Removed')
-    Write-Host "  Using default excluded states: $($excludedStates -join ', ')" -ForegroundColor Gray
+# Get excluded states from config
+if (-not $config.states.active.excludeStates) {
+    Write-Error "Configuration file is missing 'states.active.excludeStates'"
+    exit 1
 }
+$excludedStates = $config.states.active.excludeStates
+Write-Host "  Using configured excluded states: $($excludedStates -join ', ')" -ForegroundColor Gray
 
 $excludedStatesClause = ($excludedStates | ForEach-Object { "'$_'" }) -join ', '
 $activeWiqlQuery = "SELECT [System.Id], [System.WorkItemType], [System.Title], [System.State], [System.CreatedDate], [System.ChangedDate], [Microsoft.VSTS.Common.ActivatedDate], [System.BoardColumn], [System.Tags] FROM WorkItems WHERE [System.TeamProject] = '$Project' AND [System.AreaPath] UNDER '$teamAreaPath' AND [System.State] NOT IN ($excludedStatesClause) AND [System.WorkItemType] NOT IN ('Task', 'Epic') ORDER BY [System.CreatedDate] ASC"

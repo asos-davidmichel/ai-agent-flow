@@ -84,11 +84,11 @@ $configuredBoardColumns = @(
         Select-Object -Unique
 )
 
-# Limit analysis to tracked work item types (PBI/Story/Bug level)
+# Limit analysis to tracked work item types (PBI/Story/Bug/Spike level)
 $trackedWorkItemTypes = if ($config -and $config.workItemTypes -and $config.workItemTypes.tracked) {
     @($config.workItemTypes.tracked)
 } else {
-    @('Product Backlog Item', 'User Story', 'Story', 'Bug')
+    @('Product Backlog Item', 'User Story', 'Story', 'Bug', 'Spike')
 }
 
 function Test-IsTrackedWorkItemType {
@@ -2627,6 +2627,13 @@ if ($config -and $config.columns -and $config.columns.inProgress) {
         )
         $workItemAgeAllowedColumns = @($workItemAgeAllowedColumns | Where-Object { $boardCols -contains $_ })
     }
+} elseif ($EfficiencyActiveColumns -or $EfficiencyWaitingColumns) {
+    # Use efficiency columns (active + waiting = in-progress) when provided without config
+    $workItemAgeAllowedColumns = @(
+        (@($EfficiencyActiveColumns) + @($EfficiencyWaitingColumns)) |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            Select-Object -Unique
+    )
 } elseif ($rawData.boardConfig -and $rawData.boardConfig.columns) {
     # Fallback: use board order, excluding first+last columns
     $workflowColumnsAll = @(
