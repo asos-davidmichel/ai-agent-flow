@@ -89,14 +89,24 @@ After running setup, restart VS Code and try again.
 **Check if a board configuration file exists:**
 
 ```powershell
-$configPath = ".\config\{org}-{project}-{team-slug}.json"
-Test-Path $configPath
+$dateStamp = Get-Date -Format 'yyyy-MM-dd'
+$configPath = ".\output\analysis-$dateStamp\config\{org}-{project}-{team-slug}.json"
+$legacyConfigPath = ".\config\{org}-{project}-{team-slug}.json"
+
+if (Test-Path $configPath) { $true }
+elseif (Test-Path $legacyConfigPath) { $true }
+else { $false }
 ```
 
 **If configuration EXISTS:**
-- ✅ Inform user: "Found board configuration: {configPath}"
+- ✅ Inform user: "Found board configuration: {configPath}" (or legacy path if present)
 - Use this configuration for state categorization and metric boundaries
-- Set `$configFile = $configPath` to pass to the script
+- Set `$configFile` to the path that exists:
+
+```powershell
+if (Test-Path $configPath) { $configFile = $configPath }
+else { $configFile = $legacyConfigPath }
+```
 
 **If configuration DOES NOT exist:**
 - Ask user: "No board configuration found. Would you like to:
@@ -269,7 +279,7 @@ cd src\scripts
   -Project "Customer" `
   -Team "Analytics and Experimentation" `
   -Months 3 `
-  -ConfigFile ".\config\asos-customer-analytics-experimentation.json"
+  -ConfigFile ".\output\analysis-$dateStamp\config\asos-customer-analytics-experimentation.json"
 ```
 
 **If NOT using configuration (defaults):**

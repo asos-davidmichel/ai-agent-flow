@@ -254,9 +254,11 @@ Ask the user to validate:
 
 **Generate the board configuration JSON file:**
 
-Create file: `config/{org}-{project}-{team-slug}.json`
+Create file: `output/analysis-{yyyy-MM-dd}/config/{org}-{project}-{team-slug}.json`
 
-Example filename: `config/asos-customer-analytics-experimentation.json`
+Example filename: `output/analysis-2026-04-19/config/asos-customer-analytics-experimentation.json`
+
+If the `output/analysis-{yyyy-MM-dd}/config/` folder doesn't exist yet, create it.
 
 **JSON structure including blocker configuration:**
 ```json
@@ -318,7 +320,7 @@ Example filename: `config/asos-customer-analytics-experimentation.json`
 ```
 
 Write the configuration file and confirm to the user:
-"✅ Configuration saved to: config/{filename}.json"
+"✅ Configuration saved to: output/analysis-{yyyy-MM-dd}/config/{filename}.json"
 
 ### Step 11: Next steps
 
