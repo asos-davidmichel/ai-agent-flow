@@ -1375,11 +1375,12 @@ foreach ($ws in $weekStarts) {
     $weekItems = if ($completedByWeekMap.ContainsKey($key)) { @($completedByWeekMap[$key]) } else { @() }
     $weekCycleTimes = @($weekItems | ForEach-Object { $_.cycleTime } | Where-Object { $_ -gt 0 })
 
-    $cycleTimeTrendValues += if ($weekCycleTimes.Count -gt 0) {
+    $value = if ($weekCycleTimes.Count -gt 0) {
         [Math]::Round(($weekCycleTimes | Measure-Object -Average).Average, 1)
     } else {
         0
     }
+    $cycleTimeTrendValues += $value
 }
 
 $cycleTimeTrendChart = @{
@@ -1394,11 +1395,12 @@ foreach ($ws in $weekStarts) {
     $weekItems = if ($completedByWeekMap.ContainsKey($key)) { @($completedByWeekMap[$key]) } else { @() }
     $weekLeadTimes = @($weekItems | ForEach-Object { $_.leadTime } | Where-Object { $_ -gt 0 })
 
-    $leadTimeTrendValues += if ($weekLeadTimes.Count -gt 0) {
+    $value = if ($weekLeadTimes.Count -gt 0) {
         [Math]::Round(($weekLeadTimes | Measure-Object -Average).Average, 1)
     } else {
         0
     }
+    $leadTimeTrendValues += $value
 }
 
 $leadTimeTrendChart = @{

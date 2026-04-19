@@ -212,7 +212,7 @@ if ($EfficiencyBeforeWorkflowColumns) {
 if ($EfficiencyAfterWorkflowColumns) {
     $buildParams['EfficiencyAfterWorkflowColumns'] = $EfficiencyAfterWorkflowColumns
 }
-& (Join-Path $PSScriptRoot "Build-DashboardData.ps1") @buildParams
+& (Join-Path $PSScriptRoot "Build-DashboardData.ps1") @buildParams | Out-Null
 
 # Step 4: Generate HTML
 Write-Host "`n[4/4] Generating dashboard HTML..." -ForegroundColor Yellow

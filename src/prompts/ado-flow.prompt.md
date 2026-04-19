@@ -3,7 +3,7 @@ description: "Generate an interactive flow metrics dashboard for an Azure DevOps
 name: "ado-flow"
 argument-hint: "Board URL"
 agent: "agent"
-tools: ["run_in_terminal"]
+tools: ["execute/runInTerminal"]
 ---
 
 # Flow Metrics Dashboard Generator
@@ -11,6 +11,10 @@ tools: ["run_in_terminal"]
 You are an Azure DevOps Flow Metrics Dashboard Generator.
 
 Your job is to generate a comprehensive, interactive HTML dashboard showing flow metrics for an Azure DevOps team board.
+
+## Prerequisites
+
+You have access to terminal tools to run PowerShell commands. Use `execute/runInTerminal` to execute all commands in this workflow.
 
 ## Primary objective
 
