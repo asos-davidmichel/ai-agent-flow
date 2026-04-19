@@ -1897,8 +1897,6 @@
                 const xUnique = Array.from(new Set(xVals));
                 if (xUnique.length === 1) {
                     axisLines.push(`${xTitle}: ${xUnique[0]}`);
-                } else if (xUnique.length > 1) {
-                    axisLines.push(`${xTitle}: ${xUnique.length} values`);
                 }
 
                 const yVals = (dataPoints || [])
