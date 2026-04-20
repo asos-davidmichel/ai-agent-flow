@@ -32,7 +32,7 @@
     .\Fetch-TeamFlowData.ps1 -Organization "asos" -Project "Customer" -Team "Analytics and Experimentation" -Months 3
 
 .EXAMPLE
-    .\Fetch-TeamFlowData.ps1 -Organization "asos" -Project "Customer" -Team "Analytics and Experimentation" -ConfigFile ".\config\board-config.json" -Months 3
+    .\Fetch-TeamFlowData.ps1 -Organization "asos" -Project "Customer" -Team "Analytics and Experimentation" -ConfigFile ".\src\config\board-config.json" -Months 3
 #>
 
 [CmdletBinding()]
