@@ -3,7 +3,7 @@ name: "ado-types"
 description: "Analyse work item types on an Azure DevOps board, distinguishing observed usage from configured availability"
 argument-hint: "Board URL"
 agent: "agent"
-tools: ["mcp_ado_wit_list_backlogs", "mcp_ado_wit_list_backlog_work_items", "mcp_ado_wit_get_work_items_batch_by_ids"]
+tools: ["run_in_terminal"]
 ---
 
 # ADO Work Item Types Analysis Agent
@@ -69,39 +69,38 @@ Before retrieving work items, check if board data is already cached in this sess
      - Skip to Step 5
 4. If the cache doesn't exist or is stale (>5 minutes old), proceed to Step 4
 
-### Step 4: Inspect all current board items
+### Step 4: Retrieve work items and board configuration
 
-Retrieve **all work items currently returned for that board**, not a sample.
+Run the PowerShell script to retrieve work items and board configuration:
 
-Inspect their `System.WorkItemType` field and count how many items exist for each type.
+```powershell
+cd "c:\Users\david.michel\OneDrive - ASOS.com Ltd\Documents\Work\Flow Metrics\src\scripts"
+.\Get-WorkItemTypes.ps1 -Organization "{org}" -Project "{project}" -Team "{team}"
+```
 
-This step establishes which work item types are **currently present on the board**.
+The script will output JSON containing:
+- All work items from the board
+- `currentTypes`: Work item types currently present with counts for each
+- `configuredTypes`: Work item types configured for the board level (if available)
+- `defaultType`: The default work item type for the board (if available)
+- Organization, project, team, and board level metadata
+- Retrieval timestamp
+- Total count of work items
 
 **After retrieving work items, cache them for reuse:**
 
-1. Create or update `/memories/session/{cacheKey}.json` with:
-   ```json
-   {
-     "boardUrl": "...",
-     "organization": "...",
-     "pro6ect": "...",
-     "team": "...",
-     "boardLevel": "...",
-     "retrievalTimestamp": "2026-04-10T14:30:00Z",
-     "workItems": [...all retrieved work items...],
-     "totalCount": 72
-   }
-   ```
-2. Proceed to Step 5
+1. Parse the JSON output from the script
+2. Create or update `/memories/session/{cacheKey}.json` with the script output
+3. Proceed to Step 5
 
-### Step 5: Inspect board configuration, if supported
+### Step 5: Analyze the results
 
-Check whether the available tools can directly confirm which work item types are configured for this board level.
+Using the script output:
+- `currentTypes` shows which types are present and how many items of each type
+- `configuredTypes` shows which types are configured for the board (may be empty if not available)
+- `defaultType` indicates the default type (may be null if not available)
 
-- If yes, list all configured types
-- If no, do **not** guess or infer configured types from partial evidence
-
-### Step 5: Categorise carefully
+### Step 6: Categorise carefully
 
 Use these categories:
 

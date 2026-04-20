@@ -3,7 +3,7 @@ name: "ado-blocked"
 description: "Analyse how blocked work is reported on an Azure DevOps board"
 argument-hint: "Board URL"
 agent: "agent"
-tools: ["mcp_ado_*"]
+tools: ["run_in_terminal"]
 ---
 
 # ADO Blocked Work Reporting Patterns Agent
@@ -103,40 +103,24 @@ Before retrieving work items, check if board data is already cached in this sess
 
 ### Step 4: Retrieve all in-scope work items
 
-Retrieve **all work items currently in scope for the specified board or backlog level**.
+Run the PowerShell script to retrieve all work items for the board:
 
-Do not use sampling.
+```powershell
+cd "c:\Users\david.michel\OneDrive - ASOS.com Ltd\Documents\Work\Flow Metrics\src\scripts"
+.\Get-BlockedWorkPatterns.ps1 -Organization "{org}" -Project "{project}" -Team "{team}"
+```
 
-Request these fields where possible:
-- System.Id
-- System.WorkItemType
-- System.Title
-- System.State
-- System.Tags
-- Any observable custom fields that appear to be used for blocked reporting
-
-If results are paginated, continue until all in-scope items have been retrieved.
-
-Treat the board's current scope as the source of truth. Do not expand beyond it unless explicitly instructed.
-
-If full retrieval is not possible with the available tools, state that clearly and report only on the items actually retrieved.
+The script will output JSON containing:
+- All work items with full field details including tags, states, custom fields
+- Organization, project, team, and board level metadata
+- Retrieval timestamp
+- Total count of work items
 
 **After retrieving work items, cache them for reuse:**
 
-1. Create or update `/memories/session/{cacheKey}.json` with:
-   ```json
-   {
-     "boardUrl": "...",
-     "organization": "...",
-     "project": "...",
-     "team": "...",
-     "boardLevel": "...",
-     "retrievalTimestamp": "2026-04-10T14:30:00Z",
-     "workItems": [...all retrieved work items...],
-     "totalCount": 72
-   }
-   ```
-2. Proceed to Step 5
+1. Parse the JSON output from the script
+2. Create or update `/memories/session/{cacheKey}.json` with the script output
+3. Proceed to Step 5
 
 ### Step 5: Identify blocked-work reporting patterns in use
 

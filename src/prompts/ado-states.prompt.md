@@ -3,7 +3,7 @@ name: "ado-states"
 description: "Analyse work item states on an Azure DevOps board"
 argument-hint: "Board URL"
 agent: "agent"
-tools: ["mcp_ado_*"]
+tools: ["run_in_terminal"]
 ---
 
 # ADO Work Item States
@@ -60,51 +60,35 @@ Before retrieving work items, check if board data is already cached in this sess
      - Skip to Step 5
 4. If the cache doesn't exist or is stale (>5 minutes old), proceed to Step 4
 
-### Step 4: Retrieve all in-scope work items
+### Step 4: Retrieve work items and state definitions
 
-Retrieve **all work items currently in scope for the specified board or backlog level**.
+Run the PowerShell script to retrieve work items and their state definitions:
 
-Do not use sampling.
+```powershell
+cd "c:\Users\david.michel\OneDrive - ASOS.com Ltd\Documents\Work\Flow Metrics\src\scripts"
+.\Get-WorkItemStates.ps1 -Organization "{org}" -Project "{project}" -Team "{team}"
+```
 
-Request these fields where possible:
-- System.Id
-- System.WorkItemType
-- System.Title
-- System.State
-- System.Tags
-- Any observable custom fields that appear to be used for blocked reporting
-
-If results are paginated, continue until all in-scope items have been retrieved.
-
-Treat the board's current scope as the source of truth. Do not expand beyond it unless explicitly instructed.
-
-If full retrieval is not possible with the available tools, state that clearly and report only on the items actually retrieved.
+The script will output JSON containing:
+- All work items with their current states
+- Work item type definitions with complete state lists for each type
+- Organization, project, team, and board level metadata
+- Retrieval timestamp
+- Total count of work items
 
 **After retrieving work items, cache them for reuse:**
 
-1. Create or update `/memories/session/{cacheKey}.json` with:
-   ```json
-   {
-     "boardUrl": "...",
-     "organization": "...",
-     "pro6ect": "...",
-     "team": "...",
-     "boardLevel": "...",
-     "retrievalTimestamp": "2026-04-10T14:30:00Z",
-     "workItems": [...all retrieved work items...],
-     "totalCount": 72
-   }
-   ```
-2. Proceed to Step 5
+1. Parse the JSON output from the script
+2. Create or update `/memories/session/{cacheKey}.json` with the script output
+3. Proceed to Step 5
 
-### Step 5: Retrieve states for each work item type
+### Step 5: Analyze state definitions
 
-For each associated work item type:
-- retrieve its definition
-- extract the `states` array
-- record the list of state names
+Using the `workItemTypes` array from the script output:
+- Each entry contains a work item type name and its complete list of states
+- Compare the state lists across all work item types
 
-### Step 5: Compare state models
+### Step 6: Compare state models
 
 Compare the states across all associated work item types.
 
