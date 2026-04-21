@@ -93,23 +93,14 @@ After running setup, restart VS Code and try again.
 **CRITICAL: Never skip this step. Always run the interactive configuration workflow.**
 
 The configuration workflow must discover and ask the user to specify:
-1. **Blocked item patterns** - Run #ado-blocked analysis first to discover how blocked work is reported
+1. **Blocked item patterns** - Automatically discovered via Get-BlockedWorkPatterns.ps1
 2. **Column mappings** (backlog, in-progress, done)
 3. **Cycle time boundaries** (which column starts "active work")
 4. **Lead time measurement** (creation date, board entry, or backlog exit)
 
-**Step 4.5a: Discover blocked item patterns (FIRST)**
+**Step 4.5a: Discover board structure**
 
-Before configuring anything else, run the ado-blocked analysis to discover how this board reports blocked work:
-
-```
-#ado-blocked {board-url}
-```
-
-This will analyze actual work items and report only the patterns observed in use (tags, states, columns, etc.).
-Use the findings to configure blocked item handling in the next step.
-
-**Step 4.5b: Run board configuration script**
+First, discover the board columns and states by analyzing recent work items:
 
 ```powershell
 cd src\scripts
@@ -119,51 +110,154 @@ cd src\scripts
   -Team "{team}"
 ```
 
-This script will:
-1. Discover board columns and states by analyzing recent work items
-2. **Interactively prompt the user** to configure:
-   - Which columns are backlog vs in-progress vs done
-   - Where cycle time starts (e.g., "In Development")
-   - How to measure lead time (creation, board entry, or specific column)
-   - Blocked item patterns (based on ado-blocked findings)
-3. Save the configuration to: `output/analysis-YYYY-MM-DD/config/{org}-{project}-{team}.json`
+This script will analyze the board and discover:
+- All board columns
+- State-to-column mappings
+- Work item types and patterns
+
+**Step 4.5b: Configure blocked item patterns**
+
+Use a comprehensive set of blocked-related tag patterns (case-insensitive partial matches):
+
+```powershell
+$blockedPatterns = @{
+    tags = @(
+        "blocked", "blocker",
+        "on-hold", "on hold",
+        "waiting", "wait",
+        "impediment",
+        "stuck",
+        "freeze", "frozen",
+        "paused", "pause",
+        "dependency", "dependent"
+    )
+    checkTitle = $true
+}
+```
+
+**Note:** These patterns use case-insensitive partial matching, so "blocked" will match "Blocked", "BLOCKED", "Blocker", "unblocked", etc.
+
+**Step 4.5c: Interactive configuration (ONE QUESTION AT A TIME)**
+
+Now ask the user configuration questions **one at a time**, based on the discovered board structure:
+
+**Question 1: Cycle Time Start**
+Present the discovered columns and ask:
+
+```
+Based on your board columns: {list columns}
+
+Which column represents when active work starts (for cycle time measurement)?
+
+Common choices:
+- "In Development" (when developers start working)
+- "Ready for Dev" (when work is ready to start)
+- "{first in-progress column}"
+
+Please specify the column name:
+```
+
+Wait for response. Store as `$cycleTimeStartColumn`.
+
+**Question 2: Lead Time Measurement**
+Ask:
+
+```
+How should we measure lead time (when does the clock start)?
+
+a) Item creation date (when item was created in Azure DevOps)
+b) Board entry (when item first appeared on this team's board)
+c) Specific column entry (when entering a backlog column like "Ready for Dev")
+
+Please choose (a, b, or c):
+```
+
+Wait for response. If they choose (c), ask for the column name. Store as `$leadTimeMethod` and optionally `$leadTimeStartColumn`.
+
+**Question 3: Done Column**
+Ask:
+
+```
+Which column(s) represent completed work?
+
+Discovered columns: {list columns}
+
+Typically this is "Closed" or "Done". Please specify the column name(s):
+```
+
+Wait for response. Store as `$doneColumns`.
+
+**Step 4.5d: Create configuration file**
+
+Using the discovered blocked patterns and user responses, create the configuration JSON:
+
+```powershell
+$dateStamp = Get-Date -Format 'yyyy-MM-dd'
+$configDir = ".\output\analysis-$dateStamp\config"
+New-Item -ItemType Directory -Path $configDir -Force | Out-Null
+
+$config = @{
+    organization = "{organization}"
+    project = "{project}"
+    team = "{team}"
+    cycleTimeStartColumn = $cycleTimeStartColumn
+    leadTimeMethod = $leadTimeMethod
+    leadTimeStartColumn = $leadTimeStartColumn
+    doneColumns = $doneColumns
+    blockedPatterns = $blockedPatterns  # comprehensive blocked patterns from Step 4.5b
+    states = @{
+        completed = @{
+            includeStates = $doneColumns
+        }
+        active = @{
+            includeStates = @("In Progress", "Resolved", "Active")
+        }
+    }
+}
+
+$configPath = "$configDir\{org}-{project}-{team}.json"
+$config | ConvertTo-Json -Depth 10 | Set-Content $configPath
+Write-Host "Configuration saved to: $configPath"
+```
 
 **DO NOT:**
+- ? Ask all questions at once
 - ? Auto-copy example configs without user input
 - ? Skip configuration if a file exists from a previous run
 - ? Use default values without asking
 - ? Assume configuration settings
 
 **ALWAYS:**
-- ? Run the discovery script every time
-- ? Let the user interactively answer all configuration questions
-- ? Wait for the script to complete and save the configuration
+- ? Ask questions one at a time
+- ? Wait for each answer before proceeding
+- ? Use the comprehensive blocked patterns from Step 4.5b (don't ask about them)
+- ? Include state configuration for completed and active items
+- ? Save the configuration to the output folder
 - ? Use the saved configuration file path in Step 5
 
-Once configuration is complete, the script will output the config file path. Set `` to this path and proceed to Step 5.
+Once configuration is complete and saved, proceed to Step 5 with the config file path.
 
-Navigate to the src\scripts folder and run the Generate-FlowDashboard.ps1 script:
+Run the Generate-FlowDashboard.ps1 script with the saved configuration:
 
 ```powershell
-cd src\scripts
+$dateStamp = Get-Date -Format 'yyyy-MM-dd'
 .\Generate-FlowDashboard.ps1 `
   -Organization "{organization}" `
   -Project "{project}" `
   -Team "{team}" `
   -Months {months} `
-  -ConfigFile "{configPath}"
+  -ConfigFile "..\output\analysis-$dateStamp\config\{org}-{project}-{team}.json"
 ```
 
 **Example:**
 ```powershell
-cd src\scripts
 $dateStamp = Get-Date -Format 'yyyy-MM-dd'
 .\Generate-FlowDashboard.ps1 `
   -Organization "asos" `
   -Project "Customer" `
   -Team "Analytics and Experimentation" `
   -Months 3 `
-  -ConfigFile ".\output\analysis-$dateStamp\config\asos-customer-analytics-experimentation.json"
+  -ConfigFile "..\output\analysis-$dateStamp\config\asos-customer-analytics-experimentation.json"
 ```
 
 **This master script will:**
@@ -304,7 +398,7 @@ The workflow is complete when:
 When generating or modifying insight text for dashboard charts, follow these principles:
 
 ### Workflow rule (insight text changes)
-When the user asks to change how an insight is worded or what it must include, implement the change by updating the AI insight-generation instructions in this prompt (Step 6.5 + rules below) so future dashboards generate the improved insight automatically.
+When the user asks to change how an insight is worded or what it must include, implement the change by updating the AI insight-generation instructions in this prompt (Step 6 + rules below) so future dashboards generate the improved insight automatically.
 
 Do not ? insight wording only by changing hardcoded strings in the HTML template.
 - If the template has a fallback/default insight, you may update it too, but only in addition to updating this prompt.
