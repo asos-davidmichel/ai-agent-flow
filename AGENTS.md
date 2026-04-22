@@ -4,6 +4,14 @@ This file provides concise, actionable guidance for AI coding agents working in 
 
 ---
 
+## Important: Commit & Push Policy
+
+**Do not commit or push any changes to the repository unless the user explicitly requests it.**
+
+## Prompt File Update Policy
+
+**After modifying any file in `src/prompts/`, always run `update.ps1` to copy prompt files to your VS Code user prompts directory. This ensures new and updated prompts are immediately available for usage in Copilot Chat.**
+
 ## Key Documentation
 
 - [Board Configuration Guide](src/config/README.md): Explains how to define board-specific workflow semantics and JSON config structure.
